@@ -1,0 +1,141 @@
+<%@ page contentType="text/html;charset=UTF-8" %>
+<style>
+    :root {
+        --header-height: 60px;
+        --footer-height: 60px;
+    }
+
+    /* アニメーション */
+    @keyframes slideInLeft {
+        from { transform: translateX(-250px); }
+        to { transform: translateX(0); }
+    }
+    @keyframes slideOutLeft {
+        from { transform: translateX(0); }
+        to { transform: translateX(-250px); }
+    }
+
+    #menuPanel.open { animation: slideInLeft 0.3s ease-in-out; }
+    #menuPanel.close { animation: slideOutLeft 0.3s ease-in-out; }
+
+    /* 固定ヘッダー用スタイル */
+    header.app-header {
+        background-color: #333;
+        color: white;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: var(--header-height);
+        display: flex;
+        align-items: center;
+        padding: 0 20px;
+        z-index: 1001;
+        box-sizing: border-box;
+    }
+
+    /* ページコンテンツがヘッダー・フッターと被らないように余白を確保 */
+    body { /* このルールは各ページの head 内の body ルールよりも後に読み込まれるため上書きされます */
+        padding-top: var(--header-height);
+        padding-bottom: var(--footer-height);
+    }
+
+    /* ハンバーガーボタン */
+    #hamburgerBtn {
+        background: none;
+        border: none;
+        color: white;
+        font-size: 34px; /* ヘッダーサイズを変えない程度に大きく */
+        cursor: pointer;
+        padding: 0;
+        z-index: 1002;
+        line-height: 1;
+        height: var(--header-height);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    /* タイトル中央寄せ */
+    header.app-header h1 {
+        margin: 0 auto;
+        font-size: 32px; /* タイトルを大きく */
+        text-align: center;
+    }
+
+    /* メニュー関連はヘッダー高さ分だけ下げる */
+    #menuPanel {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 250px;
+        height: 100vh;
+        background-color: rgba(34, 34, 34, 0.95); /* 透過5%（不透明95%） */
+        z-index: 1000;
+        overflow-y: auto;
+        padding-top: var(--header-height);
+        transform: translateX(-250px);
+        box-sizing: border-box;
+    }
+
+    #menuOverlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.3);
+        z-index: 999;
+        display: none;
+    }
+
+    #menuPanel a { display: block; color: white; padding: 15px 20px; text-decoration: none; font-size: 16px; border-bottom: 1px solid #444; }
+
+</style>
+
+<header class="app-header">
+    <!-- ハンバーガーメニューボタン（左側、上下中央揃え） -->
+    <button id="hamburgerBtn" onclick="toggleMenu()">☰</button>
+
+    <!-- タイトル（中央揃え） -->
+    <h1>FinalTaxReturn Application</h1>
+</header>
+
+<!-- オーバーレイメニュー背景 -->
+<div id="menuOverlay" onclick="toggleMenu()"></div>
+
+<!-- ドロップダウンメニュー（左側、縦一杯） -->
+<nav id="menuPanel" aria-hidden="true">
+    <a href="${pageContext.request.contextPath}/">ホーム</a>
+    <a href="${pageContext.request.contextPath}/return-form">申告書作成</a>
+    <a href="${pageContext.request.contextPath}/income">収益登録</a>
+    <a href="${pageContext.request.contextPath}/expense">経費登録</a>
+    <a href="${pageContext.request.contextPath}/profit-loss">損益一覧</a>
+    <a href="${pageContext.request.contextPath}/report">損益レポート</a>
+    <a href="${pageContext.request.contextPath}/settings">設定</a>
+</nav>
+
+<script>
+    let menuOpen = false;
+    function toggleMenu() {
+        const menuPanel = document.getElementById('menuPanel');
+        const menuOverlay = document.getElementById('menuOverlay');
+
+        if (!menuOpen) {
+            menuPanel.classList.remove('close');
+            menuPanel.classList.add('open');
+            menuPanel.style.transform = 'translateX(0)';
+            menuPanel.setAttribute('aria-hidden', 'false');
+            menuOverlay.style.display = 'block';
+            menuOpen = true;
+        } else {
+            menuPanel.classList.remove('open');
+            menuPanel.classList.add('close');
+            menuPanel.style.transform = 'translateX(-250px)';
+            menuPanel.setAttribute('aria-hidden', 'true');
+            menuOverlay.style.display = 'none';
+            menuOpen = false;
+        }
+    }
+</script>
