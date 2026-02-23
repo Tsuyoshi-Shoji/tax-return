@@ -81,22 +81,56 @@ git clone https://github.com/Tsuyoshi-Shoji/tax-return.git
 cd tax-return
 ```
 
-### 2. Mavenでビルド
+### 2. 環境の準備（.gitignore に記載されるファイルの復元）
+
+`.gitignore` に記載されているファイルやディレクトリは、以下のコマンドで自動生成または復元されます。
+
+#### 2-1. IDEの設定ファイル復元
+
+プロジェクトをIDEで開くと、自動的に生成されます：
+
+- **IntelliJ IDEA**: プロジェクトを開くと `.idea/` ディレクトリが自動生成
+- **Eclipse**: プロジェクトを開くと `.classpath`, `.project` などが自動生成
+- **VS Code**: 拡張機能導入時に `.vscode/` が自動生成
+
+#### 2-2. ビルド成果物の生成
+
+```bash
+# Maven依存関係のダウンロード（初回のみ必須）
+mvn dependency:resolve
+```
+
+このコマンドにより、`~/.m2/repository/` に Maven の依存ライブラリがダウンロード・キャッシュされます。
+
+### 3. Mavenでビルド
 
 ```bash
 mvn clean install
 ```
 
-ビルド完了後、`target/final-tax-return-1.0-SNAPSHOT.war`が生成されます。
+このコマンドにより以下が自動実行されます：
 
-### 3. データベース設定
+- **依存関係のダウンロード**: Maven Central Repository から全てのライブラリを取得
+- **コンパイル**: Java ソースコードをコンパイル  
+- **テスト実行**: テストコードを実行
+- **ビルド成果物の生成**:
+  - `target/` ディレクトリ
+  - `target/final-tax-return-1.0-SNAPSHOT.war`（デプロイ用のWARファイル）
+  - `target/classes/`（コンパイル済みクラス）
+  - その他のビルド関連ファイル
 
-`src/main/resources/application.properties`を編集：
+> **注意**: `target/` ディレクトリは `.gitignore` に記載されているため、クローン時には含まれません。ビルド時に自動生成されます。
+
+### 4. データベース設定
+
+`src/main/resources/application.properties` を編集し、接続先を指定します。
+
+#### 4-1. ローカルMySQL環境での設定
 
 ```properties
 # MySQL接続設定
 spring.datasource.url=jdbc:mysql://localhost:3306/final_tax_return
-spring.datasource.username=your_username
+spring.datasource.username=root
 spring.datasource.password=your_password
 spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
 
@@ -106,22 +140,103 @@ spring.jpa.show-sql=false
 spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
 ```
 
-### 4. Tomcatへのデプロイ
+#### 4-2. AWS RDS（MySQL）での設定
+
+```properties
+# AWS RDS接続設定
+spring.datasource.url=jdbc:mysql://my-database-1.cyxeeww4gysa.us-east-1.rds.amazonaws.com:3306/final_tax_return?useSSL=true&serverTimezone=UTC
+spring.datasource.username=admin
+spring.datasource.password=shoji0409
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+
+# SSL証明書の設定（オプション）
+# server.ssl.key-store=/path/to/keystore.p12
+# server.ssl.key-store-password=password
+
+# Hibernate設定
+spring.jpa.hibernate.ddl-auto=update
+spring.jpa.show-sql=false
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
+```
+
+> **注意**: パスワードは `.gitignore` に記載されているため、リポジトリにはコミットされません。クローン後、自分の環境に合わせて設定してください。
+
+### 5. Tomcatへのデプロイ
+
+#### 5-1. WARファイルのコピーとデプロイ
 
 ```bash
 # WARファイルをTomcatのwebappsディレクトリにコピー
 cp target/final-tax-return-1.0-SNAPSHOT.war /usr/local/tomcat/apache-tomcat-10.1.50/webapps/
-
-# Tomcatを再起動
-/usr/local/tomcat/apache-tomcat-10.1.50/bin/shutdown.sh
-/usr/local/tomcat/apache-tomcat-10.1.50/bin/startup.sh
 ```
 
-### 5. アプリケーションにアクセス
+#### 5-2. Tomcatの再起動
+
+```bash
+# Tomcatの停止
+/usr/local/tomcat/apache-tomcat-10.1.50/bin/shutdown.sh
+
+# Tomcatの起動
+/usr/local/tomcat/apache-tomcat-10.1.50/bin/startup.sh
+
+# ログの確認（オプション）
+tail -f /usr/local/tomcat/apache-tomcat-10.1.50/logs/catalina.out
+```
+
+> **TIP**: 初回デプロイ時は WARファイルの展開に少し時間がかかります。ログで確認してください。
+
+### 6. アプリケーションにアクセス
 
 ```
 http://localhost:8080/final-tax-return-1.0-SNAPSHOT
 ```
+
+## ⚡ クイックスタート
+
+以下のコマンドを順に実行すれば、セットアップからデプロイまで完了します：
+
+```bash
+# 1. リポジトリをクローン
+git clone https://github.com/Tsuyoshi-Shoji/tax-return.git
+cd tax-return
+
+# 2. Maven依存関係をダウンロード
+mvn dependency:resolve
+
+# 3. ビルド（WARファイル生成）
+mvn clean install
+
+# 4. application.properties を編集（自分の環境に合わせて）
+# エディタで以下のファイルを開き、DB接続情報を設定
+# src/main/resources/application.properties
+
+# 5. Tomcatへデプロイ
+cp target/final-tax-return-1.0-SNAPSHOT.war /usr/local/tomcat/apache-tomcat-10.1.50/webapps/
+
+# 6. Tomcatを再起動
+/usr/local/tomcat/apache-tomcat-10.1.50/bin/shutdown.sh
+/usr/local/tomcat/apache-tomcat-10.1.50/bin/startup.sh
+
+# 7. アプリケーションにアクセス
+# ブラウザで以下にアクセス
+# http://localhost:8080/final-tax-return-1.0-SNAPSHOT
+```
+
+## 📋 .gitignore に記載されるファイル一覧
+
+| カテゴリ | ファイル/ディレクトリ | 説明 |
+|---------|---------------------|------|
+| **ビルド成果物** | `target/` | Maven ビルド出力（自動生成） |
+| **IDE設定** | `.idea/`, `*.iml`, `*.ipr` | IntelliJ IDEA 設定 |
+| | `.classpath`, `.project` | Eclipse 設定 |
+| | `.vscode/` | Visual Studio Code 設定 |
+| | `*.iws` | IntelliJ ワークスペース |
+| **ビルド中間ファイル** | `.apt_generated`, `.sts4-cache` | アノテーション処理ファイル |
+| | `/nbproject/`, `/nbbuild/` | NetBeans ビルド出力 |
+| | `/dist/` | 配布用ディレクトリ |
+| **OS ファイル** | `.DS_Store` | macOS ファイル |
+
+> 💡 **ポイント**: これらのファイルは不要な容量を削減するため、リポジトリに含めません。クローン後、ビルドコマンド実行時に自動生成されます。
 
 ## 📱 UI・UX特徴
 
@@ -149,6 +264,103 @@ http://localhost:8080/final-tax-return-1.0-SNAPSHOT
    - 収益/経費を選択
    - 勘定項目でフィルタリング
    - 検索して結果を表示
+
+## 🔧 トラブルシューティング
+
+### ❌ ビルドに失敗する
+
+**エラー**: `Could not find java.lang.String`
+
+**原因**: Java のバージョンが不適切
+
+**解決策**:
+```bash
+# Java バージョン確認
+java -version
+
+# Java 23 以上がインストールされているか確認
+# 必要に応じてインストール
+```
+
+---
+
+### ❌ データベース接続エラー
+
+**エラー**: `Access denied for user 'admin'@'localhost'`
+
+**原因**: `application.properties` のDB接続情報が間違っている
+
+**解決策**:
+```bash
+# application.properties を編集
+vi src/main/resources/application.properties
+
+# 以下を確認:
+# - spring.datasource.url: 正しいホスト/ポート/DB名
+# - spring.datasource.username: 正しいユーザー名
+# - spring.datasource.password: 正しいパスワード
+```
+
+---
+
+### ❌ Tomcat に404エラー
+
+**エラー**: `HTTP Status 404 - Not Found`
+
+**原因**: アプリケーションが正しくデプロイされていない
+
+**解決策**:
+```bash
+# 1. Tomcat ログを確認
+tail -f /usr/local/tomcat/apache-tomcat-10.1.50/logs/catalina.out
+
+# 2. WARファイルが正しくコピーされているか確認
+ls -la /usr/local/tomcat/apache-tomcat-10.1.50/webapps/
+
+# 3. Tomcat を再起動
+/usr/local/tomcat/apache-tomcat-10.1.50/bin/shutdown.sh
+/usr/local/tomcat/apache-tomcat-10.1.50/bin/startup.sh
+
+# 4. 少し待ってからアクセス（展開に時間がかかる場合がある）
+sleep 10
+# ブラウザでアクセス: http://localhost:8080/final-tax-return-1.0-SNAPSHOT
+```
+
+---
+
+### ❌ Maven 依存関係がダウンロードできない
+
+**エラー**: `Could not transfer artifact`
+
+**原因**: Maven Central Repository に接続できない、またはネットワーク問題
+
+**解決策**:
+```bash
+# Maven キャッシュをクリア
+rm -rf ~/.m2/repository
+
+# 依存関係を再ダウンロード
+mvn dependency:resolve -U
+
+# またはビルドを再実行
+mvn clean install
+```
+
+---
+
+### ❌ IDE で `target/` ディレクトリが見つからない
+
+**原因**: ビルドがまだ実行されていない
+
+**解決策**:
+```bash
+# ビルドを実行
+mvn clean install
+
+# IDE をリフレッシュ
+# IntelliJ IDEA: View → Reload File from Disk
+# Eclipse: F5 キーを押してリフレッシュ
+```
 
 ## 📝 ライセンス
 
