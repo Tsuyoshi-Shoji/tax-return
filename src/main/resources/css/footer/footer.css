@@ -1,0 +1,2 @@
+﻿/* フッターの中身が被らないように main 等は上下の余白を取る（ヘッダーの style で既に padding を付与しています） */
+    .app-footer p { margin: 0; }

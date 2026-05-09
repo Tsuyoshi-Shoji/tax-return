@@ -1,375 +1,232 @@
-# 所得税確定申告支援システム（Tax Return）
+﻿# ファイナンスマネジメント
 
-事業所得の確定申告を効率的に行うためのWebアプリケーションです。収益・経費の登録から損益レポートの生成まで、一連の申告準備業務をサポートします。
+## プロジェクト概要
 
-## 📋 主な機能
+**tax-return** は、個人事業主や自営業者向けの**収支管理および確定申告書作成・管理Webアプリケーション**です。収入・経費の登録から損益計算、申告書生成まで、一連の税務処理をサポートします。
 
-### 1. 収益管理
-- 複数の勘定項目で収益を分類登録
-- 日付、金額、詳細情報を入力
-- カレンダーUIで日付入力をサポート
-- 金額の自動カンマ区切り表示
+### 主な特徴
+- **ユーザーフレンドリーなUI**: 複雑な税務手続きを直感的に実行
+- **リアルタイム計算**: 収入・経費の登録に基づいた自動損益計算
+- **申告書生成**: 登録データから申告書を自動生成
+- **設定管理**: ユーザー情報や税務設定のカスタマイズ
 
-### 2. 経費管理
-- 事業経費を勘定項目別に登録
-- 日付、金額、但し書きを記録
-- 収益管理と同じUIで統一されたUX
+---
 
-### 3. 損益レポート
-- 期間指定での検索機能
-- 収益/経費の区分フィルタ
-- 勘定項目の複数選択対応
-- 損益結果の可視化
+## 利用技術スタック
 
-## 🛠️ 技術スタック
+### バックエンド
+| 技術 | バージョン | 役割 |
+|------|----------|------|
+| **Java** | 23 | プログラミング言語 |
+| **Spring MVC** | 6.2.10 | Webフレームワーク |
+| **Spring Boot** | 3.2.1 | アプリケーション基盤（JPA/データソース管理） |
+| **Hibernate/JPA** | 6.4.1 | ORM（オブジェクト関係マッピング） |
+| **MySQL** | 8.0.33 | データベース |
+| **HikariCP** | 5.0.1 | コネクションプーリング |
 
-| 項目 | 内容 |
+### フロントエンド
+| 技術 | バージョン | 役割 |
+|------|----------|------|
+| **JSP** | 3.1.1 | Javaサーバーページ |
+| **JSTL** | 3.0.0+ | JSPタグライブラリ |
+| **HTML5 + CSS3** | - | マークアップ・スタイリング |
+| **JavaScript** | - | クライアント側の動的処理 |
+
+### ビルド・デプロイ
+| ツール | 役割 |
 |------|------|
-| **言語** | Java 23 |
-| **フレームワーク** | Spring MVC 6.2.10 |
-| **ビルドツール** | Maven |
-| **ビューテンプレート** | JSP |
-| **データベース** | MySQL 8.0 |
-| **アプリケーションサーバー** | Apache Tomcat 10.1.50 |
-| **ORM** | Spring Data JPA / Hibernate |
-| **フロントエンド** | HTML5 / CSS3 / JavaScript |
+| **Maven** | ビルド・依存関係管理 |
+| **Tomcat** | 11.0.21 | Webサーバー/アプリケーションサーバー |
 
-## 📁 プロジェクト構成
+---
+
+## 機能概要
+
+### 📊 主要機能
+
+| 機能 | 説明 | URL |
+|------|------|------|
+| **ホーム** | ダッシュボード・ナビゲーション | `/` |
+| **申告書作成** | 確定申告書の作成・編集 | `/return-form` |
+| **収入登録** | 事業収入・その他の収入を登録 | `/income` |
+| **経費登録** | 事業経費を登録・分類 | `/expense` |
+| **損益一覧** | 登録済みの収入・経費を一覧表示 | `/profit-loss` |
+| **損益レポート** | 損益計算結果をレポート表示 | `/report` |
+| **設定** | ユーザー情報・税務設定の管理 | `/settings` |
+
+---
+
+## プロジェクト構成
 
 ```
-src/
-├── main/
+tax-return/
+├── pom.xml                          # Maven設定ファイル
+├── README.md                        # このファイル
+├── restart-tomcat.ps1               # Tomcat再起動スクリプト
+│
+├── src/main/
 │   ├── java/org/example/
-│   │   ├── Main.java                    # アプリケーション起動クラス
-│   │   ├── controller/                  # Spring Controller
-│   │   │   └── HomeController.java
-│   │   ├── service/                     # ビジネスロジック層
-│   │   │   ├── HomeService.java
-│   │   │   └── impl/
-│   │   │       └── HomeServiceImpl.java
-│   │   └── config/                      # Spring設定
-│   │       ├── WebAppInitializer.java
-│   │       └── WebConfig.java
+│   │   ├── Main.java                # エントリーポイント
+│   │   ├── config/                  # Spring設定クラス
+│   │   │   ├── WebConfig.java       # Webフレームワーク設定
+│   │   │   └── WebAppInitializer.java
+│   │   ├── controller/              # Webコントローラ層
+│   │   │   └── HomeController.java  # ホーム・ナビゲーション制御
+│   │   └── service/                 # ビジネスロジック層
+│   │       ├── HomeService.java     # ホーム関連サービス
+│   │       ├── impl/                # サービス実装クラス
+│   │       ├── Auth/                # 認証関連
+│   │       ├── Expense/             # 経費関連
+│   │       ├── Income/              # 収入関連
+│   │       ├── ProfitLoss/          # 損益関連
+│   │       ├── Report/              # レポート関連
+│   │       ├── ReturnForm/          # 申告書関連
+│   │       └── Setting/             # 設定関連
+│   │
 │   ├── resources/
-│   │   ├── application.properties        # アプリケーション設定
-│   │   ├── css/
-│   │   │   └── style.css                # スタイルシート
+│   │   ├── application.properties    # アプリケーション設定
+│   │   ├── css/                      # スタイルシート
+│   │   │   ├── style.css             # 共通CSS
+│   │   │   ├── expense/              # 経費画面用CSS
+│   │   │   ├── footer/               # フッター用CSS
+│   │   │   ├── header/               # ヘッダー用CSS
+│   │   │   ├── home/                 # ホーム用CSS
+│   │   │   ├── income/               # 収入画面用CSS
+│   │   │   ├── profit-loss/          # 損益画面用CSS
+│   │   │   ├── report/               # レポート用CSS
+│   │   │   ├── return-form/          # 申告書用CSS
+│   │   │   └── settings/             # 設定用CSS
 │   │   └── js/
-│   │       └── app.js                   # JavaScriptスクリプト
-│   └── webapp/WEB-INF/views/            # JSPテンプレート
-│       ├── header.jsp                   # ヘッダー
-│       ├── footer.jsp                   # フッター
-│       ├── home.jsp                     # ホーム画面
-│       ├── income.jsp                   # 収益登録画面
-│       ├── expense.jsp                  # 経費登録画面
-│       └── profit-loss.jsp              # 損益レポート画面
-└── test/java/                           # テストコード
+│   │       └── app.js                # JavaScript（共通）
+│   │
+│   └── webapp/WEB-INF/
+│       └── views/                    # JSPテンプレート
+│           ├── header.jsp            # ヘッダーコンポーネント
+│           ├── footer.jsp            # フッターコンポーネント
+│           ├── home.jsp              # ホーム画面
+│           ├── return-form.jsp       # 申告書画面
+│           ├── income.jsp            # 収入登録画面
+│           ├── expense.jsp           # 経費登録画面
+│           ├── profit-loss.jsp       # 損益一覧画面
+│           ├── report.jsp            # レポート画面
+│           └── settings.jsp          # 設定画面
+│
+└── target/                           # ビルド出力ディレクトリ
+    ├── final-tax-return-1.0-SNAPSHOT.war
+    └── classes/                      # コンパイル済みクラス
 ```
 
-## 🚀 セットアップ・実行方法
+---
+
+## アーキテクチャ
+
+### 3層構造
+
+```
+┌─────────────────────────────────────────┐
+│       プレゼンテーション層               │
+│  JSP/HTML/CSS/JavaScript                │
+│  (WEB-INF/views/)                       │
+└─────────────────────────────────────────┘
+                    ↕
+┌─────────────────────────────────────────┐
+│         コントローラ層 (Controller)       │
+│  Spring MVC @Controller                 │
+│  - リクエスト処理                       │
+│  - ビジネスロジックの呼び出し           │
+│  - ビューへのデータ渡し                 │
+└─────────────────────────────────────────┘
+                    ↕
+┌─────────────────────────────────────────┐
+│      ビジネスロジック層 (Service)        │
+│  Spring @Service                        │
+│  - 業務ロジック実装                     │
+│  - データ処理・計算                     │
+│  - リポジトリの呼び出し                 │
+└─────────────────────────────────────────┘
+                    ↕
+┌─────────────────────────────────────────┐
+│    永続化層 (Repository/JPA)            │
+│  Spring Data JPA @Repository            │
+│  - データベース操作（CRUD）              │
+│  - トランザクション管理                 │
+└─────────────────────────────────────────┘
+                    ↕
+┌─────────────────────────────────────────┐
+│      データベース層 (MySQL)               │
+│  AWS RDS for MySQL                      │
+└─────────────────────────────────────────┘
+```
+
+---
+
+## セットアップ・実行手順
 
 ### 前提条件
-- Java 23以上
-- Maven 3.6以上
-- MySQL 8.0以上
-- Apache Tomcat 10.1以上
+- Java 23 以上
+- Maven 3.6 以上
+- MySQL 8.0 以上
+- Tomcat 11.0.21 以上
 
-### 1. リポジトリをクローン
-
+### ビルド
 ```bash
-git clone https://github.com/Tsuyoshi-Shoji/tax-return.git
 cd tax-return
+mvn clean package
 ```
 
-### 2. 環境の準備（.gitignore に記載されるファイルの復元）
-
-`.gitignore` に記載されているファイルやディレクトリは、以下のコマンドで自動生成または復元されます。
-
-#### 2-1. IDEの設定ファイル復元
-
-プロジェクトをIDEで開くと、自動的に生成されます：
-
-- **IntelliJ IDEA**: プロジェクトを開くと `.idea/` ディレクトリが自動生成
-- **Eclipse**: プロジェクトを開くと `.classpath`, `.project` などが自動生成
-- **VS Code**: 拡張機能導入時に `.vscode/` が自動生成
-
-#### 2-2. ビルド成果物の生成
-
-```bash
-# Maven依存関係のダウンロード（初回のみ必須）
-mvn dependency:resolve
-```
-
-このコマンドにより、`~/.m2/repository/` に Maven の依存ライブラリがダウンロード・キャッシュされます。
-
-### 3. Mavenでビルド
-
-```bash
-mvn clean install
-```
-
-このコマンドにより以下が自動実行されます：
-
-- **依存関係のダウンロード**: Maven Central Repository から全てのライブラリを取得
-- **コンパイル**: Java ソースコードをコンパイル  
-- **テスト実行**: テストコードを実行
-- **ビルド成果物の生成**:
-  - `target/` ディレクトリ
-  - `target/final-tax-return-1.0-SNAPSHOT.war`（デプロイ用のWARファイル）
-  - `target/classes/`（コンパイル済みクラス）
-  - その他のビルド関連ファイル
-
-> **注意**: `target/` ディレクトリは `.gitignore` に記載されているため、クローン時には含まれません。ビルド時に自動生成されます。
-
-### 4. データベース設定
-
-`src/main/resources/application.properties` を編集し、接続先を指定します。
-
-#### 4-1. ローカルMySQL環境での設定
-
-```properties
-# MySQL接続設定
-spring.datasource.url=jdbc:mysql://localhost:3306/final_tax_return
-spring.datasource.username=root
-spring.datasource.password=your_password
-spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
-
-# Hibernate設定
-spring.jpa.hibernate.ddl-auto=update
-spring.jpa.show-sql=false
-spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
-```
-
-#### 4-2. AWS RDS（MySQL）での設定
-
-```properties
-# AWS RDS接続設定
-spring.datasource.url=jdbc:mysql://my-database-1.cyxeeww4gysa.us-east-1.rds.amazonaws.com:3306/final_tax_return?useSSL=true&serverTimezone=UTC
-spring.datasource.username=admin
-spring.datasource.password=shoji0409
-spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
-
-# SSL証明書の設定（オプション）
-# server.ssl.key-store=/path/to/keystore.p12
-# server.ssl.key-store-password=password
-
-# Hibernate設定
-spring.jpa.hibernate.ddl-auto=update
-spring.jpa.show-sql=false
-spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQLDialect
-```
-
-> **注意**: パスワードは `.gitignore` に記載されているため、リポジトリにはコミットされません。クローン後、自分の環境に合わせて設定してください。
-
-### 5. Tomcatへのデプロイ
-
-#### 5-1. WARファイルのコピーとデプロイ
-
+### デプロイ（Tomcat）
 ```bash
 # WARファイルをTomcatのwebappsディレクトリにコピー
-cp target/final-tax-return-1.0-SNAPSHOT.war /usr/local/tomcat/apache-tomcat-10.1.50/webapps/
+cp target/final-tax-return-1.0-SNAPSHOT.war $TOMCAT_HOME/webapps/
+
+# Tomcatを起動
+$TOMCAT_HOME/bin/startup.sh   # Linux/Mac
+# または
+$TOMCAT_HOME/bin/startup.bat  # Windows
 ```
 
-#### 5-2. Tomcatの再起動
-
-```bash
-# Tomcatの停止
-/usr/local/tomcat/apache-tomcat-10.1.50/bin/shutdown.sh
-
-# Tomcatの起動
-/usr/local/tomcat/apache-tomcat-10.1.50/bin/startup.sh
-
-# ログの確認（オプション）
-tail -f /usr/local/tomcat/apache-tomcat-10.1.50/logs/catalina.out
+### アクセス
 ```
-
-> **TIP**: 初回デプロイ時は WARファイルの展開に少し時間がかかります。ログで確認してください。
-
-### 6. アプリケーションにアクセス
-
-```
-http://localhost:8080/final-tax-return-1.0-SNAPSHOT
-```
-
-## ⚡ クイックスタート
-
-以下のコマンドを順に実行すれば、セットアップからデプロイまで完了します：
-
-```bash
-# 1. リポジトリをクローン
-git clone https://github.com/Tsuyoshi-Shoji/tax-return.git
-cd tax-return
-
-# 2. Maven依存関係をダウンロード
-mvn dependency:resolve
-
-# 3. ビルド（WARファイル生成）
-mvn clean install
-
-# 4. application.properties を編集（自分の環境に合わせて）
-# エディタで以下のファイルを開き、DB接続情報を設定
-# src/main/resources/application.properties
-
-# 5. Tomcatへデプロイ
-cp target/final-tax-return-1.0-SNAPSHOT.war /usr/local/tomcat/apache-tomcat-10.1.50/webapps/
-
-# 6. Tomcatを再起動
-/usr/local/tomcat/apache-tomcat-10.1.50/bin/shutdown.sh
-/usr/local/tomcat/apache-tomcat-10.1.50/bin/startup.sh
-
-# 7. アプリケーションにアクセス
-# ブラウザで以下にアクセス
-# http://localhost:8080/final-tax-return-1.0-SNAPSHOT
-```
-
-## 📋 .gitignore に記載されるファイル一覧
-
-| カテゴリ | ファイル/ディレクトリ | 説明 |
-|---------|---------------------|------|
-| **ビルド成果物** | `target/` | Maven ビルド出力（自動生成） |
-| **IDE設定** | `.idea/`, `*.iml`, `*.ipr` | IntelliJ IDEA 設定 |
-| | `.classpath`, `.project` | Eclipse 設定 |
-| | `.vscode/` | Visual Studio Code 設定 |
-| | `*.iws` | IntelliJ ワークスペース |
-| **ビルド中間ファイル** | `.apt_generated`, `.sts4-cache` | アノテーション処理ファイル |
-| | `/nbproject/`, `/nbbuild/` | NetBeans ビルド出力 |
-| | `/dist/` | 配布用ディレクトリ |
-| **OS ファイル** | `.DS_Store` | macOS ファイル |
-
-> 💡 **ポイント**: これらのファイルは不要な容量を削減するため、リポジトリに含めません。クローン後、ビルドコマンド実行時に自動生成されます。
-
-## 📱 UI・UX特徴
-
-- **統一されたレイアウト**: 収益・経費登録画面は同じUIで実装
-- **カレンダーピッカー**: 日付入力時にカレンダーを表示
-- **自動フォーマット**: 金額入力時に日本円のカンマ区切りを自動適用
-- **レスポンシブデザイン**: ヘッダー・フッター付きで、各画面のコンテンツはセンタリング表示
-- **バリデーション**: 日付範囲チェック、数値入力の検証
-
-## 🔄 使用フロー
-
-1. **ホーム画面**で機能を選択
-2. **収益登録画面**で収入を登録
-   - 勘定項目を選択
-   - 日付を入力
-   - 金額を入力
-   - 詳細を記入
-3. **経費登録画面**で支出を登録
-   - 勘定項目を選択
-   - 日付を入力
-   - 金額を入力
-   - 但し書きを記入
-4. **損益レポート画面**で集計結果を確認
-   - 期間を指定
-   - 収益/経費を選択
-   - 勘定項目でフィルタリング
-   - 検索して結果を表示
-
-## 🔧 トラブルシューティング
-
-### ❌ ビルドに失敗する
-
-**エラー**: `Could not find java.lang.String`
-
-**原因**: Java のバージョンが不適切
-
-**解決策**:
-```bash
-# Java バージョン確認
-java -version
-
-# Java 23 以上がインストールされているか確認
-# 必要に応じてインストール
+http://localhost:8080/final-tax-return-1.0-SNAPSHOT/
 ```
 
 ---
 
-### ❌ データベース接続エラー
+## データベース設定
 
-**エラー**: `Access denied for user 'admin'@'localhost'`
+`application.properties` でデータベース接続情報を設定：
 
-**原因**: `application.properties` のDB接続情報が間違っている
+```properties
+spring.datasource.url=jdbc:mysql://[HOST]:[PORT]/[DATABASE]
+spring.datasource.username=[USER]
+spring.datasource.password=[PASSWORD]
+spring.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
 
-**解決策**:
-```bash
-# application.properties を編集
-vi src/main/resources/application.properties
-
-# 以下を確認:
-# - spring.datasource.url: 正しいホスト/ポート/DB名
-# - spring.datasource.username: 正しいユーザー名
-# - spring.datasource.password: 正しいパスワード
+spring.jpa.hibernate.ddl-auto=update  # 自動スキーマ生成
+spring.jpa.properties.hibernate.dialect=org.hibernate.dialect.MySQL8Dialect
 ```
 
 ---
 
-### ❌ Tomcat に404エラー
+## 開発メモ
 
-**エラー**: `HTTP Status 404 - Not Found`
+### Spring設定
+- **@EnableWebMvc**: Spring MVCの有効化
+- **@ComponentScan**: 指定パッケージのコンポーネント自動検出
+- **ViewResolver**: JSP テンプレートの解決設定
+  - Prefix: `/WEB-INF/views/`
+  - Suffix: `.jsp`
 
-**原因**: アプリケーションが正しくデプロイされていない
-
-**解決策**:
-```bash
-# 1. Tomcat ログを確認
-tail -f /usr/local/tomcat/apache-tomcat-10.1.50/logs/catalina.out
-
-# 2. WARファイルが正しくコピーされているか確認
-ls -la /usr/local/tomcat/apache-tomcat-10.1.50/webapps/
-
-# 3. Tomcat を再起動
-/usr/local/tomcat/apache-tomcat-10.1.50/bin/shutdown.sh
-/usr/local/tomcat/apache-tomcat-10.1.50/bin/startup.sh
-
-# 4. 少し待ってからアクセス（展開に時間がかかる場合がある）
-sleep 10
-# ブラウザでアクセス: http://localhost:8080/final-tax-return-1.0-SNAPSHOT
-```
+### 静的リソース
+- CSS/JavaScript: `/resources/` 配下
+- 各画面ごとにCSS: `resources/css/[screen-name]/`
 
 ---
 
-### ❌ Maven 依存関係がダウンロードできない
+## ライセンス
+- 開発中
 
-**エラー**: `Could not transfer artifact`
-
-**原因**: Maven Central Repository に接続できない、またはネットワーク問題
-
-**解決策**:
-```bash
-# Maven キャッシュをクリア
-rm -rf ~/.m2/repository
-
-# 依存関係を再ダウンロード
-mvn dependency:resolve -U
-
-# またはビルドを再実行
-mvn clean install
-```
-
----
-
-### ❌ IDE で `target/` ディレクトリが見つからない
-
-**原因**: ビルドがまだ実行されていない
-
-**解決策**:
-```bash
-# ビルドを実行
-mvn clean install
-
-# IDE をリフレッシュ
-# IntelliJ IDEA: View → Reload File from Disk
-# Eclipse: F5 キーを押してリフレッシュ
-```
-
-## 📝 ライセンス
-
-MIT License
-
-## 👤 作成者
-
-Tsuyoshi Shoji
-
-## 🔗 リポジトリ
-
-https://github.com/Tsuyoshi-Shoji/tax-return
+## 参考資料
+- Spring MVC: https://spring.io/projects/spring-framework
+- Hibernate JPA: https://hibernate.org/orm/
+- Tomcat: https://tomcat.apache.org/

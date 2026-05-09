@@ -20,36 +20,43 @@ public class HomeController {
     public String home(Model model) {
         model.addAttribute("message", homeService.getWelcomeMessage());
         model.addAttribute("serverTime", homeService.getCurrentTime());
-        return "home";
+        model.addAttribute("headerTitle", "ホーム");
+        return "Home/home";
     }
 
     @GetMapping("/return-form")
-    public String returnForm() {
-        return "return-form";
+    public String returnForm(Model model) {
+        model.addAttribute("headerTitle", "申告書作成");
+        return "ReturnForm/return-form";
     }
 
     @GetMapping("/income")
-    public String income() {
-        return "income";
+    public String income(Model model) {
+        model.addAttribute("headerTitle", "収益登録");
+        return "Income/income";
     }
 
     @GetMapping("/expense")
-    public String expense() {
-        return "expense";
+    public String expense(Model model) {
+        model.addAttribute("headerTitle", "経費登録");
+        return "Expense/expense";
     }
 
     @GetMapping("/profit-loss")
-    public String profitLoss() {
-        return "profit-loss";
+    public String profitLoss(Model model) {
+        model.addAttribute("headerTitle", "損益一覧");
+        return "ProfitLoss/profit-loss";
     }
 
     @GetMapping("/report")
-    public String report() {
-        return "report";
+    public String report(Model model) {
+        model.addAttribute("headerTitle", "損益レポート");
+        return "Report/report";
     }
 
     @GetMapping("/settings")
-    public String settings() {
-        return "settings";
+    public String settings(Model model) {
+        model.addAttribute("headerTitle", "設定");
+        return "Setting/settings";
     }
 }
