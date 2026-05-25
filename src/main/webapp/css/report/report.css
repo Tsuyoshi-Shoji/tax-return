@@ -1,0 +1,438 @@
+/* ========================================
+   損益レポート画面 - UIルール準拠
+   ======================================== */
+
+.report-main {
+    width: 100%;
+}
+
+.report-container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.section-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: var(--spacing-md);
+    margin-bottom: var(--spacing-lg);
+}
+
+.section-heading h2 {
+    margin: 0;
+}
+
+.section-heading span {
+    color: var(--color-text-light);
+    font-size: var(--font-size-sm);
+}
+
+.progress-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.progress-spinner {
+    width: 50px;
+    height: 50px;
+    border: 4px solid var(--color-border);
+    border-top: 4px solid var(--color-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: var(--spacing-lg);
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.period-selector {
+    background-color: var(--color-white);
+    padding: var(--spacing-lg);
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+    margin-bottom: var(--spacing-2xl);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    flex-wrap: wrap;
+}
+
+.period-selector form {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+}
+
+.period-selector label {
+    margin: 0;
+    font-weight: 600;
+}
+
+.period-selector select {
+    min-width: 150px;
+}
+
+.period-selector button {
+    margin-left: auto;
+}
+
+.report-section {
+    background-color: var(--color-white);
+    padding: var(--spacing-lg);
+    border-radius: 4px;
+    border: 1px solid var(--color-border);
+    margin-bottom: var(--spacing-2xl);
+}
+
+.report-section h2 {
+    margin-bottom: var(--spacing-lg);
+    font-size: var(--font-size-lg);
+}
+
+.report-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.report-table-wrapper {
+    overflow-x: auto;
+}
+
+.report-table thead {
+    background-color: var(--color-bg);
+}
+
+.report-table th,
+.report-table td {
+    padding: var(--spacing-md);
+    text-align: right;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.report-table tbody th {
+    font-weight: 600;
+}
+
+.month-link {
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+.income-row th,
+.income-row td,
+.income-summary p {
+    color: var(--color-primary);
+}
+
+.expense-row th,
+.expense-row td,
+.expense-summary p {
+    color: var(--color-error);
+}
+
+.profit-row th,
+.profit-row td,
+.profit-summary p {
+    color: var(--color-text);
+    font-weight: 700;
+}
+
+.report-table th:first-child,
+.report-table td:first-child {
+    text-align: left;
+}
+
+.report-table th.income {
+    color: var(--color-success);
+}
+
+.report-table th.expense {
+    color: var(--color-error);
+}
+
+.report-table th.profit {
+    color: var(--color-primary);
+}
+
+.chart-container {
+    display: flex;
+    justify-content: center;
+    margin-bottom: var(--spacing-lg);
+}
+
+.summary-section {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-2xl);
+}
+
+.summary-card {
+    padding: var(--spacing-lg);
+    background-color: var(--color-white);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+}
+
+.summary-card h3 {
+    margin-bottom: var(--spacing-sm);
+    color: var(--color-text-light);
+    font-size: var(--font-size-base);
+}
+
+.summary-card p {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.bar-chart {
+    min-height: 260px;
+    display: grid;
+    grid-template-columns: repeat(12, minmax(48px, 1fr));
+    gap: var(--spacing-md);
+    align-items: end;
+    padding: var(--spacing-lg) var(--spacing-md) var(--spacing-md);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    overflow-x: auto;
+}
+
+.bar-group {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+    min-height: 220px;
+    color: var(--color-text);
+}
+
+.bars {
+    display: flex;
+    align-items: end;
+    gap: 4px;
+    height: 190px;
+}
+
+.bar {
+    width: 14px;
+    min-height: 4px;
+    border-radius: 3px 3px 0 0;
+}
+
+.income-bar {
+    background-color: var(--color-primary);
+}
+
+.expense-bar {
+    background-color: var(--color-error);
+}
+
+.bar-label {
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+}
+
+.chart-note {
+    margin: var(--spacing-md) 0 0;
+    color: var(--color-text-light);
+    font-size: var(--font-size-sm);
+}
+
+.detail-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-lg);
+}
+
+.report-detail-container {
+    max-width: 1100px;
+}
+
+.detail-table-container h3,
+.chart-pie-container h3 {
+    font-size: var(--font-size-base);
+    margin-bottom: var(--spacing-md);
+}
+
+.detail-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.detail-table thead {
+    background-color: var(--color-bg);
+}
+
+.detail-table th,
+.detail-table td {
+    padding: var(--spacing-md);
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.detail-table td:last-child {
+    text-align: right;
+}
+
+.detail-month-table {
+    max-width: 520px;
+}
+
+.pie-chart {
+    width: 220px;
+    height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    border: 1px solid var(--color-border);
+    margin: 0 auto;
+    color: var(--color-text-light);
+    background: var(--color-bg);
+}
+
+.calendar {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(72px, 1fr));
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.calendar-head,
+.calendar-cell {
+    min-height: 56px;
+    padding: var(--spacing-sm);
+    border-right: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--color-border);
+    background-color: var(--color-white);
+}
+
+.calendar-head {
+    min-height: auto;
+    font-weight: 600;
+    text-align: center;
+    background-color: var(--color-bg);
+}
+
+.calendar-cell.is-blank {
+    background-color: #f3f4f6;
+}
+
+.calendar-dots {
+    display: flex;
+    gap: 4px;
+    margin-top: var(--spacing-sm);
+}
+
+.dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.income-dot {
+    background-color: var(--color-primary);
+}
+
+.expense-dot {
+    background-color: var(--color-error);
+}
+
+.detail-summary {
+    margin-top: var(--spacing-lg);
+    padding-top: var(--spacing-lg);
+    border-top: 1px solid var(--color-border);
+}
+
+.detail-summary p {
+    margin: var(--spacing-sm) 0;
+    display: flex;
+    justify-content: space-between;
+}
+
+.close-btn {
+    padding: var(--button-padding);
+    height: var(--button-height);
+    background-color: var(--color-white);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: var(--input-border-radius);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+    background-color: var(--color-bg);
+}
+
+/* レスポンシブ */
+@media (max-width: 768px) {
+    .period-selector {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .period-selector form,
+    .section-heading {
+        width: 100%;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .period-selector button {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .detail-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .calendar {
+        grid-template-columns: repeat(7, minmax(42px, 1fr));
+    }
+
+    .calendar-head,
+    .calendar-cell {
+        min-height: 44px;
+        padding: 6px;
+    }
+}
+
+@media print {
+    header,
+    footer,
+    .period-selector,
+    .chart-note {
+        display: none !important;
+    }
+
+    main {
+        margin: 0 !important;
+        padding: 0 !important;
+    }
+
+    .report-section,
+    .summary-card {
+        break-inside: avoid;
+        box-shadow: none;
+    }
+}
+
