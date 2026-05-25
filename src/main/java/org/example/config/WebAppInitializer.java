@@ -7,14 +7,14 @@ public class WebAppInitializer
 
     @Override
     protected Class<?>[] getRootConfigClasses() {
-        // 今回はルートコンテキスト未使用
-        return null;
+        // Root context keeps infrastructure beans (JPA, service, repository, etc.)
+        return new Class<?>[]{RootConfig.class};
     }
 
     @Override
     protected Class<?>[] getServletConfigClasses() {
-        // Spring MVC の設定クラス
-        return new Class<?>[]{ WebConfig.class };
+        // Web MVC only
+        return new Class<?>[]{WebConfig.class};
     }
 
     @Override

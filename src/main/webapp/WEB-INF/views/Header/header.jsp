@@ -1,12 +1,25 @@
 ﻿<%@ page contentType="text/html;charset=UTF-8" %>
-<link rel="stylesheet" href="${pageContext.request.contextPath}/resources/css/header/header.css" />
+<%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css" />
+<link rel="stylesheet" href="${pageContext.request.contextPath}/css/header/header.css" />
 
 <header class="app-header">
-    <!-- ハンバーガーメニューボタン（左側、上下中央揃え） -->
     <button id="hamburgerBtn" onclick="toggleMenu()">☰</button>
-
-    <!-- タイトル（中央揃え） -->
-    <h1>${empty headerTitle ? '収支管理' : headerTitle}</h1>
+    <div class="header-spacer"></div>
+    <div class="header-user-area">
+        <c:if test="${not empty currentUserDisplayName}">
+            <div class="header-user-info">
+                <span class="header-user-name"><c:out value="${currentUserDisplayName}" /></span>
+                <span class="header-user-email"><c:out value="${currentUserEmail}" /></span>
+            </div>
+        </c:if>
+        <form method="post" action="${pageContext.request.contextPath}/logout" class="logout-form">
+            <c:if test="${not empty _csrf}">
+                <input type="hidden" name="${_csrf.parameterName}" value="${_csrf.token}" />
+            </c:if>
+            <button type="submit" class="logout-button">ログアウト</button>
+        </form>
+    </div>
 </header>
 
 <!-- オーバーレイメニュー背景 -->
@@ -17,7 +30,7 @@
     <a href="${pageContext.request.contextPath}/">ホーム</a>
     <a href="${pageContext.request.contextPath}/return-form">申告書作成</a>
     <a href="${pageContext.request.contextPath}/income">収益登録</a>
-    <a href="${pageContext.request.contextPath}/expense">経費登録</a>
+    <a href="${pageContext.request.contextPath}/expense">支出登録</a>
     <a href="${pageContext.request.contextPath}/profit-loss">損益一覧</a>
     <a href="${pageContext.request.contextPath}/report">損益レポート</a>
     <a href="${pageContext.request.contextPath}/settings">設定</a>
