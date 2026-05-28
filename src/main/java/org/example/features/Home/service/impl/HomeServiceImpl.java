@@ -3,6 +3,7 @@ package org.example.features.home.service.impl;
 import org.example.entity.Expense;
 import org.example.entity.Income;
 import org.example.entity.User;
+import org.example.features.auth.AuthUserContext;
 import org.example.features.home.service.HomeService;
 import org.example.repository.ExpenseRepository;
 import org.example.repository.IncomeRepository;
@@ -24,7 +25,6 @@ import java.util.stream.Stream;
 @Service
 public class HomeServiceImpl implements HomeService {
 
-    private static final Long DEFAULT_USER_ID = 1L;
     private final IncomeRepository incomeRepository;
     private final ExpenseRepository expenseRepository;
     private final UserRepository userRepository;
@@ -132,7 +132,9 @@ public class HomeServiceImpl implements HomeService {
         BigDecimal income = includeTaxExcluded
                 ? nvl(incomeRepository.sumAmountByUserIdAndPeriodIncludingAllData(currentUser.getId(), fromDate, toDate))
                 : nvl(incomeRepository.sumAmountByUserIdAndPeriod(currentUser.getId(), fromDate, toDate));
-        BigDecimal expense = nvl(expenseRepository.sumAmountByUserIdAndPeriod(currentUser.getId(), fromDate, toDate));
+        BigDecimal expense = includeTaxExcluded
+                ? nvl(expenseRepository.sumAmountByUserIdAndPeriodIncludingAllData(currentUser.getId(), fromDate, toDate))
+                : nvl(expenseRepository.sumAmountByUserIdAndPeriod(currentUser.getId(), fromDate, toDate));
         Map<String, Object> result = new HashMap<>();
         result.put("income", income);
         result.put("expense", expense);
@@ -141,7 +143,11 @@ public class HomeServiceImpl implements HomeService {
     }
 
     private Optional<User> findCurrentUser() {
-        return userRepository.findById(DEFAULT_USER_ID);
+        Long userId = AuthUserContext.getCurrentUserId();
+        if (userId == null) {
+            return Optional.empty();
+        }
+        return userRepository.findById(userId);
     }
 
     private BigDecimal nvl(BigDecimal value) {

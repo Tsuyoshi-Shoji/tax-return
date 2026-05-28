@@ -7,6 +7,7 @@ public record ExpenseEditView(
         String date,
         String amount,
         String details,
+        Boolean businessTarget,
         boolean homeApportionment,
         Long paymentMethodId) {
 }

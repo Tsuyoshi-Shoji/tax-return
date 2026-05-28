@@ -3,6 +3,7 @@ package org.example.features.profitloss.service.impl;
 import org.example.entity.Expense;
 import org.example.entity.Income;
 import org.example.entity.User;
+import org.example.features.auth.AuthUserContext;
 import org.example.features.profitloss.dto.ProfitLossDetailView;
 import org.example.features.profitloss.dto.ProfitLossListRow;
 import org.example.features.profitloss.dto.ProfitLossSearchResult;
@@ -29,7 +30,6 @@ import java.util.stream.Collectors;
 public class ProfitLossServiceImpl implements ProfitLossService {
 
     private static final int PAGE_SIZE = 10;
-    private static final Long DEFAULT_USER_ID = 1L;
 
     private final IncomeRepository incomeRepository;
     private final ExpenseRepository expenseRepository;
@@ -47,7 +47,7 @@ public class ProfitLossServiceImpl implements ProfitLossService {
     @Override
     @Transactional(readOnly = true)
     public ProfitLossSearchResult search(ProfitLossSearchForm form) {
-        Optional<User> currentUserOptional = userRepository.findById(DEFAULT_USER_ID);
+        Optional<User> currentUserOptional = findCurrentUser();
         if (currentUserOptional.isEmpty()) {
             return new ProfitLossSearchResult(
                     BigDecimal.ZERO,
@@ -70,13 +70,17 @@ public class ProfitLossServiceImpl implements ProfitLossService {
 
         List<ProfitLossListRow> filteredIncomeRows = incomeCandidates.stream()
                 .filter(income -> matchesIncome(income, form))
-                .sorted(Comparator.comparing(Income::getIncomeDate).reversed().thenComparing(Income::getId).reversed())
+                .sorted(Comparator.comparing(Income::getIncomeDate, Comparator.reverseOrder()).thenComparing(Income::getId, Comparator.reverseOrder()))
                 .map(this::toIncomeRow)
                 .toList();
 
-        List<ProfitLossListRow> filteredExpenseRows = allExpenses.stream()
+        List<Expense> expenseCandidates = form.isShowTaxExcluded()
+                ? allExpenses
+                : allExpenses.stream().filter(this::isProfitLossTargetExpense).toList();
+
+        List<ProfitLossListRow> filteredExpenseRows = expenseCandidates.stream()
                 .filter(expense -> matchesExpense(expense, form))
-                .sorted(Comparator.comparing(Expense::getExpenseDate).reversed().thenComparing(Expense::getId).reversed())
+                .sorted(Comparator.comparing(Expense::getExpenseDate, Comparator.reverseOrder()).thenComparing(Expense::getId, Comparator.reverseOrder()))
                 .map(this::toExpenseRow)
                 .toList();
 
@@ -98,8 +102,7 @@ public class ProfitLossServiceImpl implements ProfitLossService {
     @Override
     @Transactional(readOnly = true)
     public ProfitLossDetailView getDetail(String recordType, Long id) {
-        User currentUser = userRepository.findById(DEFAULT_USER_ID)
-                .orElseThrow(() -> new IllegalStateException("Default user not found"));
+        User currentUser = findCurrentUser().orElseThrow(() -> new IllegalStateException("Current user not found"));
         if ("income".equals(recordType)) {
             Income income = incomeRepository.findByIdAndUserIdAndDeletedFlagFalse(id, currentUser.getId())
                     .orElseThrow(() -> new IllegalArgumentException("対象の収益が見つかりません。"));
@@ -128,8 +131,7 @@ public class ProfitLossServiceImpl implements ProfitLossService {
     @Override
     @Transactional
     public void delete(String recordType, Long id) {
-        User currentUser = userRepository.findById(DEFAULT_USER_ID)
-                .orElseThrow(() -> new IllegalStateException("Default user not found"));
+        User currentUser = findCurrentUser().orElseThrow(() -> new IllegalStateException("Current user not found"));
         if ("income".equals(recordType)) {
             Income income = incomeRepository.findByIdAndUserIdAndDeletedFlagFalse(id, currentUser.getId())
                     .orElseThrow(() -> new IllegalArgumentException("対象の収益が見つかりません。"));
@@ -216,6 +218,10 @@ public class ProfitLossServiceImpl implements ProfitLossService {
         return !Boolean.FALSE.equals(income.getBusinessTartget());
     }
 
+    private boolean isProfitLossTargetExpense(Expense expense) {
+        return !Boolean.FALSE.equals(expense.getBusinessTarget());
+    }
+
     private ProfitLossListRow toExpenseRow(Expense expense) {
         return new ProfitLossListRow(
                 expense.getId(),
@@ -263,6 +269,14 @@ public class ProfitLossServiceImpl implements ProfitLossService {
             case "PUBLIC" -> "public";
             default -> "private";
         };
+    }
+
+    private Optional<User> findCurrentUser() {
+        Long userId = AuthUserContext.getCurrentUserId();
+        if (userId == null) {
+            return Optional.empty();
+        }
+        return userRepository.findById(userId);
     }
 }
 

@@ -8,6 +8,7 @@ public class ExpenseForm {
     private String date;
     private String amount;
     private String details;
+    private String businessTarget;
     private boolean homeApportionment;
     private String deductibleAmount;
     private String paymentMethodId;
@@ -59,6 +60,14 @@ public class ExpenseForm {
 
     public void setDetails(String details) {
         this.details = details;
+    }
+
+    public String getBusinessTarget() {
+        return businessTarget;
+    }
+
+    public void setBusinessTarget(String businessTarget) {
+        this.businessTarget = businessTarget;
     }
 
     public boolean isHomeApportionment() {

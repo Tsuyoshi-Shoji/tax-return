@@ -93,6 +93,13 @@
                     <p id="paymentMethodIdError" class="error-message" aria-live="polite"></p>
                 </div>
 
+                <div class="form-group full">
+                    <label class="checkbox-item" for="businessTargetExcluded">
+                        <input type="checkbox" id="businessTargetExcluded" name="businessTarget" value="false" />
+                        <span>申告対象外（損益計算から除外）として登録する</span>
+                    </label>
+                </div>
+
                 <div class="form-group full apportionment-group">
                     <input type="hidden" id="defaultBusinessUseRatio" name="defaultBusinessUseRatio" value="${defaultBusinessUseRatio}" />
                     <input type="hidden" id="deductibleAmount" name="deductibleAmount" value="" />
@@ -242,9 +249,11 @@
             const clearButton = document.getElementById('clearButton');
             const confirmHighAmountButton = document.getElementById('confirmHighAmountButton');
             const homeApportionmentInput = document.getElementById('homeApportionment');
+            const businessTargetExcludedInput = document.getElementById('businessTargetExcluded');
             const initialExpenseType = '<c:out value="${not empty expenseForm.expenseType ? expenseForm.expenseType : expenseEdit.expenseType}" />';
             const initialCategory = '<c:out value="${not empty expenseForm.category ? expenseForm.category : expenseEdit.subcategoryId}" />';
             const initialPaymentMethodId = '<c:out value="${not empty expenseForm.paymentMethodId ? expenseForm.paymentMethodId : expenseEdit.paymentMethodId}" />';
+            const initialBusinessTarget = '<c:out value="${not empty expenseForm.businessTarget ? expenseForm.businessTarget : expenseEdit.businessTarget}" />';
             const defaultBusinessUseRatioInput = document.getElementById('defaultBusinessUseRatio');
             const deductibleAmountInput = document.getElementById('deductibleAmount');
             const businessUseRatioLabel = document.getElementById('businessUseRatioLabel');
@@ -331,12 +340,14 @@
 
             function updateApportionmentPreview() {
                 const amount = parseAmount(amountInput.value.trim());
-                const shouldApplyApportionment = homeApportionmentInput.checked;
-                const deductibleAmount = calculateDeductibleAmount(amount, shouldApplyApportionment);
+                const isExcluded = businessTargetExcludedInput.checked;
+                const shouldApplyApportionment = !isExcluded && homeApportionmentInput.checked;
+                const deductibleAmount = isExcluded ? 0 : calculateDeductibleAmount(amount, shouldApplyApportionment);
 
                 deductibleAmountInput.value = amount > 0 ? String(deductibleAmount) : '';
                 apportionmentAmountLabel.textContent = formatYen(amount);
                 deductibleAmountLabel.textContent = formatYen(deductibleAmount);
+                homeApportionmentInput.disabled = isExcluded;
                 apportionmentPanel.classList.toggle('is-active', shouldApplyApportionment);
             }
 
@@ -485,6 +496,9 @@
                 setError('apportionment', '');
                 updateApportionmentPreview();
             });
+            businessTargetExcludedInput.addEventListener('change', () => {
+                updateApportionmentPreview();
+            });
             detailsInput.addEventListener('input', () => {
                 detailsCount.textContent = String(detailsInput.value.length);
                 setError('details', '');
@@ -552,6 +566,9 @@
                 if (paymentRadio) {
                     paymentRadio.checked = true;
                 }
+            }
+            if (initialBusinessTarget === 'false') {
+                businessTargetExcludedInput.checked = true;
             }
             updateApportionmentPreview();
         })();

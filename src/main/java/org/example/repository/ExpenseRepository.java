@@ -19,8 +19,11 @@ public interface ExpenseRepository extends JpaRepository<Expense, Long> {
 
     Optional<Expense> findByIdAndUserIdAndDeletedFlagFalse(Long id, Long userId);
 
-    @Query("select coalesce(sum(e.amount), 0) from Expense e where e.user.id = :userId and e.deletedFlag = false and e.expenseDate between :fromDate and :toDate")
+    @Query("select coalesce(sum(e.amount), 0) from Expense e where e.user.id = :userId and e.deletedFlag = false and (e.businessTarget is null or e.businessTarget = true) and e.expenseDate between :fromDate and :toDate")
     BigDecimal sumAmountByUserIdAndPeriod(@Param("userId") Long userId, @Param("fromDate") LocalDate fromDate, @Param("toDate") LocalDate toDate);
+
+    @Query("select coalesce(sum(e.amount), 0) from Expense e where e.user.id = :userId and e.deletedFlag = false and e.expenseDate between :fromDate and :toDate")
+    BigDecimal sumAmountByUserIdAndPeriodIncludingAllData(@Param("userId") Long userId, @Param("fromDate") LocalDate fromDate, @Param("toDate") LocalDate toDate);
 
     @Modifying
     @Query("delete from Expense e where e.user.id = :userId")

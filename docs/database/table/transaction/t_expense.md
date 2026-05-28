@@ -19,12 +19,13 @@
 | 7  | 金額         | amount                 | DECIMAL(15,0) |    | ○  |    |                                               | 支出金額。Java 側では `BigDecimal` で扱う。                                                          |
 | 8  | 支出詳細       | description            | VARCHAR(500)  |    |    |    | NULL                                          | 一覧・帳票向けの簡潔な説明。                                                                           |
 | 9  | メモ         | memo                   | TEXT          |    |    |    | NULL                                          | 補足メモ。                                                                                    |
-| 10 | 経費対象金額     | deductible_amount      | DECIMAL(15,0) |    |    |    | NULL                                          | 税務上の経費対象金額。未設定時は Service 層で `m_user_setting.default_business_use_ratio` を使い、明示的な丸めで計算する。 |
-| 11 | 削除フラグ      | deleted_flag           | BOOLEAN       |    | ○  |    | FALSE                                         | 論理削除状態。TRUE のデータは通常集計から除外する。                                                             |
-| 12 | 削除日時       | deleted_at             | DATETIME      |    |    |    | NULL                                          | 論理削除日時。                                                                                  |
-| 13 | 登録日時       | created_at             | DATETIME      |    | ○  |    | CURRENT_TIMESTAMP                             | レコード作成日時。                                                                                |
-| 14 | 更新日時       | updated_at             | DATETIME      |    | ○  |    | CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | レコード更新日時。                                                                                |
-| 15 | バージョン      | version                | BIGINT        |    | ○  |    | 0                                             | 楽観ロック用バージョン。JPA の `@Version` に対応する。                                                      |
+| 10 | 事業収支対象フラグ  | is_business_tartget    | BOOLEAN       |    |    |    | NULL                                          | `NULL`/`TRUE`: 事業収支対象、`FALSE`: 事業収支対象外（事業損益計算から除外）。                                      |
+| 11 | 経費対象金額     | deductible_amount      | DECIMAL(15,0) |    |    |    | NULL                                          | 税務上の経費対象金額。未設定時は Service 層で `m_user_setting.default_business_use_ratio` を使い、明示的な丸めで計算する。 |
+| 12 | 削除フラグ      | deleted_flag           | BOOLEAN       |    | ○  |    | FALSE                                         | 論理削除状態。TRUE のデータは通常集計から除外する。                                                             |
+| 13 | 削除日時       | deleted_at             | DATETIME      |    |    |    | NULL                                          | 論理削除日時。                                                                                  |
+| 14 | 登録日時       | created_at             | DATETIME      |    | ○  |    | CURRENT_TIMESTAMP                             | レコード作成日時。                                                                                |
+| 15 | 更新日時       | updated_at             | DATETIME      |    | ○  |    | CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP | レコード更新日時。                                                                                |
+| 16 | バージョン      | version                | BIGINT        |    | ○  |    | 0                                             | 楽観ロック用バージョン。JPA の `@Version` に対応する。                                                      |
 
 ## 制約
 

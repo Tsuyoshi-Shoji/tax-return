@@ -5,6 +5,7 @@ import org.example.entity.ExpenseCategory;
 import org.example.entity.ExpenseSubcategory;
 import org.example.entity.PaymentMethod;
 import org.example.entity.User;
+import org.example.features.auth.AuthUserContext;
 import org.example.features.expense.dto.ExpenseEditView;
 import org.example.features.expense.dto.ExpenseRegistrationResult;
 import org.example.features.expense.form.ExpenseForm;
@@ -32,7 +33,6 @@ public class ExpenseServiceImpl implements ExpenseService {
 
     private static final BigDecimal ONE_HUNDRED = new BigDecimal("100");
     private static final Pattern INVALID_DETAILS_CHARACTER_PATTERN = Pattern.compile("[<>\"'`\\\\]");
-    private static final Long DEFAULT_USER_ID = 1L;
 
     private final SettingService settingService;
     private final ExpenseRepository expenseRepository;
@@ -75,8 +75,7 @@ public class ExpenseServiceImpl implements ExpenseService {
          }
          ExpenseCategory resolvedCategory = category;
 
-         User currentUser = userRepository.findById(DEFAULT_USER_ID)
-                .orElseThrow(() -> new IllegalStateException("Default user not found"));
+         User currentUser = getCurrentUser();
          ExpenseSubcategory subcategory = expenseSubcategoryRepository
                 .findByIdAndExpenseCategoryIdAndStatus(parseLong(form.getCategory()), resolvedCategory.getId(), "ACTIVE")
                 .orElseThrow(() -> new IllegalArgumentException("選択された項目がマスタに存在しません。"));
@@ -88,7 +87,8 @@ public class ExpenseServiceImpl implements ExpenseService {
                         .orElseThrow(() -> new IllegalArgumentException("更新対象の支出が見つかりません。"));
 
         BigDecimal amount = new BigDecimal(form.getAmount().trim());
-        BigDecimal deductibleAmount = calculateDeductibleAmount(amount, form.isHomeApportionment(), businessUseRatio, resolvedCategory);
+        Boolean businessTarget = parseBusinessTarget(form.getBusinessTarget());
+        BigDecimal deductibleAmount = calculateDeductibleAmount(amount, form.isHomeApportionment(), businessUseRatio, businessTarget);
 
         expense.setUser(currentUser);
         expense.setExpenseCategory(resolvedCategory);
@@ -98,6 +98,7 @@ public class ExpenseServiceImpl implements ExpenseService {
         expense.setAmount(amount);
         expense.setDescription(trimToEmpty(form.getDetails()));
         expense.setMemo(null);
+        expense.setBusinessTarget(businessTarget);
         expense.setDeductibleAmount(deductibleAmount);
         expense.setDeletedFlag(Boolean.FALSE);
         expense.setDeletedAt(null);
@@ -109,12 +110,12 @@ public class ExpenseServiceImpl implements ExpenseService {
     @Override
     @Transactional(readOnly = true)
     public ExpenseEditView getExpenseEditView(Long id) {
-        User currentUser = userRepository.findById(DEFAULT_USER_ID)
-                .orElseThrow(() -> new IllegalStateException("Default user not found"));
+        User currentUser = getCurrentUser();
         Expense expense = expenseRepository.findByIdAndUserIdAndDeletedFlagFalse(id, currentUser.getId())
                 .orElseThrow(() -> new IllegalArgumentException("対象の支出が見つかりません。"));
         String expenseType = expense.getExpenseCategory().getExpenseType().toLowerCase(Locale.ROOT);
-        boolean homeApportionment = expense.getDeductibleAmount() != null
+        boolean homeApportionment = !Boolean.FALSE.equals(expense.getBusinessTarget())
+                && expense.getDeductibleAmount() != null
                 && expense.getDeductibleAmount().compareTo(BigDecimal.ZERO) > 0
                 && expense.getDeductibleAmount().compareTo(expense.getAmount()) < 0;
         return new ExpenseEditView(
@@ -124,14 +125,14 @@ public class ExpenseServiceImpl implements ExpenseService {
                 expense.getExpenseDate().toString(),
                 expense.getAmount().toPlainString(),
                 expense.getDescription(),
+                expense.getBusinessTarget(),
                 homeApportionment,
                 expense.getPaymentMethod() == null ? null : expense.getPaymentMethod().getId());
     }
 
     private List<String> validate(ExpenseForm form, BigDecimal businessUseRatio, ExpenseCategory expenseCategory) {
         List<String> errors = new ArrayList<>();
-        User currentUser = userRepository.findById(DEFAULT_USER_ID)
-                .orElseThrow(() -> new IllegalStateException("Default user not found"));
+        User currentUser = getCurrentUser();
 
         String expenseType = trimToEmpty(form.getExpenseType());
         String categoryId = trimToEmpty(form.getCategory());
@@ -139,6 +140,7 @@ public class ExpenseServiceImpl implements ExpenseService {
         String amount = trimToEmpty(form.getAmount());
         String details = trimToEmpty(form.getDetails());
         String paymentMethodId = trimToEmpty(form.getPaymentMethodId());
+        boolean profitLossTarget = !Boolean.FALSE.equals(parseBusinessTarget(form.getBusinessTarget()));
 
         if (expenseType.isEmpty()) {
             errors.add("区分を選択してください。");
@@ -180,7 +182,7 @@ public class ExpenseServiceImpl implements ExpenseService {
             errors.add("支出詳細に使用できない文字が含まれています。");
         }
 
-        if (businessUseRatio.compareTo(BigDecimal.ZERO) < 0 || businessUseRatio.compareTo(ONE_HUNDRED) > 0) {
+        if (profitLossTarget && (businessUseRatio.compareTo(BigDecimal.ZERO) < 0 || businessUseRatio.compareTo(ONE_HUNDRED) > 0)) {
             errors.add("設定されている家事按分率が不正です。");
         }
 
@@ -232,26 +234,29 @@ public class ExpenseServiceImpl implements ExpenseService {
             BigDecimal amount,
             boolean homeApportionment,
             BigDecimal businessUseRatio,
-            ExpenseCategory category) {
-        if (category == null) {
+            Boolean businessTarget) {
+        if (Boolean.FALSE.equals(businessTarget)) {
             return BigDecimal.ZERO;
         }
-        if (Boolean.TRUE.equals(category.getTaxDeductibleFlag())) {
-            if (!homeApportionment || "BUSINESS".equals(category.getExpenseType())) {
-                return amount;
-            }
-            return amount.multiply(businessUseRatio).divide(ONE_HUNDRED, 0, RoundingMode.DOWN);
+        if (!homeApportionment) {
+            // 按分未適用時は満額保存（amountとdeductible_amountを同額にする）。
+            return amount;
         }
-        if ("PUBLIC".equals(category.getExpenseType())) {
-            return BigDecimal.ZERO;
+        return amount.multiply(businessUseRatio).divide(ONE_HUNDRED, 0, RoundingMode.DOWN);
+    }
+
+    private Boolean parseBusinessTarget(String value) {
+        String normalized = trimToEmpty(value);
+        if (normalized.isEmpty()) {
+            return Boolean.TRUE;
         }
-        if ("PRIVATE".equals(category.getExpenseType())) {
-            if (!homeApportionment) {
-                return BigDecimal.ZERO;
-            }
-            return amount.multiply(businessUseRatio).divide(ONE_HUNDRED, 0, RoundingMode.DOWN);
+        if ("true".equalsIgnoreCase(normalized) || "on".equalsIgnoreCase(normalized)) {
+            return Boolean.TRUE;
         }
-        return BigDecimal.ZERO;
+        if ("false".equalsIgnoreCase(normalized)) {
+            return Boolean.FALSE;
+        }
+        return Boolean.TRUE;
     }
 
     private String trimToEmpty(String value) {
@@ -268,6 +273,15 @@ public class ExpenseServiceImpl implements ExpenseService {
         } catch (RuntimeException ex) {
             return null;
         }
+    }
+
+    private User getCurrentUser() {
+        Long userId = AuthUserContext.getCurrentUserId();
+        if (userId == null) {
+            throw new IllegalStateException("Login user is not found in session");
+        }
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalStateException("Current user not found"));
     }
 }
 
