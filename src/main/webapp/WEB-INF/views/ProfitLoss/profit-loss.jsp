@@ -75,10 +75,21 @@
                     <div class="form-group full">
                         <label for="itemsDisplay">項目</label>
                         <div class="custom-select" id="itemSelect">
-                            <button type="button" class="select-display" id="itemsDisplay" aria-expanded="false" aria-controls="itemOptions">
+                            <button type="button" class="select-display" id="itemsDisplay" aria-expanded="false" aria-controls="itemOptionsPanel">
                                 <span class="selected-items" id="selectedItems">全項目</span>
                             </button>
-                            <div class="select-options" id="itemOptions"></div>
+                            <div class="select-options" id="itemOptionsPanel">
+                                <div class="select-search-box">
+                                    <input type="search" id="itemSearch" class="select-search-input" placeholder="項目名で検索" autocomplete="off" aria-label="項目検索" />
+                                    <p class="select-search-status" id="itemSearchStatus">全項目を表示中</p>
+                                    <div class="select-suggestion-box" id="itemSuggestionBox" hidden>
+                                        <p class="select-suggestion-title">候補</p>
+                                        <div class="select-suggestion-list" id="itemSuggestions"></div>
+                                    </div>
+                                </div>
+                                <div class="select-options-list" id="itemOptions"></div>
+                                <p class="select-empty-message" id="itemOptionsEmpty" hidden>一致する項目がありません。</p>
+                            </div>
                         </div>
                         <input type="hidden" id="items" name="items" value="${param.items}" />
                         <p class="help-text">区分を未選択の場合は全区分の項目を表示します。</p>
@@ -246,11 +257,19 @@
             const amountFrom = document.getElementById('amountFrom');
             const amountTo = document.getElementById('amountTo');
             const itemsHidden = document.getElementById('items');
+            const itemOptionsPanel = document.getElementById('itemOptionsPanel');
             const itemOptions = document.getElementById('itemOptions');
+            const itemSearch = document.getElementById('itemSearch');
+            const itemSearchStatus = document.getElementById('itemSearchStatus');
+            const itemOptionsEmpty = document.getElementById('itemOptionsEmpty');
+            const itemSuggestionBox = document.getElementById('itemSuggestionBox');
+            const itemSuggestions = document.getElementById('itemSuggestions');
             const selectedItems = document.getElementById('selectedItems');
             const itemsDisplay = document.getElementById('itemsDisplay');
             const errorModal = document.getElementById('errorModal');
             const errorMessage = document.getElementById('errorMessage');
+
+            const MAX_SUGGESTION_COUNT = 8;
 
             function selectedTypes() {
                 return Array.from(document.querySelectorAll('input[name="types"]:checked')).map(input => input.value);
@@ -263,6 +282,110 @@
 
             function itemValue(type, label) {
                 return type + ':' + label;
+            }
+
+            function normalizeSearchText(value) {
+                return (value || '')
+                    .normalize('NFKC')
+                    .toLowerCase()
+                    .replace(/[\s　]+/g, '');
+            }
+
+            function updateItemSearchStatus(visibleCount, totalCount) {
+                const keyword = itemSearch.value.trim();
+                if (!keyword) {
+                    itemSearchStatus.textContent = '全' + totalCount + '件を表示中';
+                    return;
+                }
+                itemSearchStatus.textContent = visibleCount + '件 / 全' + totalCount + '件';
+            }
+
+            function checkedValueSet() {
+                return new Set(
+                    Array.from(itemOptions.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value)
+                );
+            }
+
+            function renderItemSuggestions(keyword) {
+                itemSuggestions.innerHTML = '';
+                if (!keyword) {
+                    itemSuggestionBox.hidden = true;
+                    return;
+                }
+
+                const checkedValues = checkedValueSet();
+                const candidates = [];
+                itemOptions.querySelectorAll('.option-item').forEach(option => {
+                    const searchText = option.dataset.searchText || '';
+                    const label = option.dataset.label || '';
+                    const value = option.dataset.value || '';
+                    const matchIndex = searchText.indexOf(keyword);
+                    if (matchIndex < 0) {
+                        return;
+                    }
+                    candidates.push({ value, label, matchIndex, selected: checkedValues.has(value) });
+                });
+
+                candidates.sort((a, b) => {
+                    if (a.matchIndex !== b.matchIndex) {
+                        return a.matchIndex - b.matchIndex;
+                    }
+                    return a.label.localeCompare(b.label, 'ja');
+                });
+
+                const topCandidates = candidates.slice(0, MAX_SUGGESTION_COUNT);
+                if (topCandidates.length === 0) {
+                    itemSuggestionBox.hidden = true;
+                    return;
+                }
+
+                topCandidates.forEach(candidate => {
+                    const button = document.createElement('button');
+                    button.type = 'button';
+                    button.className = candidate.selected
+                        ? 'select-suggestion-item is-selected'
+                        : 'select-suggestion-item';
+                    button.textContent = candidate.label;
+                    button.dataset.value = candidate.value;
+                    button.addEventListener('click', () => {
+                        const checkbox = itemOptions.querySelector('input[type="checkbox"][value="' + candidate.value + '"]');
+                        if (!checkbox) {
+                            return;
+                        }
+                        checkbox.checked = !checkbox.checked;
+                        updateSelectedItems();
+                        const normalizedKeyword = normalizeSearchText(itemSearch.value);
+                        renderItemSuggestions(normalizedKeyword);
+                    });
+                    itemSuggestions.appendChild(button);
+                });
+
+                itemSuggestionBox.hidden = false;
+            }
+
+            function filterItemOptions() {
+                const keyword = normalizeSearchText(itemSearch.value);
+                let totalCount = 0;
+                let visibleCount = 0;
+
+                itemOptions.querySelectorAll('.option-group').forEach(group => {
+                    let groupVisibleCount = 0;
+                    group.querySelectorAll('.option-item').forEach(option => {
+                        totalCount += 1;
+                        const searchText = option.dataset.searchText || '';
+                        const visible = !keyword || searchText.includes(keyword);
+                        option.classList.toggle('is-hidden', !visible);
+                        if (visible) {
+                            groupVisibleCount += 1;
+                            visibleCount += 1;
+                        }
+                    });
+                    group.classList.toggle('is-hidden', groupVisibleCount === 0);
+                });
+
+                itemOptionsEmpty.hidden = visibleCount !== 0;
+                updateItemSearchStatus(visibleCount, totalCount);
+                renderItemSuggestions(keyword);
             }
 
             function renderItemOptions() {
@@ -278,6 +401,9 @@
                         const value = itemValue(type, label);
                         const option = document.createElement('label');
                         option.className = 'option-item';
+                        option.dataset.searchText = normalizeSearchText(label);
+                        option.dataset.label = label;
+                        option.dataset.value = value;
                         const checkbox = document.createElement('input');
                         checkbox.type = 'checkbox';
                         checkbox.value = value;
@@ -290,6 +416,7 @@
                     itemOptions.appendChild(group);
                 });
                 updateSelectedItems();
+                filterItemOptions();
             }
 
             function typeLabel(type) {
@@ -416,25 +543,34 @@
             document.querySelectorAll('input[name="types"]').forEach(input => {
                 input.addEventListener('change', () => {
                     itemsHidden.value = '';
+                    itemSearch.value = '';
                     renderItemOptions();
                 });
             });
 
+            itemSearch.addEventListener('input', filterItemOptions);
+
             itemsDisplay.addEventListener('click', event => {
                 event.stopPropagation();
-                itemOptions.classList.toggle('open');
-                itemsDisplay.setAttribute('aria-expanded', itemOptions.classList.contains('open') ? 'true' : 'false');
+                itemOptionsPanel.classList.toggle('open');
+                const isOpen = itemOptionsPanel.classList.contains('open');
+                itemsDisplay.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+                if (isOpen) {
+                    itemSearch.focus();
+                    itemSearch.select();
+                }
             });
 
-            itemOptions.addEventListener('click', event => event.stopPropagation());
+            itemOptionsPanel.addEventListener('click', event => event.stopPropagation());
             document.addEventListener('click', () => {
-                itemOptions.classList.remove('open');
+                itemOptionsPanel.classList.remove('open');
                 itemsDisplay.setAttribute('aria-expanded', 'false');
             });
 
             document.getElementById('clearButton').addEventListener('click', () => {
                 form.reset();
                 itemsHidden.value = '';
+                itemSearch.value = '';
                 document.getElementById('incomePage').value = '1';
                 document.getElementById('expensePage').value = '1';
                 renderItemOptions();

@@ -2,6 +2,7 @@ package org.example.features.setting.service.impl;
 
 import org.example.entity.User;
 import org.example.entity.UserSetting;
+import org.example.features.auth.AuthUserContext;
 import org.example.features.setting.dto.SettingOperationResult;
 import org.example.features.setting.dto.SettingView;
 import org.example.features.setting.form.AccountActionForm;
@@ -13,6 +14,7 @@ import org.example.repository.ExpenseRepository;
 import org.example.repository.IncomeRepository;
 import org.example.repository.UserRepository;
 import org.example.repository.UserSettingRepository;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,28 +31,30 @@ public class SettingServiceImpl implements SettingService {
     private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(2, RoundingMode.UNNECESSARY);
     private static final BigDecimal ONE_HUNDRED = new BigDecimal("100.00");
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
-    private static final Long DEFAULT_USER_ID = 1L;
 
     private final UserRepository userRepository;
     private final UserSettingRepository userSettingRepository;
     private final ExpenseRepository expenseRepository;
     private final IncomeRepository incomeRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public SettingServiceImpl(
             UserRepository userRepository,
             UserSettingRepository userSettingRepository,
             ExpenseRepository expenseRepository,
-            IncomeRepository incomeRepository) {
+            IncomeRepository incomeRepository,
+            PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
         this.userSettingRepository = userSettingRepository;
         this.expenseRepository = expenseRepository;
         this.incomeRepository = incomeRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
     @Transactional(readOnly = true)
     public SettingView getCurrentSetting() {
-        Optional<User> userOptional = userRepository.findById(DEFAULT_USER_ID);
+        Optional<User> userOptional = findCurrentUser();
         if (userOptional.isEmpty()) {
             return new SettingView("", "", ONE_HUNDRED, "ACTIVE");
         }
@@ -66,7 +70,7 @@ public class SettingServiceImpl implements SettingService {
     @Override
     @Transactional(readOnly = true)
     public BigDecimal getDefaultBusinessUseRatio() {
-        Optional<User> userOptional = userRepository.findById(DEFAULT_USER_ID);
+        Optional<User> userOptional = findCurrentUser();
         if (userOptional.isEmpty()) {
             return ONE_HUNDRED;
         }
@@ -80,8 +84,7 @@ public class SettingServiceImpl implements SettingService {
         List<String> errors = new ArrayList<>();
         String requestedUsername = trimToEmpty(form.getUsername());
         String requestedEmail = trimToEmpty(form.getEmail());
-        User currentUser = userRepository.findById(DEFAULT_USER_ID)
-                .orElseThrow(() -> new IllegalStateException("Default user not found"));
+        User currentUser = requireCurrentUser();
 
         if (requestedUsername.isEmpty() || requestedUsername.length() > 100) {
             errors.add("ユーザー名は1〜100文字で入力してください。");
@@ -109,8 +112,7 @@ public class SettingServiceImpl implements SettingService {
         String currentPassword = trimToEmpty(form.getCurrentPassword());
         String newPassword = trimToEmpty(form.getNewPassword());
         String confirmPassword = trimToEmpty(form.getConfirmPassword());
-        User currentUser = userRepository.findById(DEFAULT_USER_ID)
-                .orElseThrow(() -> new IllegalStateException("Default user not found"));
+        User currentUser = requireCurrentUser();
 
         if (currentPassword.isEmpty()) {
             errors.add("現在のパスワードを入力してください。");
@@ -121,11 +123,16 @@ public class SettingServiceImpl implements SettingService {
         if (!newPassword.equals(confirmPassword)) {
             errors.add("新しいパスワードと確認用パスワードが一致しません。");
         }
+        boolean currentPasswordMatched = currentPassword.equals(currentUser.getPasswordHash())
+                || passwordEncoder.matches(currentPassword, currentUser.getPasswordHash());
+        if (!currentPassword.isEmpty() && !currentPasswordMatched) {
+            errors.add("現在のパスワードが正しくありません。");
+        }
         if (!errors.isEmpty()) {
             return SettingOperationResult.failure(errors);
         }
 
-        currentUser.setPasswordHash(newPassword);
+        currentUser.setPasswordHash(passwordEncoder.encode(newPassword));
         return SettingOperationResult.success("パスワードを変更しました。");
     }
 
@@ -138,8 +145,7 @@ public class SettingServiceImpl implements SettingService {
             return SettingOperationResult.failure(errors);
         }
 
-        User user = userRepository.findById(DEFAULT_USER_ID)
-                .orElseThrow(() -> new IllegalStateException("Default user not found"));
+        User user = requireCurrentUser();
         UserSetting setting = getOrCreateUserSetting(user);
         setting.setDefaultBusinessUseRatio(requestedRatio);
         return SettingOperationResult.success("家事按分率を更新しました。支出登録画面の計算に即時反映されます。");
@@ -151,8 +157,7 @@ public class SettingServiceImpl implements SettingService {
         if (!"無効化".equals(trimToEmpty(form.getConfirmationText()))) {
             return SettingOperationResult.failure(List.of("確認欄に「無効化」と入力してください。"));
         }
-        User currentUser = userRepository.findById(DEFAULT_USER_ID)
-                .orElseThrow(() -> new IllegalStateException("Default user not found"));
+        User currentUser = requireCurrentUser();
         currentUser.setStatus("DISABLED");
         currentUser.setLockedUntil(null);
         currentUser.setFailedLoginCount(0);
@@ -165,8 +170,7 @@ public class SettingServiceImpl implements SettingService {
         if (!"削除".equals(trimToEmpty(form.getConfirmationText()))) {
             return SettingOperationResult.failure(List.of("確認欄に「削除」と入力してください。"));
         }
-        User currentUser = userRepository.findById(DEFAULT_USER_ID)
-                .orElseThrow(() -> new IllegalStateException("Default user not found"));
+        User currentUser = requireCurrentUser();
         Long userId = currentUser.getId();
         expenseRepository.deleteAllByUserId(userId);
         incomeRepository.deleteAllByUserId(userId);
@@ -204,6 +208,18 @@ public class SettingServiceImpl implements SettingService {
 
     private String trimToEmpty(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private Optional<User> findCurrentUser() {
+        Long userId = AuthUserContext.getCurrentUserId();
+        if (userId == null) {
+            return Optional.empty();
+        }
+        return userRepository.findById(userId);
+    }
+
+    private User requireCurrentUser() {
+        return findCurrentUser().orElseThrow(() -> new IllegalStateException("Current user not found"));
     }
 }
 

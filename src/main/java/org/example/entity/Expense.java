@@ -54,6 +54,9 @@ public class Expense {
     @Column(name = "memo")
     private String memo;
 
+    @Column(name = "is_business_target")
+    private Boolean businessTarget;
+
     @Column(name = "deductible_amount", precision = 15, scale = 0)
     private BigDecimal deductibleAmount;
 
@@ -106,6 +109,8 @@ public class Expense {
     public void setDescription(String description) { this.description = description; }
     public String getMemo() { return memo; }
     public void setMemo(String memo) { this.memo = memo; }
+    public Boolean getBusinessTarget() { return businessTarget; }
+    public void setBusinessTarget(Boolean businessTarget) { this.businessTarget = businessTarget; }
     public BigDecimal getDeductibleAmount() { return deductibleAmount; }
     public void setDeductibleAmount(BigDecimal deductibleAmount) { this.deductibleAmount = deductibleAmount; }
     public Boolean getDeletedFlag() { return deletedFlag; }

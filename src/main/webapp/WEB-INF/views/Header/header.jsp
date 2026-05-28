@@ -13,12 +13,14 @@
                 <span class="header-user-email"><c:out value="${currentUserEmail}" /></span>
             </div>
         </c:if>
-        <form method="post" action="${pageContext.request.contextPath}/logout" class="logout-form">
-            <c:if test="${not empty _csrf}">
-                <input type="hidden" name="${_csrf.parameterName}" value="${_csrf.token}" />
-            </c:if>
-            <button type="submit" class="logout-button">ログアウト</button>
-        </form>
+        <c:if test="${not empty currentUserEmail}">
+            <form method="post" action="${pageContext.request.contextPath}/logout" class="logout-form">
+                <c:if test="${not empty _csrf}">
+                    <input type="hidden" name="${_csrf.parameterName}" value="${_csrf.token}" />
+                </c:if>
+                <button type="submit" class="logout-button">ログアウト</button>
+            </form>
+        </c:if>
     </div>
 </header>
 

@@ -3,6 +3,7 @@ package org.example.config;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.ViewResolver;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
@@ -16,6 +17,11 @@ import org.springframework.web.servlet.view.InternalResourceViewResolver;
         "org.example.features.setting.controller"
 })
 public class WebConfig implements WebMvcConfigurer {
+
+    @Bean
+    public AuthRequiredInterceptor authRequiredInterceptor() {
+        return new AuthRequiredInterceptor();
+    }
 
     @Bean
     public ViewResolver viewResolver() {
@@ -42,5 +48,18 @@ public class WebConfig implements WebMvcConfigurer {
         registry
                 .addResourceHandler("/resources/**")
                 .addResourceLocations("/resources/", "classpath:/");
+    }
+
+    @Override
+    public void addInterceptors(InterceptorRegistry registry) {
+        registry.addInterceptor(authRequiredInterceptor())
+                .addPathPatterns("/**")
+                .excludePathPatterns(
+                        "/login",
+                        "/register",
+                        "/css/**",
+                        "/js/**",
+                        "/resources/**",
+                        "/error");
     }
 }

@@ -17,6 +17,8 @@ public interface IncomeRepository extends JpaRepository<Income, Long> {
 
     List<Income> findByUserIdAndDeletedFlagFalseOrderByIncomeDateDescCreatedAtDesc(Long userId);
 
+    List<Income> findByUserIdAndDeletedFlagFalseOrderByIncomeDateDescCreatedAtDescIdDesc(Long userId);
+
     Optional<Income> findByIdAndUserIdAndDeletedFlagFalse(Long id, Long userId);
 
     @Query("select coalesce(sum(i.amount), 0) from Income i where i.user.id = :userId and i.deletedFlag = false and (i.businessTartget is null or i.businessTartget = true) and i.incomeDate between :fromDate and :toDate")

@@ -5,6 +5,7 @@ import org.example.entity.IncomeCategory;
 import org.example.entity.IncomeSubcategory;
 import org.example.entity.ReceiveMethod;
 import org.example.entity.User;
+import org.example.features.auth.AuthUserContext;
 import org.example.features.income.dto.IncomeEditView;
 import org.example.features.income.dto.IncomeRegistrationResult;
 import org.example.features.income.form.IncomeForm;
@@ -29,7 +30,6 @@ import java.util.regex.Pattern;
 public class IncomeServiceImpl implements IncomeService {
 
     private static final Pattern INVALID_DETAILS_CHARACTER_PATTERN = Pattern.compile("[<>\"'`\\\\]");
-    private static final Long DEFAULT_USER_ID = 1L;
 
     private final IncomeRepository incomeRepository;
     private final IncomeCategoryRepository incomeCategoryRepository;
@@ -59,8 +59,7 @@ public class IncomeServiceImpl implements IncomeService {
             return IncomeRegistrationResult.failure(errors);
         }
 
-         User currentUser = userRepository.findById(DEFAULT_USER_ID)
-                .orElseThrow(() -> new IllegalStateException("Default user not found"));
+         User currentUser = getCurrentUser();
          IncomeSubcategory subcategory = incomeSubcategoryRepository
                 .findByIdAndIncomeCategoryIdAndStatus(parseLong(form.getCategory()), category.getId(), "ACTIVE")
                 .orElseThrow(() -> new IllegalArgumentException("選択された項目がマスタに存在しません。"));
@@ -92,8 +91,7 @@ public class IncomeServiceImpl implements IncomeService {
     @Override
     @Transactional(readOnly = true)
     public IncomeEditView getIncomeEditView(Long id) {
-        User currentUser = userRepository.findById(DEFAULT_USER_ID)
-                .orElseThrow(() -> new IllegalStateException("Default user not found"));
+        User currentUser = getCurrentUser();
         Income income = incomeRepository.findByIdAndUserIdAndDeletedFlagFalse(id, currentUser.getId())
                 .orElseThrow(() -> new IllegalArgumentException("対象の収益が見つかりません。"));
         return new IncomeEditView(
@@ -109,8 +107,7 @@ public class IncomeServiceImpl implements IncomeService {
 
     private List<String> validate(IncomeForm form, IncomeCategory category) {
         List<String> errors = new ArrayList<>();
-        User currentUser = userRepository.findById(DEFAULT_USER_ID)
-                .orElseThrow(() -> new IllegalStateException("Default user not found"));
+        User currentUser = getCurrentUser();
 
         String incomeType = trimToEmpty(form.getIncomeType());
         String categoryId = trimToEmpty(form.getCategory());
@@ -240,6 +237,15 @@ public class IncomeServiceImpl implements IncomeService {
             return Boolean.FALSE;
         }
         return Boolean.TRUE;
+    }
+
+    private User getCurrentUser() {
+        Long userId = AuthUserContext.getCurrentUserId();
+        if (userId == null) {
+            throw new IllegalStateException("Login user is not found in session");
+        }
+        return userRepository.findById(userId)
+                .orElseThrow(() -> new IllegalStateException("Current user not found"));
     }
 }
 

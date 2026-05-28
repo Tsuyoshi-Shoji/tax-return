@@ -3,6 +3,7 @@ package org.example.features.returnform.service.impl;
 import org.example.entity.Expense;
 import org.example.entity.Income;
 import org.example.entity.User;
+import org.example.features.auth.AuthUserContext;
 import org.example.features.returnform.dto.ReturnFormView;
 import org.example.features.returnform.service.ReturnFormService;
 import org.example.repository.ExpenseRepository;
@@ -19,7 +20,6 @@ import java.util.Optional;
 @Service
 public class ReturnFormServiceImpl implements ReturnFormService {
 
-    private static final Long DEFAULT_USER_ID = 1L;
     private final IncomeRepository incomeRepository;
     private final ExpenseRepository expenseRepository;
     private final UserRepository userRepository;
@@ -37,7 +37,7 @@ public class ReturnFormServiceImpl implements ReturnFormService {
     @Transactional(readOnly = true)
     public ReturnFormView getCurrentYearSummary() {
         int year = LocalDate.now().getYear();
-        Optional<User> currentUserOptional = userRepository.findById(DEFAULT_USER_ID);
+        Optional<User> currentUserOptional = findCurrentUser();
         if (currentUserOptional.isEmpty()) {
             return new ReturnFormView(year, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
         }
@@ -48,6 +48,7 @@ public class ReturnFormServiceImpl implements ReturnFormService {
                 .filter(income -> income.getIncomeDate().getYear() == year)
                 .toList();
         List<Expense> expenses = expenseRepository.findByUserIdAndDeletedFlagFalseOrderByExpenseDateDescCreatedAtDesc(currentUser.getId()).stream()
+                .filter(this::isProfitLossTargetExpense)
                 .filter(expense -> expense.getExpenseDate().getYear() == year)
                 .toList();
 
@@ -68,6 +69,18 @@ public class ReturnFormServiceImpl implements ReturnFormService {
 
     private boolean isProfitLossTargetIncome(Income income) {
         return !Boolean.FALSE.equals(income.getBusinessTartget());
+    }
+
+    private boolean isProfitLossTargetExpense(Expense expense) {
+        return !Boolean.FALSE.equals(expense.getBusinessTarget());
+    }
+
+    private Optional<User> findCurrentUser() {
+        Long userId = AuthUserContext.getCurrentUserId();
+        if (userId == null) {
+            return Optional.empty();
+        }
+        return userRepository.findById(userId);
     }
 }
 

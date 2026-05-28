@@ -3,6 +3,7 @@ package org.example.features.report.service.impl;
 import org.example.entity.Expense;
 import org.example.entity.Income;
 import org.example.entity.User;
+import org.example.features.auth.AuthUserContext;
 import org.example.features.report.dto.CalendarEvent;
 import org.example.features.report.dto.ItemAmountRow;
 import org.example.features.report.dto.MonthlyAmountRow;
@@ -29,7 +30,6 @@ import java.util.stream.IntStream;
 @Service
 public class ReportServiceImpl implements ReportService {
 
-    private static final Long DEFAULT_USER_ID = 1L;
     private final IncomeRepository incomeRepository;
     private final ExpenseRepository expenseRepository;
     private final UserRepository userRepository;
@@ -65,7 +65,9 @@ public class ReportServiceImpl implements ReportService {
         List<Income> incomes = filterIncomes(
                 incomeRepository.findByUserIdAndDeletedFlagFalseOrderByIncomeDateDescCreatedAtDesc(currentUser.getId()),
                 includeTaxExcluded);
-        List<Expense> expenses = expenseRepository.findByUserIdAndDeletedFlagFalseOrderByExpenseDateDescCreatedAtDesc(currentUser.getId());
+        List<Expense> expenses = filterExpenses(
+                expenseRepository.findByUserIdAndDeletedFlagFalseOrderByExpenseDateDescCreatedAtDesc(currentUser.getId()),
+                includeTaxExcluded);
 
         List<MonthlyAmountRow> monthlyRows = new ArrayList<>();
         BigDecimal totalIncome = BigDecimal.ZERO;
@@ -114,12 +116,16 @@ public class ReportServiceImpl implements ReportService {
                 includeTaxExcluded).stream()
                 .filter(income -> income.getIncomeDate().getYear() == year && income.getIncomeDate().getMonthValue() == month)
                 .toList();
-        List<Expense> expenses = expenseRepository.findByUserIdAndDeletedFlagFalseOrderByExpenseDateDescCreatedAtDesc(currentUser.getId()).stream()
+        List<Expense> expenses = filterExpenses(
+                expenseRepository.findByUserIdAndDeletedFlagFalseOrderByExpenseDateDescCreatedAtDesc(currentUser.getId()),
+                includeTaxExcluded).stream()
                 .filter(expense -> expense.getExpenseDate().getYear() == year && expense.getExpenseDate().getMonthValue() == month)
                 .toList();
 
         BigDecimal totalIncome = incomes.stream().map(Income::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
-        BigDecimal totalExpense = expenses.stream().map(Expense::getAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal totalExpense = expenses.stream()
+                .map(expense -> resolveExpenseAmountForDetail(expense, includeTaxExcluded))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         Map<String, BigDecimal> incomeMap = new LinkedHashMap<>();
         for (Income income : incomes) {
@@ -130,7 +136,7 @@ public class ReportServiceImpl implements ReportService {
         Map<String, BigDecimal> expenseMap = new LinkedHashMap<>();
         for (Expense expense : expenses) {
             String key = expense.getExpenseSubcategory() == null ? expense.getExpenseCategory().getCategoryName() : expense.getExpenseSubcategory().getSubcategoryName();
-            expenseMap.merge(key, expense.getAmount(), BigDecimal::add);
+            expenseMap.merge(key, resolveExpenseAmountForDetail(expense, includeTaxExcluded), BigDecimal::add);
         }
 
         List<ItemAmountRow> incomeBreakdown = incomeMap.entrySet().stream().map(entry -> new ItemAmountRow(entry.getKey(), entry.getValue())).toList();
@@ -161,7 +167,11 @@ public class ReportServiceImpl implements ReportService {
     }
 
     private Optional<User> findDefaultUser() {
-        return userRepository.findById(DEFAULT_USER_ID);
+        Long userId = AuthUserContext.getCurrentUserId();
+        if (userId == null) {
+            return Optional.empty();
+        }
+        return userRepository.findById(userId);
     }
 
     private List<Income> filterIncomes(List<Income> incomes, boolean includeTaxExcluded) {
@@ -173,7 +183,27 @@ public class ReportServiceImpl implements ReportService {
                 .toList();
     }
 
+    private List<Expense> filterExpenses(List<Expense> expenses, boolean includeTaxExcluded) {
+        if (includeTaxExcluded) {
+            return expenses;
+        }
+        return expenses.stream()
+                .filter(this::isProfitLossTargetExpense)
+                .toList();
+    }
+
     private boolean isProfitLossTargetIncome(Income income) {
         return !Boolean.FALSE.equals(income.getBusinessTartget());
+    }
+
+    private boolean isProfitLossTargetExpense(Expense expense) {
+        return !Boolean.FALSE.equals(expense.getBusinessTarget());
+    }
+
+    private BigDecimal resolveExpenseAmountForDetail(Expense expense, boolean includeTaxExcluded) {
+        if (includeTaxExcluded) {
+            return expense.getAmount();
+        }
+        return expense.getDeductibleAmount() == null ? BigDecimal.ZERO : expense.getDeductibleAmount();
     }
 }

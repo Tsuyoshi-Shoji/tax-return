@@ -13,7 +13,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$ProjectPath = "C:\Users\ihsoy\OneDrive\Desktop\workspace\src\MySpace\tax-return"
+$ProjectPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 $TomcatPath = "C:\Program Files\apache-tomcat-11.0.21\apache-tomcat-11.0.21"
 $AppName = "final-tax-return-1.0-SNAPSHOT"
 $WarFile = Join-Path $ProjectPath "target\$AppName.war"
