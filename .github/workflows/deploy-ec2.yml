@@ -50,7 +50,7 @@ jobs:
 
           echo "host=$HOST" >> "$GITHUB_OUTPUT"
           echo "base_url=http://$CURL_HOST:${APP_PORT}${APP_CONTEXT_PATH}" >> "$GITHUB_OUTPUT"
-          echo "health_url=http://$CURL_HOST:${APP_PORT}${APP_CONTEXT_PATH}/home" >> "$GITHUB_OUTPUT"
+          echo "health_url=http://$CURL_HOST:${APP_PORT}/" >> "$GITHUB_OUTPUT"
 
       - name: Deploy via SSH
         shell: bash

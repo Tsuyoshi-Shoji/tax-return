@@ -139,7 +139,7 @@ log "✓ Tomcat started"
 # ============================================================
 log_section "Step 8: Health check"
 
-HEALTH_URL="http://localhost:8080/final-tax-return-1.0-SNAPSHOT/home"
+HEALTH_URL="http://localhost:8080/"
 RETRY_COUNT=30
 RETRY_INTERVAL=2
 
