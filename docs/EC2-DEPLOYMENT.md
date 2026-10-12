@@ -111,7 +111,7 @@ GitHub リポジトリ Settings → Secrets に以下を登録：
 
 | Secret Name | Value |
 |---|---|
-| `EC2_HOST` | EC2 インスタンスのパブリック IP またはホスト名 |
+| `EC2_HOST` | EC2 インスタンスのパブリック IP / IPv6 / ホスト名 |
 | `EC2_PRIVATE_KEY` | EC2 キーペア (.pem ファイルの内容全文) |
 
 **キーペアの取得方法：**
@@ -171,6 +171,7 @@ tail -f /var/log/mysql/error.log
 curl http://localhost:8080/final-tax-return-1.0-SNAPSHOT/home
 
 # ローカルから
+# IPv6 の場合は curl http://[<EC2_HOST>]:8080/final-tax-return-1.0-SNAPSHOT/home
 curl http://<EC2_HOST>:8080/final-tax-return-1.0-SNAPSHOT/home
 ```
 

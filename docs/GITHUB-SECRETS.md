@@ -49,11 +49,13 @@ gh secret set EC2_PRIVATE_KEY < ~/.ssh/your-key-pair.pem
 | 項目 | 値 |
 |---|---|
 | **Name** | `EC2_HOST` |
-| **Secret** | EC2 インスタンスのパブリック IP またはホスト名 |
+| **Secret** | EC2 インスタンスのパブリック IP / IPv6 / ホスト名 |
 
 **例:**
 ```
 203.0.113.45
+または
+2406:da14:117f:7b2c:dd13:5665:e938:7d
 または
 ec2-203-0-113-45.ap-northeast-1.compute.amazonaws.com
 ```

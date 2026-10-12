@@ -56,8 +56,9 @@ on:
 **ファイル**: `scripts/setup-ec2.sh`
 
 **改善内容**:
-- ✅ 依存関係統合: `yum install` を 1 回にまとめる（実行時間短縮）
-- ✅ Java バージョン: `17` → `21` に統一
+- ✅ EBS 20GiB 前提: 初回セットアップ時に自動マウント
+- ✅ 依存関係統合: `dnf install` を 1 回にまとめる（実行時間短縮）
+- ✅ Java バージョン: `21` に統一
 - ✅ エラーハンドリング: `set -euo pipefail`
 - ✅ 秘密情報管理: パーミッション `600` (root のみ読み取り可能)
 - ✅ setenv.sh 検証: 環境変数ファイル欠落時にエラー終了
@@ -65,6 +66,7 @@ on:
 - ✅ MySQL: ランダムパスワード生成（OpenSSL 使用）
 - ✅ Firewall: ポート 3306 明示的に閉鎖
 - ✅ Cron 設定: 自動バックアップ（毎日 03:00）
+- ✅ メモリ最適化: t3.micro 向けに Java / MySQL の使用量を抑制
 
 **セットアップ所要時間**: 約 10-15 分
 
@@ -105,22 +107,19 @@ on:
 
 ```bash
 # 1. EC2 インスタンス起動
-#   - イメージ: Amazon Linux 2 / 2023
-#   - インスタンスタイプ: t3.medium 以上
+#   - イメージ: Amazon Linux 2023
+#   - インスタンスタイプ: t3.micro
 #   - キーペアダウンロード
 
 # 2. EBS ボリューム作成・アタッチ
-#   - サイズ: 100GB 以上
+#   - サイズ: 20GiB
 #   - 暗号化: 有効
 
 # 3. SSH 接続確認
 ssh -i your-key.pem ec2-user@<EC2_PUBLIC_IP>
 
 # 4. EBS マウント・フォーマット
-sudo mkfs -t ext4 /dev/nvme1n1
-sudo mkdir -p /data/mysql
-sudo mount /dev/nvme1n1 /data/mysql
-sudo bash -c 'echo "/dev/nvme1n1 /data/mysql ext4 defaults,nofail 0 2" >> /etc/fstab'
+EBS_DEVICE=/dev/xvdf ./scripts/setup-ec2.sh
 ```
 
 ### フェーズ B: EC2 セットアップ（15 分）
@@ -144,7 +143,7 @@ chmod +x scripts/setup-ec2.sh
 1. GitHub リポジトリの Settings へ移動
 2. Secrets and variables → Actions
 3. New repository secret
-   - EC2_HOST: <EC2_PUBLIC_IP>
+   - EC2_HOST: <EC2_PUBLIC_IP / IPv6 / ホスト名>
    - EC2_PRIVATE_KEY: <秘密鍵の全文>
 ```
 
@@ -164,6 +163,7 @@ ssh -i your-key.pem ec2-user@<EC2_HOST>
 tail -f /var/log/deploy.log
 
 # アプリケーション起動確認
+# IPv6 の場合は curl http://[<EC2_HOST>]:8080/final-tax-return-1.0-SNAPSHOT/
 curl http://<EC2_HOST>:8080/final-tax-return-1.0-SNAPSHOT/
 ```
 
