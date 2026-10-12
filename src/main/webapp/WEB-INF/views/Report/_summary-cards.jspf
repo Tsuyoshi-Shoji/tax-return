@@ -1,0 +1,18 @@
+<%@ page pageEncoding="UTF-8" %>
+<div class="report-summary">
+    <div class="summary-card">
+        <span class="summary-icon summary-income"><i class="ui-icon icon-trend" aria-hidden="true"></i></span>
+        <div><div class="summary-label"><c:out value="${labelIncome}" /></div>
+            <div class="summary-value"><span id="${idIncome}"><fmt:formatNumber value="${section.totalIncome}" pattern="#,##0" /></span><small>円</small></div></div>
+    </div>
+    <div class="summary-card">
+        <span class="summary-icon summary-expense"><i class="ui-icon icon-trend report-icon-down" aria-hidden="true"></i></span>
+        <div><div class="summary-label"><c:out value="${labelExpense}" /></div>
+            <div class="summary-value"><span id="${idExpense}"><fmt:formatNumber value="${section.totalExpense}" pattern="#,##0" /></span><small>円</small></div></div>
+    </div>
+    <div class="summary-card">
+        <span class="summary-icon summary-profit"><i class="ui-icon icon-profit" aria-hidden="true"></i></span>
+        <div><div class="summary-label"><c:out value="${labelProfit}" /></div>
+            <div class="summary-value"><span id="${idProfit}"><fmt:formatNumber value="${section.profit}" pattern="#,##0" /></span><small>円</small></div></div>
+    </div>
+</div>

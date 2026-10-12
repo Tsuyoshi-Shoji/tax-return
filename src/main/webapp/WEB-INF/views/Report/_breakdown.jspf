@@ -1,0 +1,53 @@
+<%@ page pageEncoding="UTF-8" %>
+<div class="breakdown-card">
+    <h3 id="${idIncomeHeading}">項目別 累計収益</h3>
+    <table id="${idIncomeTable}" class="breakdown-table">
+        <thead><tr><th scope="col">項目</th><th scope="col" class="num">金額</th></tr></thead>
+        <tbody>
+        <c:forEach var="row" items="${section.incomeItems}">
+            <tr><td><c:out value="${row.name}" /></td><td class="num"><fmt:formatNumber value="${row.amount}" pattern="#,##0" /> 円</td></tr>
+        </c:forEach>
+        <c:if test="${empty section.incomeItems}"><tr><td colspan="2" class="empty">データがありません</td></tr></c:if>
+        </tbody>
+        <tfoot><tr><th scope="row">合計</th><td class="num"><fmt:formatNumber value="${section.totalIncome}" pattern="#,##0" /> 円</td></tr></tfoot>
+    </table>
+</div>
+<div class="breakdown-card">
+    <h3>項目別収益割合</h3>
+    <div class="pie-wrap">
+        <div id="${idIncomePie}" class="pie" style="background: ${section.incomeGradient}" role="img" aria-label="収益項目の割合">
+            <span class="pie-center"><fmt:formatNumber value="${section.totalIncome}" pattern="#,##0" /><br>円</span>
+        </div>
+        <ul class="pie-legend">
+            <c:forEach var="row" items="${section.incomeItems}">
+                <li><i class="dot" style="background: ${row.color}"></i><span><c:out value="${row.name}" /></span><b><c:out value="${row.percent}" />%</b></li>
+            </c:forEach>
+        </ul>
+    </div>
+</div>
+<div class="breakdown-card">
+    <h3 id="${idExpenseHeading}">項目別 累計支出</h3>
+    <table id="${idExpenseTable}" class="breakdown-table">
+        <thead><tr><th scope="col">項目</th><th scope="col" class="num">金額</th></tr></thead>
+        <tbody>
+        <c:forEach var="row" items="${section.expenseItems}">
+            <tr><td><c:out value="${row.name}" /></td><td class="num"><fmt:formatNumber value="${row.amount}" pattern="#,##0" /> 円</td></tr>
+        </c:forEach>
+        <c:if test="${empty section.expenseItems}"><tr><td colspan="2" class="empty">データがありません</td></tr></c:if>
+        </tbody>
+        <tfoot><tr><th scope="row">合計</th><td class="num"><fmt:formatNumber value="${section.totalExpense}" pattern="#,##0" /> 円</td></tr></tfoot>
+    </table>
+</div>
+<div class="breakdown-card">
+    <h3>項目別支出割合</h3>
+    <div class="pie-wrap">
+        <div id="${idExpensePie}" class="pie" style="background: ${section.expenseGradient}" role="img" aria-label="支出項目の割合">
+            <span class="pie-center"><fmt:formatNumber value="${section.totalExpense}" pattern="#,##0" /><br>円</span>
+        </div>
+        <ul class="pie-legend">
+            <c:forEach var="row" items="${section.expenseItems}">
+                <li><i class="dot" style="background: ${row.color}"></i><span><c:out value="${row.name}" /></span><b><c:out value="${row.percent}" />%</b></li>
+            </c:forEach>
+        </ul>
+    </div>
+</div>

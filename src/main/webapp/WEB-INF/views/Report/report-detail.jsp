@@ -1,305 +1,136 @@
 <%@ page contentType="text/html;charset=UTF-8" %>
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
+<%@ taglib prefix="fmt" uri="jakarta.tags.fmt" %>
+<fmt:setLocale value="ja_JP" scope="page" />
+<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>損益詳細レポート</title>
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css" />
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/report/report.css" />
+    <title>レポート詳細 | マネタックス</title>
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css?v=20261011c">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/home/home.css?v=20261011c">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/profit-loss/profit-loss.css?v=20261011d">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/report/report.css?v=20261011c">
+    <script src="${pageContext.request.contextPath}/css/report/report.js?v=20261011c" defer></script>
 </head>
-<body>
-    <jsp:include page="/WEB-INF/views/Header/header.jsp" />
+<body class="home-page profit-loss-page report-page">
+<jsp:include page="/WEB-INF/views/Header/header.jsp" />
+<div class="home-shell">
+    <jsp:include page="/WEB-INF/views/Common/sidebar.jsp" />
+    <main id="main-content" class="home-main profit-loss-main" tabindex="-1">
+        <div class="profit-loss-container">
+            <nav class="profit-loss-breadcrumb" aria-label="パンくず">
+                <ol>
+                    <li><a href="${pageContext.request.contextPath}/home">ホーム</a></li>
+                    <li><a id="link-back-year-report" href="${pageContext.request.contextPath}/report?year=${page.year}">レポート</a></li>
+                    <li aria-current="page"><c:out value="${page.monthLabel}" /></li>
+                </ol>
+            </nav>
 
-    <main class="report-main">
-        <div class="report-container report-detail-container">
-            <div class="page-header">
-                <h1>損益詳細レポート</h1>
-                <p class="page-subtitle"><span id="detailYearMonth"></span> の損益内訳を確認できます。</p>
+            <div class="report-title-row">
+                <section class="profit-loss-title-area" aria-labelledby="page-title">
+                    <h1 id="page-title">レポート詳細</h1>
+                    <p id="page-description">選択した月の収支・損益の詳細を確認できます。各項目の内訳や発生した取引をカレンダーで確認できます。</p>
+                </section>
+                <form id="month-form" class="report-controls" method="get" action="${pageContext.request.contextPath}/report/detail">
+                    <input type="hidden" name="year" value="${page.year}" />
+                    <c:choose>
+                        <c:when test="${page.hasPrev}"><a id="button-prev-month" class="month-nav" href="${pageContext.request.contextPath}/report/detail?year=${page.prevYear}&amp;month=${page.prevMonth}" aria-label="前月">&lsaquo;</a></c:when>
+                        <c:otherwise><span id="button-prev-month" class="month-nav is-disabled" aria-disabled="true">&lsaquo;</span></c:otherwise>
+                    </c:choose>
+                    <label id="label-month-select" class="visually-hidden" for="month-select">選択月</label>
+                    <select id="month-select" name="month">
+                        <c:forEach var="opt" items="${page.monthOptions}">
+                            <option value="${opt.month}" <c:if test="${opt.month == page.month}">selected</c:if>><c:out value="${opt.label}" /></option>
+                        </c:forEach>
+                    </select>
+                    <c:choose>
+                        <c:when test="${page.hasNext}"><a id="button-next-month" class="month-nav" href="${pageContext.request.contextPath}/report/detail?year=${page.nextYear}&amp;month=${page.nextMonth}" aria-label="次月">&rsaquo;</a></c:when>
+                        <c:otherwise><span id="button-next-month" class="month-nav is-disabled" aria-disabled="true">&rsaquo;</span></c:otherwise>
+                    </c:choose>
+                    <noscript><button type="submit">表示</button></noscript>
+                </form>
             </div>
 
-            <section class="report-section" aria-labelledby="allDetailTitle" data-detail-section="all">
-                <div class="section-heading">
-                    <h2 id="allDetailTitle">全データ詳細レポート</h2>
-                    <a class="close-btn" href="${pageContext.request.contextPath}/report?year=${reportDetailViewAll.year}">年度レポートへ戻る</a>
+            <c:set var="labelIncome" value="選択月の累計収益" />
+            <c:set var="labelExpense" value="選択月の累計支出" />
+            <c:set var="labelProfit" value="選択月の損益" />
+
+            <section class="profit-loss-card report-section" aria-labelledby="heading-all-data-detail-report">
+                <h2 id="heading-all-data-detail-report" class="report-section-title">全データ月次レポート（申告対象外を含む）</h2>
+                <p class="report-section-desc">事業収支、配当金、雑収入など、すべての収支データを含めた選択月のレポートです。</p>
+                <c:set var="section" value="${page.allData}" />
+                <c:set var="idIncome" value="display-monthly-income-all" />
+                <c:set var="idExpense" value="display-monthly-expense-all" />
+                <c:set var="idProfit" value="display-monthly-profit-all" />
+                <%@ include file="/WEB-INF/views/Report/_summary-cards.jspf" %>
+                <div class="report-charts report-charts-4">
+                    <c:set var="idIncomeHeading" value="heading-income-breakdown-all-detail" />
+                    <c:set var="idIncomeTable" value="table-income-breakdown-all-detail" />
+                    <c:set var="idIncomePie" value="chart-income-pie-all-detail" />
+                    <c:set var="idExpenseHeading" value="heading-expense-breakdown-all-detail" />
+                    <c:set var="idExpenseTable" value="table-expense-breakdown-all-detail" />
+                    <c:set var="idExpensePie" value="chart-expense-pie-all-detail" />
+                    <%@ include file="/WEB-INF/views/Report/_breakdown.jspf" %>
                 </div>
-                <table class="report-table detail-month-table">
-                    <thead>
-                        <tr>
-                            <th>区分</th>
-                            <th>金額</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr class="income-row"><th>収益</th><td id="allDetailIncome">¥0</td></tr>
-                        <tr class="expense-row"><th>支出</th><td id="allDetailExpense">¥0</td></tr>
-                        <tr class="profit-row"><th>損益</th><td id="allDetailProfit">¥0</td></tr>
-                    </tbody>
-                </table>
-
-                <section class="report-section nested-report-section">
-                    <div class="detail-layout">
-                        <div class="detail-table-container">
-                            <h2>収益 項目別累計</h2>
-                            <table class="detail-table">
-                                <thead><tr><th>項目</th><th>金額</th></tr></thead>
-                                <tbody id="allIncomeBreakdownBody"></tbody>
-                            </table>
-                        </div>
-                        <div class="chart-pie-container">
-                            <h2>収益割合</h2>
-                            <div class="pie-chart empty-pie" id="allIncomePie"><span>画面右表の構成比を確認してください</span></div>
-                        </div>
-                    </div>
-
-                    <div class="detail-layout">
-                        <div class="detail-table-container">
-                            <h2>支出 項目別累計</h2>
-                            <table class="detail-table">
-                                <thead><tr><th>項目</th><th>金額</th></tr></thead>
-                                <tbody id="allExpenseBreakdownBody"></tbody>
-                            </table>
-                        </div>
-                        <div class="chart-pie-container">
-                            <h2>支出割合</h2>
-                            <div class="pie-chart empty-pie" id="allExpensePie"><span>画面右表の構成比を確認してください</span></div>
-                        </div>
-                    </div>
-                </section>
-
-                <section class="report-section nested-report-section">
-                    <div class="section-heading">
-                        <h2>発生日カレンダー</h2>
-                        <span>青ドット: 収益 / 赤ドット: 支出</span>
-                    </div>
-                    <div class="calendar" id="allCalendar"></div>
-                </section>
             </section>
 
-            <section class="report-section" aria-labelledby="businessDetailTitle" data-detail-section="business">
-                <div class="section-heading">
-                    <h2 id="businessDetailTitle">事業収支詳細レポート</h2>
-                    <a class="close-btn" href="${pageContext.request.contextPath}/report?year=${reportDetailViewBusiness.year}">年度レポートへ戻る</a>
+            <section class="profit-loss-card report-section" aria-labelledby="heading-business-detail-report">
+                <h2 id="heading-business-detail-report" class="report-section-title">事業収支月次レポート（申告対象のみ）</h2>
+                <p class="report-section-desc">確定申告の対象となる事業収支データのみを集計した選択月のレポートです。</p>
+                <c:set var="section" value="${page.business}" />
+                <c:set var="idIncome" value="display-monthly-income-business" />
+                <c:set var="idExpense" value="display-monthly-expense-business" />
+                <c:set var="idProfit" value="display-monthly-profit-business" />
+                <%@ include file="/WEB-INF/views/Report/_summary-cards.jspf" %>
+                <div class="report-charts report-charts-4">
+                    <c:set var="idIncomeHeading" value="heading-income-breakdown-business-detail" />
+                    <c:set var="idIncomeTable" value="table-income-breakdown-business-detail" />
+                    <c:set var="idIncomePie" value="chart-income-pie-business-detail" />
+                    <c:set var="idExpenseHeading" value="heading-expense-breakdown-business-detail" />
+                    <c:set var="idExpenseTable" value="table-expense-breakdown-business-detail" />
+                    <c:set var="idExpensePie" value="chart-expense-pie-business-detail" />
+                    <%@ include file="/WEB-INF/views/Report/_breakdown.jspf" %>
                 </div>
-                <table class="report-table detail-month-table">
+            </section>
+
+            <section class="profit-loss-card report-section" aria-labelledby="heading-transaction-calendar">
+                <div class="calendar-head">
+                    <div>
+                        <h2 id="heading-transaction-calendar" class="report-section-title">発生カレンダー</h2>
+                        <p class="report-section-desc">選択した月に発生した収益・支出・申告対象外の取引をカレンダーで確認できます。</p>
+                    </div>
+                    <span class="chart-legend"><i class="dot dot-income"></i>収益 <i class="dot dot-expense"></i>支出 <i class="dot dot-excluded"></i>申告対象外</span>
+                </div>
+                <table id="calendar-display" class="calendar-table">
                     <thead>
-                        <tr>
-                            <th>区分</th>
-                            <th>金額</th>
-                        </tr>
+                    <tr>
+                        <th scope="col" class="sun">日</th><th scope="col">月</th><th scope="col">火</th><th scope="col">水</th>
+                        <th scope="col">木</th><th scope="col">金</th><th scope="col" class="sat">土</th>
+                    </tr>
                     </thead>
                     <tbody>
-                        <tr class="income-row"><th>収益</th><td id="businessDetailIncome">¥0</td></tr>
-                        <tr class="expense-row"><th>支出</th><td id="businessDetailExpense">¥0</td></tr>
-                        <tr class="profit-row"><th>損益</th><td id="businessDetailProfit">¥0</td></tr>
+                    <c:forEach var="week" items="${page.calendarWeeks}">
+                        <tr>
+                            <c:forEach var="day" items="${week}" varStatus="st">
+                                <td class="${day.inMonth ? '' : 'is-outside'} ${st.index == 0 ? 'sun' : (st.index == 6 ? 'sat' : '')}">
+                                    <span class="cal-day">${day.day}</span>
+                                    <span class="cal-dots">
+                                        <c:if test="${day.hasIncome}"><i class="dot dot-income" title="収益"></i></c:if>
+                                        <c:if test="${day.hasExpense}"><i class="dot dot-expense" title="支出"></i></c:if>
+                                        <c:if test="${day.hasExcluded}"><i class="dot dot-excluded" title="申告対象外"></i></c:if>
+                                    </span>
+                                </td>
+                            </c:forEach>
+                        </tr>
+                    </c:forEach>
                     </tbody>
                 </table>
-
-                <section class="report-section nested-report-section">
-                    <div class="detail-layout">
-                        <div class="detail-table-container">
-                            <h2>収益 項目別累計</h2>
-                            <table class="detail-table">
-                                <thead><tr><th>項目</th><th>金額</th></tr></thead>
-                                <tbody id="businessIncomeBreakdownBody"></tbody>
-                            </table>
-                        </div>
-                        <div class="chart-pie-container">
-                            <h2>収益割合</h2>
-                            <div class="pie-chart empty-pie" id="businessIncomePie"><span>画面右表の構成比を確認してください</span></div>
-                        </div>
-                    </div>
-
-                    <div class="detail-layout">
-                        <div class="detail-table-container">
-                            <h2>支出 項目別累計</h2>
-                            <table class="detail-table">
-                                <thead><tr><th>項目</th><th>金額</th></tr></thead>
-                                <tbody id="businessExpenseBreakdownBody"></tbody>
-                            </table>
-                        </div>
-                        <div class="chart-pie-container">
-                            <h2>支出割合</h2>
-                            <div class="pie-chart empty-pie" id="businessExpensePie"><span>画面右表の構成比を確認してください</span></div>
-                        </div>
-                    </div>
-                </section>
-
-                <section class="report-section nested-report-section">
-                    <div class="section-heading">
-                        <h2>発生日カレンダー</h2>
-                        <span>青ドット: 収益 / 赤ドット: 支出</span>
-                    </div>
-                    <div class="calendar" id="businessCalendar"></div>
-                </section>
             </section>
         </div>
     </main>
-
-    <jsp:include page="/WEB-INF/views/Footer/footer.jsp" />
-
-    <script>
-        (function () {
-            'use strict';
-
-            const detailData = {
-                all: {
-                    year: Number('${reportDetailViewAll.year}'),
-                    month: Number('${reportDetailViewAll.month}'),
-                    incomeBreakdown: [
-                        <c:forEach var="row" items="${reportDetailViewAll.incomeBreakdown}" varStatus="status">
-                        { item: '${row.item}', amount: Number('${row.amount}') }<c:if test="${not status.last}">,</c:if>
-                        </c:forEach>
-                    ],
-                    expenseBreakdown: [
-                        <c:forEach var="row" items="${reportDetailViewAll.expenseBreakdown}" varStatus="status">
-                        { item: '${row.item}', amount: Number('${row.amount}') }<c:if test="${not status.last}">,</c:if>
-                        </c:forEach>
-                    ],
-                    calendarEvents: [
-                        <c:forEach var="event" items="${reportDetailViewAll.calendarEvents}" varStatus="status">
-                        { day: ${event.day}, type: '${event.type}' }<c:if test="${not status.last}">,</c:if>
-                        </c:forEach>
-                    ]
-                },
-                business: {
-                    year: Number('${reportDetailViewBusiness.year}'),
-                    month: Number('${reportDetailViewBusiness.month}'),
-                    incomeBreakdown: [
-                        <c:forEach var="row" items="${reportDetailViewBusiness.incomeBreakdown}" varStatus="status">
-                        { item: '${row.item}', amount: Number('${row.amount}') }<c:if test="${not status.last}">,</c:if>
-                        </c:forEach>
-                    ],
-                    expenseBreakdown: [
-                        <c:forEach var="row" items="${reportDetailViewBusiness.expenseBreakdown}" varStatus="status">
-                        { item: '${row.item}', amount: Number('${row.amount}') }<c:if test="${not status.last}">,</c:if>
-                        </c:forEach>
-                    ],
-                    calendarEvents: [
-                        <c:forEach var="event" items="${reportDetailViewBusiness.calendarEvents}" varStatus="status">
-                        { day: ${event.day}, type: '${event.type}' }<c:if test="${not status.last}">,</c:if>
-                        </c:forEach>
-                    ]
-                }
-            };
-
-            function formatCurrency(value) {
-                return '¥' + Number(value || 0).toLocaleString('ja-JP');
-            }
-
-            function sum(rows) {
-                return rows.reduce((total, row) => total + Number(row.amount || 0), 0);
-            }
-
-            function renderBreakdown(section, bodyId, rows) {
-                const body = section.querySelector('#' + bodyId);
-                body.innerHTML = '';
-                if (rows.length === 0) {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = '<td colspan="2" class="empty-row">データなし</td>';
-                    body.appendChild(tr);
-                    return;
-                }
-                rows.forEach(row => {
-                    const tr = document.createElement('tr');
-                    const item = document.createElement('td');
-                    const amount = document.createElement('td');
-                    item.textContent = row.item;
-                    amount.textContent = formatCurrency(row.amount);
-                    tr.appendChild(item);
-                    tr.appendChild(amount);
-                    body.appendChild(tr);
-                });
-            }
-
-            function renderCalendar(section, calendarId, events, year, month) {
-                const calendar = section.querySelector('#' + calendarId);
-                const firstDay = new Date(year, month - 1, 1);
-                const lastDate = new Date(year, month, 0).getDate();
-                const startOffset = firstDay.getDay();
-                const weekLabels = ['日', '月', '火', '水', '木', '金', '土'];
-
-                calendar.innerHTML = '';
-                weekLabels.forEach(label => {
-                    const cell = document.createElement('div');
-                    cell.className = 'calendar-head';
-                    cell.textContent = label;
-                    calendar.appendChild(cell);
-                });
-                for (let i = 0; i < startOffset; i++) {
-                    const blank = document.createElement('div');
-                    blank.className = 'calendar-cell is-blank';
-                    calendar.appendChild(blank);
-                }
-                for (let day = 1; day <= lastDate; day++) {
-                    const cell = document.createElement('div');
-                    cell.className = 'calendar-cell';
-                    const dayLabel = document.createElement('span');
-                    dayLabel.textContent = String(day);
-                    const dots = document.createElement('span');
-                    dots.className = 'calendar-dots';
-                    if (events.some(event => event.day === day && event.type === 'income')) {
-                        const dot = document.createElement('span');
-                        dot.className = 'dot income-dot';
-                        dots.appendChild(dot);
-                    }
-                    if (events.some(event => event.day === day && event.type === 'expense')) {
-                        const dot = document.createElement('span');
-                        dot.className = 'dot expense-dot';
-                        dots.appendChild(dot);
-                    }
-                    cell.appendChild(dayLabel);
-                    cell.appendChild(dots);
-                    calendar.appendChild(cell);
-                }
-            }
-
-            function renderPieChart(section, elementId, rows, colors) {
-                const target = section.querySelector('#' + elementId);
-                if (!target) {
-                    return;
-                }
-                if (!rows.length) {
-                    target.classList.add('empty-pie');
-                    target.style.background = 'var(--color-bg)';
-                    return;
-                }
-                const total = sum(rows);
-                let start = 0;
-                const segments = rows.map((row, index) => {
-                    const ratio = total === 0 ? 0 : (Number(row.amount) / total) * 100;
-                    const end = start + ratio;
-                    const color = colors[index % colors.length];
-                    const segment = color + ' ' + start + '% ' + end + '%';
-                    start = end;
-                    return segment;
-                });
-                target.classList.remove('empty-pie');
-                target.style.background = 'conic-gradient(' + segments.join(', ') + ')';
-                target.innerHTML = '<span>' + rows.length + '項目</span>';
-            }
-
-            function renderDetail(sectionId, key) {
-                const section = document.querySelector('[data-detail-section="' + sectionId + '"]');
-                const data = detailData[key];
-                const totalIncome = sum(data.incomeBreakdown);
-                const totalExpense = sum(data.expenseBreakdown);
-                const profit = totalIncome - totalExpense;
-
-                document.getElementById('detailYearMonth').textContent = data.year + '年' + data.month + '月';
-                section.querySelector('#' + key + 'DetailIncome').textContent = formatCurrency(totalIncome);
-                section.querySelector('#' + key + 'DetailExpense').textContent = formatCurrency(totalExpense);
-                section.querySelector('#' + key + 'DetailProfit').textContent = formatCurrency(profit);
-                renderBreakdown(section, key + 'IncomeBreakdownBody', data.incomeBreakdown);
-                renderBreakdown(section, key + 'ExpenseBreakdownBody', data.expenseBreakdown);
-                renderCalendar(section, key + 'Calendar', data.calendarEvents, data.year, data.month);
-                renderPieChart(section, key + 'IncomePie', data.incomeBreakdown, ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#1d4ed8']);
-                renderPieChart(section, key + 'ExpensePie', data.expenseBreakdown, ['#dc2626', '#ef4444', '#f87171', '#fca5a5', '#991b1b']);
-            }
-
-            renderDetail('all', 'all');
-            renderDetail('business', 'business');
-        })();
-    </script>
+</div>
+<jsp:include page="/WEB-INF/views/Footer/footer.jsp" />
 </body>
 </html>

@@ -67,6 +67,14 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- H2 Database (Local Development) -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.2.224</version>
+            <scope>runtime</scope>
+        </dependency>
+
         <!-- Spring Boot Starter Web (必要に応じて) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

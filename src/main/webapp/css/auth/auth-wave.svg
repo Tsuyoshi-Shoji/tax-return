@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1536 966" fill="none">
+  <defs>
+    <linearGradient id="skyWave" x1="984" y1="78" x2="1515" y2="476" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F8FBFF" stop-opacity=".98"/>
+      <stop offset="1" stop-color="#E8F2FF" stop-opacity=".56"/>
+    </linearGradient>
+    <linearGradient id="upperSweep" x1="704" y1="116" x2="1463" y2="508" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F4F9FF" stop-opacity=".94"/>
+      <stop offset="1" stop-color="#DDEBFF" stop-opacity=".66"/>
+    </linearGradient>
+    <linearGradient id="leftHill" x1="82" y1="364" x2="628" y2="902" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D9EAFD" stop-opacity=".92"/>
+      <stop offset=".55" stop-color="#CAE0FB" stop-opacity=".78"/>
+      <stop offset="1" stop-color="#EAF3FF" stop-opacity=".5"/>
+    </linearGradient>
+    <linearGradient id="midHill" x1="531" y1="251" x2="1191" y2="785" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EAF3FF" stop-opacity=".84"/>
+      <stop offset=".55" stop-color="#D8E9FF" stop-opacity=".66"/>
+      <stop offset="1" stop-color="#EEF5FF" stop-opacity=".42"/>
+    </linearGradient>
+    <radialGradient id="leftGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(240 600) rotate(-9.2) scale(412 216)">
+      <stop stop-color="#D8EAFE" stop-opacity=".72"/>
+      <stop offset="1" stop-color="#D8EAFE" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="rightGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1186 222) rotate(171) scale(452 268)">
+      <stop stop-color="#E5F0FF" stop-opacity=".82"/>
+      <stop offset="1" stop-color="#E5F0FF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <ellipse cx="240" cy="604" rx="420" ry="220" fill="url(#leftGlow)"/>
+  <ellipse cx="1186" cy="222" rx="458" ry="274" fill="url(#rightGlow)"/>
+
+  <path d="M702 15c158 4 300 27 435 82 121 49 245 132 399 131v308c-97-39-173-111-306-146-141-36-293-10-422-61-142-56-214-161-335-220 66-54 129-94 229-94Z" fill="url(#upperSweep)"/>
+  <path d="M938 45c178 18 347 89 598 67v224c-149-1-270-67-426-74-161-8-293 44-430 28-83-10-159-39-227-83 145-102 305-178 485-162Z" fill="url(#skyWave)" opacity=".9"/>
+
+  <path d="M-30 733c56-73 151-150 245-197 103-52 232-76 340-40 87 29 153 92 210 166 44 58 83 124 155 155 53 23 111 24 165 29H-30V733Z" fill="url(#leftHill)"/>
+  <path d="M218 615c101-124 231-208 389-244 110-25 236-21 331 41 65 42 114 106 177 151 99 71 221 96 321 97V966H0V846c70-49 137-113 218-231Z" fill="url(#midHill)"/>
+  <path d="M555 755c86-53 177-84 272-87 113-4 225 31 339 21 122-11 237-74 370-67v344H0V904c127-12 259 8 388-23 62-15 116-50 167-81Z" fill="#F2F7FF" opacity=".82"/>
+</svg>

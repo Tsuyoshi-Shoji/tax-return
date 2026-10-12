@@ -1,7 +1,12 @@
 package org.example.controller;
 
+import java.util.List;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import org.example.features.auth.AuthSessionAttributes;
+import org.example.features.auth.AuthUserContext;
 import org.example.features.auth.dto.AuthOperationResult;
 import org.example.features.auth.form.LoginForm;
 import org.example.features.auth.form.UserRegisterForm;
@@ -15,7 +20,6 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 @Controller
 public class AuthController {
-
     private final AuthService authService;
 
     public AuthController(AuthService authService) {
@@ -23,40 +27,49 @@ public class AuthController {
     }
 
     @GetMapping("/login")
-    public String login(Model model, HttpSession session) {
-        if (isLoggedIn(session)) {
-            return "redirect:/";
+    public String showLogin(
+            Model model,
+            HttpServletRequest request,
+            @ModelAttribute("successMessage") String successMessage) {
+        if (request.getSession(false) != null
+                && request.getSession(false).getAttribute(AuthSessionAttributes.CURRENT_USER) != null) {
+            return "redirect:/home";
         }
-        model.addAttribute("headerTitle", "ログイン");
         if (!model.containsAttribute("loginForm")) {
             model.addAttribute("loginForm", new LoginForm());
+        }
+        if (successMessage != null && !successMessage.isBlank()) {
+            model.addAttribute("successMessage", successMessage);
         }
         return "Auth/login";
     }
 
     @PostMapping("/login")
-    public String loginSubmit(@ModelAttribute LoginForm form, Model model, HttpSession session) {
-        AuthOperationResult result = authService.login(form);
+    public String login(
+            @ModelAttribute("loginForm") LoginForm loginForm,
+            Model model,
+            HttpServletRequest request,
+            HttpServletResponse response) {
+        AuthOperationResult result = authService.login(loginForm);
         if (!result.isSuccess()) {
-            model.addAttribute("headerTitle", "ログイン");
-            model.addAttribute("failureMessage", result.getFirstErrorMessage());
-            model.addAttribute("validationErrors", result.getErrors());
-            model.addAttribute("loginForm", form);
+            response.setStatus(result.getStatusCode());
+            applyFailure(model, "loginForm", loginForm, result.getMessage(), result.getValidationErrors());
             return "Auth/login";
         }
-
-        session.setAttribute(AuthSessionAttributes.USER_ID, result.getUserId());
-        session.setAttribute(AuthSessionAttributes.USER_EMAIL, result.getEmail());
-        session.setAttribute(AuthSessionAttributes.USER_DISPLAY_NAME, result.getDisplayName());
-        return "redirect:/";
+        HttpSession existing = request.getSession(false);
+        if (existing != null) {
+            existing.invalidate();
+        }
+        HttpSession session = request.getSession(true);
+        AuthUserContext context = result.getUserContext();
+        session.setAttribute(AuthSessionAttributes.CURRENT_USER, context);
+        int timeout = loginForm.isRememberMe() ? 60 * 60 * 24 * 14 : 60 * 30;
+        session.setMaxInactiveInterval(timeout);
+        return "redirect:/home";
     }
 
     @GetMapping("/register")
-    public String register(Model model, HttpSession session) {
-        if (isLoggedIn(session)) {
-            return "redirect:/";
-        }
-        model.addAttribute("headerTitle", "新規登録");
+    public String showRegister(Model model) {
         if (!model.containsAttribute("registerForm")) {
             model.addAttribute("registerForm", new UserRegisterForm());
         }
@@ -64,27 +77,33 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public String registerSubmit(@ModelAttribute("registerForm") UserRegisterForm form, Model model, RedirectAttributes redirectAttributes) {
-        AuthOperationResult result = authService.register(form);
+    public String register(
+            @ModelAttribute("registerForm") UserRegisterForm registerForm,
+            Model model,
+            HttpServletResponse response,
+            RedirectAttributes redirectAttributes) {
+        AuthOperationResult result = authService.register(registerForm);
         if (!result.isSuccess()) {
-            model.addAttribute("headerTitle", "新規登録");
-            model.addAttribute("failureMessage", result.getFirstErrorMessage());
-            model.addAttribute("validationErrors", result.getErrors());
+            response.setStatus(result.getStatusCode());
+            applyFailure(model, "registerForm", registerForm, result.getMessage(), result.getValidationErrors());
             return "Auth/user-register";
         }
-
-        redirectAttributes.addFlashAttribute("successMessage", result.getMessage());
+        redirectAttributes.addFlashAttribute("successMessage", "ユーザー登録が完了しました。ログインしてください。");
         return "redirect:/login";
     }
 
     @PostMapping("/logout")
-    public String logout(HttpSession session) {
-        session.invalidate();
+    public String logout(HttpServletRequest request) {
+        HttpSession session = request.getSession(false);
+        if (session != null) {
+            session.invalidate();
+        }
         return "redirect:/login";
     }
 
-    private boolean isLoggedIn(HttpSession session) {
-        return session.getAttribute(AuthSessionAttributes.USER_ID) instanceof Long;
+    private void applyFailure(Model model, String formKey, Object form, String message, List<String> errors) {
+        model.addAttribute(formKey, form);
+        model.addAttribute("failureMessage", message);
+        model.addAttribute("validationErrors", errors);
     }
 }
-

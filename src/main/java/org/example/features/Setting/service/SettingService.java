@@ -7,22 +7,16 @@ import org.example.features.setting.form.BusinessUseRatioForm;
 import org.example.features.setting.form.PasswordForm;
 import org.example.features.setting.form.ProfileForm;
 
-import java.math.BigDecimal;
-
 public interface SettingService {
+    SettingView load(Long appUserId);
 
-    SettingView getCurrentSetting();
+    SettingOperationResult updateProfile(Long appUserId, ProfileForm form);
 
-    BigDecimal getDefaultBusinessUseRatio();
+    SettingOperationResult changePassword(Long appUserId, PasswordForm form);
 
-    SettingOperationResult updateProfile(ProfileForm form);
+    SettingOperationResult updateBusinessUseRatio(Long appUserId, BusinessUseRatioForm form);
 
-    SettingOperationResult changePassword(PasswordForm form);
+    SettingOperationResult disableAccount(Long appUserId, AccountActionForm form);
 
-    SettingOperationResult updateBusinessUseRatio(BusinessUseRatioForm form);
-
-    SettingOperationResult disableAccount(AccountActionForm form);
-
-    SettingOperationResult deleteAccount(AccountActionForm form);
+    SettingOperationResult deleteAccount(Long appUserId, AccountActionForm form);
 }
-

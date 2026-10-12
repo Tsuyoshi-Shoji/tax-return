@@ -1,38 +1,37 @@
 package org.example.entity;
 
+import java.time.LocalDateTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.Version;
-
-import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "m_expense_category")
+@Table(name = "expense_category")
 public class ExpenseCategory {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "expense_category_id")
     private Long id;
+
+    @ManyToOne(optional = false)
+    @JoinColumn(name = "business_profile_id", nullable = false)
+    private BusinessProfile businessProfile;
+
+    @Column(name = "category_code", nullable = false, length = 50)
+    private String categoryCode;
 
     @Column(name = "category_name", nullable = false, length = 100)
     private String categoryName;
 
-    @Column(name = "expense_type", nullable = false, length = 30)
-    private String expenseType;
-
-    @Column(name = "tax_deductible_flag", nullable = false)
-    private Boolean taxDeductibleFlag;
-
-    @Column(name = "display_order", nullable = false)
-    private Integer displayOrder;
-
-    @Column(name = "status", nullable = false, length = 20)
-    private String status;
+    @Column(name = "is_active", nullable = false)
+    private boolean active;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
@@ -40,27 +39,51 @@ public class ExpenseCategory {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    @Version
-    @Column(name = "version", nullable = false)
-    private Long version;
+    @PrePersist
+    public void prePersist() {
+        LocalDateTime now = LocalDateTime.now();
+        createdAt = now;
+        updatedAt = now;
+    }
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    public String getCategoryName() { return categoryName; }
-    public void setCategoryName(String categoryName) { this.categoryName = categoryName; }
-    public String getExpenseType() { return expenseType; }
-    public void setExpenseType(String expenseType) { this.expenseType = expenseType; }
-    public Boolean getTaxDeductibleFlag() { return taxDeductibleFlag; }
-    public void setTaxDeductibleFlag(Boolean taxDeductibleFlag) { this.taxDeductibleFlag = taxDeductibleFlag; }
-    public Integer getDisplayOrder() { return displayOrder; }
-    public void setDisplayOrder(Integer displayOrder) { this.displayOrder = displayOrder; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
-    public Long getVersion() { return version; }
-    public void setVersion(Long version) { this.version = version; }
+    @PreUpdate
+    public void preUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public BusinessProfile getBusinessProfile() {
+        return businessProfile;
+    }
+
+    public void setBusinessProfile(BusinessProfile businessProfile) {
+        this.businessProfile = businessProfile;
+    }
+
+    public String getCategoryCode() {
+        return categoryCode;
+    }
+
+    public void setCategoryCode(String categoryCode) {
+        this.categoryCode = categoryCode;
+    }
+
+    public String getCategoryName() {
+        return categoryName;
+    }
+
+    public void setCategoryName(String categoryName) {
+        this.categoryName = categoryName;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
+    }
 }
-

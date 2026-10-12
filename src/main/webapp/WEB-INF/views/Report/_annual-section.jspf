@@ -1,0 +1,90 @@
+<%@ page pageEncoding="UTF-8" %>
+<section class="profit-loss-card report-section" aria-labelledby="${idHeading}">
+    <h2 id="${idHeading}" class="report-section-title"><c:out value="${sectionTitle}" /></h2>
+    <p class="report-section-desc"><c:out value="${sectionDesc}" /></p>
+
+    <c:set var="labelIncome" value="当年度 総収益" />
+    <c:set var="labelExpense" value="当年度 総支出" />
+    <c:set var="labelProfit" value="当年度 総損益" />
+    <c:set var="idIncome" value="display-total-income-${suffix}" />
+    <c:set var="idExpense" value="display-total-expense-${suffix}" />
+    <c:set var="idProfit" value="display-profit-${suffix}" />
+    <%@ include file="/WEB-INF/views/Report/_summary-cards.jspf" %>
+
+    <h3 class="report-subtitle">月別収支一覧</h3>
+    <div class="table-scroll">
+        <table id="table-monthly-${suffix}" class="monthly-table">
+            <thead>
+            <tr>
+                <th scope="col"><span class="visually-hidden">区分</span></th>
+                <c:forEach var="m" items="${section.months}">
+                    <th scope="col"><a id="link-month-detail-${suffix}-${m.month}" href="${pageContext.request.contextPath}/report/detail?year=${page.selectedYear}&amp;month=${m.month}">${m.month}月</a></th>
+                </c:forEach>
+                <th scope="col">年間合計</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr class="row-income"><th scope="row">収益</th>
+                <c:forEach var="m" items="${section.months}"><td><fmt:formatNumber value="${m.income}" pattern="#,##0" /></td></c:forEach>
+                <td class="total"><fmt:formatNumber value="${section.totalIncome}" pattern="#,##0" /></td></tr>
+            <tr class="row-expense"><th scope="row">支出</th>
+                <c:forEach var="m" items="${section.months}"><td><fmt:formatNumber value="${m.expense}" pattern="#,##0" /></td></c:forEach>
+                <td class="total"><fmt:formatNumber value="${section.totalExpense}" pattern="#,##0" /></td></tr>
+            <tr class="row-profit"><th scope="row">損益</th>
+                <c:forEach var="m" items="${section.months}"><td><fmt:formatNumber value="${m.profit}" pattern="#,##0" /></td></c:forEach>
+                <td class="total"><fmt:formatNumber value="${section.profit}" pattern="#,##0" /></td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="report-charts">
+        <div class="breakdown-card chart-card">
+            <div class="chart-head"><h3>月別 収益・支出比較</h3>
+                <span class="chart-legend"><i class="dot dot-income"></i>収益 <i class="dot dot-expense"></i>支出</span></div>
+            <div id="chart-monthly-income-expense-${suffix}" class="bar-chart">
+                <div class="bar-axis">
+                    <c:forEach var="tick" items="${section.axisTicks}" varStatus="st">
+                        <span style="bottom: ${st.index * 25}%"><fmt:formatNumber value="${tick}" pattern="#,##0" /></span>
+                    </c:forEach>
+                </div>
+                <div class="bar-plot">
+                    <c:forEach var="m" items="${section.months}">
+                        <a class="bar-group" href="${pageContext.request.contextPath}/report/detail?year=${page.selectedYear}&amp;month=${m.month}" aria-label="${m.month}月 収益 ${m.income}円 支出 ${m.expense}円">
+                            <span class="bar-pair">
+                                <span class="bar bar-income" style="height: ${m.incomeBarPercent}%"></span>
+                                <span class="bar bar-expense" style="height: ${m.expenseBarPercent}%"></span>
+                            </span>
+                            <span class="bar-label">${m.month}月</span>
+                        </a>
+                    </c:forEach>
+                </div>
+            </div>
+        </div>
+        <div class="breakdown-card">
+            <h3 id="heading-income-breakdown-${suffix}">収益項目の内訳</h3>
+            <div class="pie-wrap">
+                <div id="chart-income-pie-${suffix}" class="pie" style="background: ${section.incomeGradient}" role="img" aria-label="収益項目の割合">
+                    <span class="pie-center"><fmt:formatNumber value="${section.totalIncome}" pattern="#,##0" /><br>円</span>
+                </div>
+                <ul id="table-income-breakdown-${suffix}" class="pie-legend">
+                    <c:forEach var="row" items="${section.incomeItems}">
+                        <li><i class="dot" style="background: ${row.color}"></i><span><c:out value="${row.name}" /></span><em><fmt:formatNumber value="${row.amount}" pattern="#,##0" />円</em><b><c:out value="${row.percent}" />%</b></li>
+                    </c:forEach>
+                </ul>
+            </div>
+        </div>
+        <div class="breakdown-card">
+            <h3 id="heading-expense-breakdown-${suffix}">支出項目の内訳</h3>
+            <div class="pie-wrap">
+                <div id="chart-expense-pie-${suffix}" class="pie" style="background: ${section.expenseGradient}" role="img" aria-label="支出項目の割合">
+                    <span class="pie-center"><fmt:formatNumber value="${section.totalExpense}" pattern="#,##0" /><br>円</span>
+                </div>
+                <ul id="table-expense-breakdown-${suffix}" class="pie-legend">
+                    <c:forEach var="row" items="${section.expenseItems}">
+                        <li><i class="dot" style="background: ${row.color}"></i><span><c:out value="${row.name}" /></span><em><fmt:formatNumber value="${row.amount}" pattern="#,##0" />円</em><b><c:out value="${row.percent}" />%</b></li>
+                    </c:forEach>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>

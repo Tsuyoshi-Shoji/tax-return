@@ -1,15 +1,11 @@
 package org.example.features.setting.form;
 
 public class BusinessUseRatioForm {
+    private String ratio;
+    private String csrfToken;
 
-    private String defaultBusinessUseRatio;
-
-    public String getDefaultBusinessUseRatio() {
-        return defaultBusinessUseRatio;
-    }
-
-    public void setDefaultBusinessUseRatio(String defaultBusinessUseRatio) {
-        this.defaultBusinessUseRatio = defaultBusinessUseRatio;
-    }
+    public String getRatio() { return ratio; }
+    public void setRatio(String ratio) { this.ratio = ratio; }
+    public String getCsrfToken() { return csrfToken; }
+    public void setCsrfToken(String csrfToken) { this.csrfToken = csrfToken; }
 }
-

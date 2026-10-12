@@ -1,184 +1,147 @@
 package org.example.features.home.service.impl;
 
-import org.example.entity.Expense;
-import org.example.entity.Income;
-import org.example.entity.User;
-import org.example.features.auth.AuthUserContext;
+import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalAdjusters;
+import java.util.Collections;
+import java.util.List;
+
+import org.example.entity.AccountingTransaction;
+import org.example.entity.BusinessProfile;
+import org.example.entity.FiscalYear;
+import org.example.features.home.dto.FiscalYearOptionDto;
+import org.example.features.home.dto.HomeSummaryDto;
+import org.example.features.home.dto.HomeViewDto;
+import org.example.features.home.dto.RecentTransactionDto;
 import org.example.features.home.service.HomeService;
-import org.example.repository.ExpenseRepository;
-import org.example.repository.IncomeRepository;
-import org.example.repository.UserRepository;
+import org.example.repository.AccountingTransactionRepository;
+import org.example.repository.BusinessProfileRepository;
+import org.example.repository.ExpenseEntryRepository;
+import org.example.repository.FiscalYearRepository;
+import org.example.repository.IncomeEntryRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.Month;
-import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Stream;
-
 @Service
 public class HomeServiceImpl implements HomeService {
-
-    private final IncomeRepository incomeRepository;
-    private final ExpenseRepository expenseRepository;
-    private final UserRepository userRepository;
+    private final BusinessProfileRepository businessProfileRepository;
+    private final FiscalYearRepository fiscalYearRepository;
+    private final IncomeEntryRepository incomeEntryRepository;
+    private final ExpenseEntryRepository expenseEntryRepository;
+    private final AccountingTransactionRepository accountingTransactionRepository;
 
     public HomeServiceImpl(
-            IncomeRepository incomeRepository,
-            ExpenseRepository expenseRepository,
-            UserRepository userRepository) {
-        this.incomeRepository = incomeRepository;
-        this.expenseRepository = expenseRepository;
-        this.userRepository = userRepository;
+            BusinessProfileRepository businessProfileRepository,
+            FiscalYearRepository fiscalYearRepository,
+            IncomeEntryRepository incomeEntryRepository,
+            ExpenseEntryRepository expenseEntryRepository,
+            AccountingTransactionRepository accountingTransactionRepository) {
+        this.businessProfileRepository = businessProfileRepository;
+        this.fiscalYearRepository = fiscalYearRepository;
+        this.incomeEntryRepository = incomeEntryRepository;
+        this.expenseEntryRepository = expenseEntryRepository;
+        this.accountingTransactionRepository = accountingTransactionRepository;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public String getWelcomeMessage() {
-        Optional<User> currentUserOptional = findCurrentUser();
-        if (currentUserOptional.isEmpty()) {
-            return "ようこそ。";
-        }
-        User currentUser = currentUserOptional.get();
-        String name = currentUser.getUsername();
-        return (name == null || name.isBlank() ? currentUser.getEmail() : name) + " さん、ようこそ。";
-    }
-
-    @Override
-    public String getCurrentTime() {
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-        return LocalDateTime.now().format(formatter);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<Map<String, Object>> getRecentTransactions(int limit) {
-        Optional<User> currentUserOptional = findCurrentUser();
-        if (currentUserOptional.isEmpty()) {
-            return List.of();
-        }
-        User currentUser = currentUserOptional.get();
-        List<Income> incomes = incomeRepository.findByUserIdAndDeletedFlagFalseOrderByCreatedAtDesc(currentUser.getId());
-        List<Expense> expenses = expenseRepository.findByUserIdAndDeletedFlagFalseOrderByCreatedAtDesc(currentUser.getId());
-
-        return Stream.concat(
-                        incomes.stream().map(this::toIncomeTransaction),
-                        expenses.stream().map(this::toExpenseTransaction))
-                .sorted((left, right) -> ((LocalDate) right.get("sortDate")).compareTo((LocalDate) left.get("sortDate")))
-                .limit(limit)
-                .peek(transaction -> transaction.remove("sortDate"))
+    public HomeViewDto getHomeView(Long appUserId, Long selectedFiscalYearId) {
+        BusinessProfile profile = businessProfileRepository.findByAppUserId(appUserId)
+                .orElseThrow(() -> new IllegalStateException("Business profile not found."));
+        List<FiscalYear> fiscalYears = fiscalYearRepository.findByBusinessProfileIdOrderByTaxYearDesc(profile.getId());
+        List<FiscalYearOptionDto> options = fiscalYears.stream()
+                .map(f -> new FiscalYearOptionDto(f.getId(), f.getTaxYear() + "年"))
                 .toList();
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Map<String, Object> getAnnualProfitLoss() {
-        return getAnnualProfitLoss(false);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Map<String, Object> getAnnualProfitLoss(boolean includeTaxExcluded) {
-        LocalDate today = LocalDate.now();
-        return getProfitLossBetween(LocalDate.of(today.getYear(), Month.JANUARY, 1), today, includeTaxExcluded);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Map<String, Object> getMonthlyProfitLoss() {
-        return getMonthlyProfitLoss(false);
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public Map<String, Object> getMonthlyProfitLoss(boolean includeTaxExcluded) {
-        LocalDate today = LocalDate.now();
-        return getProfitLossBetween(today.withDayOfMonth(1), today, includeTaxExcluded);
-    }
-
-    @Override
-    public long getDaysUntilTaxDeadline() {
-        LocalDate today = LocalDate.now();
-        LocalDate deadline = LocalDate.of(today.getYear(), 3, 15);
-        if (today.isAfter(deadline)) {
-            deadline = deadline.plusYears(1);
-        }
-        deadline = moveToNextBusinessDay(deadline);
-        return java.time.temporal.ChronoUnit.DAYS.between(today, deadline);
-    }
-
-    @Override
-    public boolean isApproachingDeadline() {
-        return getDaysUntilTaxDeadline() <= 90;
-    }
-
-    private Map<String, Object> getProfitLossBetween(LocalDate fromDate, LocalDate toDate, boolean includeTaxExcluded) {
-        Optional<User> currentUserOptional = findCurrentUser();
-        if (currentUserOptional.isEmpty()) {
-            Map<String, Object> empty = new HashMap<>();
-            empty.put("income", BigDecimal.ZERO);
-            empty.put("expense", BigDecimal.ZERO);
-            empty.put("profit", BigDecimal.ZERO);
-            return empty;
+        if (fiscalYears.isEmpty()) {
+            HomeSummaryDto emptySummary = new HomeSummaryDto(
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO,
+                    BigDecimal.ZERO);
+            return new HomeViewDto(options, null, emptySummary, Collections.emptyList(), 0, LocalDate.now());
         }
 
-        User currentUser = currentUserOptional.get();
-        BigDecimal income = includeTaxExcluded
-                ? nvl(incomeRepository.sumAmountByUserIdAndPeriodIncludingAllData(currentUser.getId(), fromDate, toDate))
-                : nvl(incomeRepository.sumAmountByUserIdAndPeriod(currentUser.getId(), fromDate, toDate));
-        BigDecimal expense = includeTaxExcluded
-                ? nvl(expenseRepository.sumAmountByUserIdAndPeriodIncludingAllData(currentUser.getId(), fromDate, toDate))
-                : nvl(expenseRepository.sumAmountByUserIdAndPeriod(currentUser.getId(), fromDate, toDate));
-        Map<String, Object> result = new HashMap<>();
-        result.put("income", income);
-        result.put("expense", expense);
-        result.put("profit", income.subtract(expense));
-        return result;
-    }
+        FiscalYear selected = resolveFiscalYear(fiscalYears, selectedFiscalYearId);
+        LocalDate fiscalStart = selected.getPeriodStart();
+        LocalDate fiscalEnd = selected.getPeriodEnd();
+        LocalDate now = LocalDate.now();
 
-    private Optional<User> findCurrentUser() {
-        Long userId = AuthUserContext.getCurrentUserId();
-        if (userId == null) {
-            return Optional.empty();
+        BigDecimal annualIncome = incomeEntryRepository.sumBusinessAmountInRange(selected.getId(), fiscalStart, fiscalEnd);
+        BigDecimal annualExpense = expenseEntryRepository.sumBusinessAmountInRange(selected.getId(), fiscalStart, fiscalEnd);
+        BigDecimal annualProfit = annualIncome.subtract(annualExpense);
+
+        LocalDate monthStart = now.withDayOfMonth(1);
+        LocalDate monthEnd = now.with(TemporalAdjusters.lastDayOfMonth());
+        monthStart = maxDate(monthStart, fiscalStart);
+        monthEnd = minDate(monthEnd, fiscalEnd);
+        BigDecimal monthlyIncome = incomeEntryRepository.sumBusinessAmountInRange(selected.getId(), monthStart, monthEnd);
+        BigDecimal monthlyExpense = expenseEntryRepository.sumBusinessAmountInRange(selected.getId(), monthStart, monthEnd);
+        BigDecimal monthlyProfit = monthlyIncome.subtract(monthlyExpense);
+
+        LocalDate prevMonthDate = now.minusMonths(1);
+        LocalDate prevStart = prevMonthDate.withDayOfMonth(1);
+        LocalDate prevEnd = prevMonthDate.with(TemporalAdjusters.lastDayOfMonth());
+        prevStart = maxDate(prevStart, fiscalStart);
+        prevEnd = minDate(prevEnd, fiscalEnd);
+        BigDecimal prevIncome = incomeEntryRepository.sumBusinessAmountInRange(selected.getId(), prevStart, prevEnd);
+        BigDecimal prevExpense = expenseEntryRepository.sumBusinessAmountInRange(selected.getId(), prevStart, prevEnd);
+        BigDecimal prevProfit = prevIncome.subtract(prevExpense);
+
+        HomeSummaryDto summary = new HomeSummaryDto(
+                annualProfit,
+                monthlyProfit.subtract(prevProfit),
+                annualProfit,
+                annualIncome,
+                monthlyIncome,
+                annualExpense,
+                monthlyExpense);
+
+        List<AccountingTransaction> tx = accountingTransactionRepository
+                .findTop5ByFiscalYearIdAndStatusOrderByTransactionDateDescIdDesc(selected.getId(), "finalized");
+        if (tx.isEmpty()) {
+            tx = accountingTransactionRepository.findTop5ByFiscalYearIdOrderByTransactionDateDescIdDesc(selected.getId());
         }
-        return userRepository.findById(userId);
+        List<RecentTransactionDto> recent = tx.stream()
+                .map(t -> new RecentTransactionDto(
+                        t.getTransactionDate(),
+                        "income".equalsIgnoreCase(t.getTransactionType()) ? "収益" : "支出",
+                        t.getTransactionType(),
+                        t.getSummary(),
+                        t.getTotalAmount()))
+                .toList();
+
+        LocalDate deadlineDate = calculateDeadline(now);
+        long daysUntilDeadline = Math.max(0L, ChronoUnit.DAYS.between(now, deadlineDate));
+        return new HomeViewDto(options, selected.getId(), summary, recent, daysUntilDeadline, deadlineDate);
     }
 
-    private BigDecimal nvl(BigDecimal value) {
-        return value == null ? BigDecimal.ZERO : value;
-    }
-
-    private LocalDate moveToNextBusinessDay(LocalDate date) {
-        LocalDate adjusted = date;
-        while (adjusted.getDayOfWeek().getValue() >= 6) {
-            adjusted = adjusted.plusDays(1);
+    private FiscalYear resolveFiscalYear(List<FiscalYear> fiscalYears, Long selectedFiscalYearId) {
+        if (selectedFiscalYearId == null) {
+            return fiscalYears.get(0);
         }
-        return adjusted;
+        return fiscalYears.stream()
+                .filter(f -> f.getId().equals(selectedFiscalYearId))
+                .findFirst()
+                .orElseThrow(SecurityException::new);
     }
 
-    private Map<String, Object> toIncomeTransaction(Income income) {
-        Map<String, Object> transaction = new HashMap<>();
-        transaction.put("sortDate", income.getIncomeDate());
-        transaction.put("date", income.getIncomeDate());
-        transaction.put("type", "収益");
-        transaction.put("category", income.getIncomeSubcategory() == null ? income.getIncomeCategory().getCategoryName() : income.getIncomeSubcategory().getSubcategoryName());
-        transaction.put("amount", income.getAmount());
-        return transaction;
+    private LocalDate calculateDeadline(LocalDate now) {
+        LocalDate base = LocalDate.of(now.getYear(), 3, 15);
+        if (now.isAfter(base)) {
+            return LocalDate.of(now.getYear() + 1, 3, 15);
+        }
+        return base;
     }
 
-    private Map<String, Object> toExpenseTransaction(Expense expense) {
-        Map<String, Object> transaction = new HashMap<>();
-        transaction.put("sortDate", expense.getExpenseDate());
-        transaction.put("date", expense.getExpenseDate());
-        transaction.put("type", "支出");
-        transaction.put("category", expense.getExpenseSubcategory() == null ? expense.getExpenseCategory().getCategoryName() : expense.getExpenseSubcategory().getSubcategoryName());
-        transaction.put("amount", expense.getAmount());
-        return transaction;
+    private LocalDate maxDate(LocalDate a, LocalDate b) {
+        return a.isAfter(b) ? a : b;
+    }
+
+    private LocalDate minDate(LocalDate a, LocalDate b) {
+        return a.isBefore(b) ? a : b;
     }
 }

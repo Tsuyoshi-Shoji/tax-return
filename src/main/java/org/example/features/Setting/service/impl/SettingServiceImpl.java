@@ -1,8 +1,13 @@
 package org.example.features.setting.service.impl;
 
-import org.example.entity.User;
+import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.regex.Pattern;
+
+import org.example.entity.AppUser;
 import org.example.entity.UserSetting;
-import org.example.features.auth.AuthUserContext;
+import org.example.features.entry.EntryNotFoundException;
 import org.example.features.setting.dto.SettingOperationResult;
 import org.example.features.setting.dto.SettingView;
 import org.example.features.setting.form.AccountActionForm;
@@ -10,216 +15,148 @@ import org.example.features.setting.form.BusinessUseRatioForm;
 import org.example.features.setting.form.PasswordForm;
 import org.example.features.setting.form.ProfileForm;
 import org.example.features.setting.service.SettingService;
-import org.example.repository.ExpenseRepository;
-import org.example.repository.IncomeRepository;
-import org.example.repository.UserRepository;
+import org.example.repository.AppUserRepository;
 import org.example.repository.UserSettingRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
-import java.util.regex.Pattern;
-
 @Service
 public class SettingServiceImpl implements SettingService {
+    private static final Logger log = LoggerFactory.getLogger(SettingServiceImpl.class);
+    private static final Pattern RATIO_PATTERN = Pattern.compile("^[0-9]{1,3}$");
+    private static final String STATUS_ACTIVE = "active";
+    private static final String PASSWORD_MISMATCH = "現在のパスワードが正しくありません。";
 
-    private static final BigDecimal ZERO = BigDecimal.ZERO.setScale(2, RoundingMode.UNNECESSARY);
-    private static final BigDecimal ONE_HUNDRED = new BigDecimal("100.00");
-    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
-
-    private final UserRepository userRepository;
+    private final AppUserRepository appUserRepository;
     private final UserSettingRepository userSettingRepository;
-    private final ExpenseRepository expenseRepository;
-    private final IncomeRepository incomeRepository;
     private final PasswordEncoder passwordEncoder;
 
     public SettingServiceImpl(
-            UserRepository userRepository,
+            AppUserRepository appUserRepository,
             UserSettingRepository userSettingRepository,
-            ExpenseRepository expenseRepository,
-            IncomeRepository incomeRepository,
             PasswordEncoder passwordEncoder) {
-        this.userRepository = userRepository;
+        this.appUserRepository = appUserRepository;
         this.userSettingRepository = userSettingRepository;
-        this.expenseRepository = expenseRepository;
-        this.incomeRepository = incomeRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
     @Override
     @Transactional(readOnly = true)
-    public SettingView getCurrentSetting() {
-        Optional<User> userOptional = findCurrentUser();
-        if (userOptional.isEmpty()) {
-            return new SettingView("", "", ONE_HUNDRED, "ACTIVE");
-        }
-        User user = userOptional.get();
-        UserSetting setting = getOrCreateUserSetting(user);
-        return new SettingView(
-                user.getUsername() == null ? "" : user.getUsername(),
-                user.getEmail(),
-                setting.getDefaultBusinessUseRatio(),
-                user.getStatus());
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public BigDecimal getDefaultBusinessUseRatio() {
-        Optional<User> userOptional = findCurrentUser();
-        if (userOptional.isEmpty()) {
-            return ONE_HUNDRED;
-        }
-        User user = userOptional.get();
-        return getOrCreateUserSetting(user).getDefaultBusinessUseRatio();
+    public SettingView load(Long appUserId) {
+        AppUser user = findUser(appUserId);
+        BigDecimal rate = userSettingRepository.findByAppUserId(appUserId)
+                .map(UserSetting::getHomeApportionmentRate)
+                .orElse(BigDecimal.ZERO);
+        return new SettingView(user.getDisplayName(), user.getEmail(), user.getStatus(), rate.setScale(0, java.math.RoundingMode.DOWN));
     }
 
     @Override
     @Transactional
-    public SettingOperationResult updateProfile(ProfileForm form) {
-        List<String> errors = new ArrayList<>();
-        String requestedUsername = trimToEmpty(form.getUsername());
-        String requestedEmail = trimToEmpty(form.getEmail());
-        User currentUser = requireCurrentUser();
-
-        if (requestedUsername.isEmpty() || requestedUsername.length() > 100) {
-            errors.add("ユーザー名は1〜100文字で入力してください。");
+    public SettingOperationResult updateProfile(Long appUserId, ProfileForm form) {
+        String name = form == null || form.getDisplayName() == null ? "" : form.getDisplayName().trim();
+        if (name.isEmpty() || name.length() > 100) {
+            return SettingOperationResult.invalid(List.of("ユーザー名は1〜100文字で入力してください。"));
         }
-        if (requestedEmail.isEmpty() || requestedEmail.length() > 255 || !EMAIL_PATTERN.matcher(requestedEmail).matches()) {
-            errors.add("メールアドレスは正しい形式で入力してください。");
-        }
-        if (!requestedEmail.equalsIgnoreCase(currentUser.getEmail())
-                && userRepository.existsByEmail(requestedEmail.toLowerCase())) {
-            errors.add("このメールアドレスは既に利用されています。");
-        }
-        if (!errors.isEmpty()) {
-            return SettingOperationResult.failure(errors);
-        }
-
-        currentUser.setUsername(requestedUsername);
-        currentUser.setEmail(requestedEmail.toLowerCase());
-        return SettingOperationResult.success("プロフィールを更新しました。");
+        AppUser user = findActiveUser(appUserId);
+        user.setDisplayName(name);
+        appUserRepository.save(user);
+        log.info("Profile updated. userId={}", appUserId);
+        return SettingOperationResult.success("プロフィールを更新しました。", name);
     }
 
     @Override
     @Transactional
-    public SettingOperationResult changePassword(PasswordForm form) {
-        List<String> errors = new ArrayList<>();
-        String currentPassword = trimToEmpty(form.getCurrentPassword());
-        String newPassword = trimToEmpty(form.getNewPassword());
-        String confirmPassword = trimToEmpty(form.getConfirmPassword());
-        User currentUser = requireCurrentUser();
-
-        if (currentPassword.isEmpty()) {
+    public SettingOperationResult changePassword(Long appUserId, PasswordForm form) {
+        String current = form == null ? null : form.getCurrentPassword();
+        String next = form == null ? null : form.getNewPassword();
+        String confirm = form == null ? null : form.getConfirmPassword();
+        List<String> errors = new java.util.ArrayList<>();
+        if (current == null || current.isEmpty()) {
             errors.add("現在のパスワードを入力してください。");
         }
-        if (newPassword.length() < 8 || newPassword.length() > 72) {
+        if (next == null || next.length() < 8 || next.length() > 72 || next.getBytes(StandardCharsets.UTF_8).length > 72) {
             errors.add("新しいパスワードは8〜72文字で入力してください。");
-        }
-        if (!newPassword.equals(confirmPassword)) {
+        } else if (!next.equals(confirm)) {
             errors.add("新しいパスワードと確認用パスワードが一致しません。");
         }
-        boolean currentPasswordMatched = currentPassword.equals(currentUser.getPasswordHash())
-                || passwordEncoder.matches(currentPassword, currentUser.getPasswordHash());
-        if (!currentPassword.isEmpty() && !currentPasswordMatched) {
-            errors.add("現在のパスワードが正しくありません。");
-        }
         if (!errors.isEmpty()) {
-            return SettingOperationResult.failure(errors);
+            return SettingOperationResult.invalid(errors);
         }
-
-        currentUser.setPasswordHash(passwordEncoder.encode(newPassword));
+        AppUser user = findActiveUser(appUserId);
+        if (!passwordEncoder.matches(current, user.getPasswordHash())) {
+            return SettingOperationResult.invalid(List.of(PASSWORD_MISMATCH));
+        }
+        user.setPasswordHash(passwordEncoder.encode(next));
+        appUserRepository.save(user);
+        log.info("Password changed. userId={}", appUserId);
         return SettingOperationResult.success("パスワードを変更しました。");
     }
 
     @Override
     @Transactional
-    public SettingOperationResult updateBusinessUseRatio(BusinessUseRatioForm form) {
-        List<String> errors = new ArrayList<>();
-        BigDecimal requestedRatio = parseRatio(trimToEmpty(form.getDefaultBusinessUseRatio()), errors);
-        if (!errors.isEmpty()) {
-            return SettingOperationResult.failure(errors);
+    public SettingOperationResult updateBusinessUseRatio(Long appUserId, BusinessUseRatioForm form) {
+        String raw = form == null || form.getRatio() == null ? "" : form.getRatio().trim();
+        if (!RATIO_PATTERN.matcher(raw).matches() || Integer.parseInt(raw) > 100) {
+            return SettingOperationResult.invalid(List.of("家事按分率は0〜100%の範囲で入力してください。"));
         }
-
-        User user = requireCurrentUser();
-        UserSetting setting = getOrCreateUserSetting(user);
-        setting.setDefaultBusinessUseRatio(requestedRatio);
-        return SettingOperationResult.success("家事按分率を更新しました。支出登録画面の計算に即時反映されます。");
+        AppUser user = findActiveUser(appUserId);
+        UserSetting setting = userSettingRepository.findByAppUserId(appUserId).orElseGet(() -> {
+            UserSetting created = new UserSetting();
+            created.setAppUser(user);
+            return created;
+        });
+        setting.setHomeApportionmentRate(new BigDecimal(raw).setScale(2));
+        userSettingRepository.save(setting);
+        log.info("Apportionment rate updated. userId={}", appUserId);
+        return SettingOperationResult.success("家事按分率を保存しました。");
     }
 
     @Override
     @Transactional
-    public SettingOperationResult disableAccount(AccountActionForm form) {
-        if (!"無効化".equals(trimToEmpty(form.getConfirmationText()))) {
-            return SettingOperationResult.failure(List.of("確認欄に「無効化」と入力してください。"));
-        }
-        User currentUser = requireCurrentUser();
-        currentUser.setStatus("DISABLED");
-        currentUser.setLockedUntil(null);
-        currentUser.setFailedLoginCount(0);
-        return SettingOperationResult.success("ユーザーを無効化しました。次回以降はログインできません。");
+    public SettingOperationResult disableAccount(Long appUserId, AccountActionForm form) {
+        return changeAccountStatus(appUserId, form, "無効化", "disabled", "アカウントを無効化しました。");
     }
 
     @Override
     @Transactional
-    public SettingOperationResult deleteAccount(AccountActionForm form) {
-        if (!"削除".equals(trimToEmpty(form.getConfirmationText()))) {
-            return SettingOperationResult.failure(List.of("確認欄に「削除」と入力してください。"));
+    public SettingOperationResult deleteAccount(Long appUserId, AccountActionForm form) {
+        // 保存義務の確認前に物理削除しないため、ログイン不可の削除済み状態にとどめる。
+        return changeAccountStatus(appUserId, form, "削除", "deleted", "アカウントを削除しました。");
+    }
+
+    private SettingOperationResult changeAccountStatus(
+            Long appUserId, AccountActionForm form, String expectedText, String newStatus, String message) {
+        String confirmText = form == null || form.getConfirmText() == null ? "" : form.getConfirmText().trim();
+        if (!expectedText.equals(confirmText)) {
+            return SettingOperationResult.invalid(List.of("確認欄に「" + expectedText + "」と入力してください。"));
         }
-        User currentUser = requireCurrentUser();
-        Long userId = currentUser.getId();
-        expenseRepository.deleteAllByUserId(userId);
-        incomeRepository.deleteAllByUserId(userId);
-        userSettingRepository.findByUserId(userId).ifPresent(userSettingRepository::delete);
-        userRepository.delete(currentUser);
-        return SettingOperationResult.success("ユーザーと関連データを削除しました。");
-    }
-
-    private UserSetting getOrCreateUserSetting(User user) {
-        return userSettingRepository.findByUserId(user.getId())
-                .orElseGet(() -> {
-                    UserSetting setting = new UserSetting();
-                    setting.setUser(user);
-                    setting.setDefaultBusinessUseRatio(ONE_HUNDRED);
-                    return userSettingRepository.save(setting);
-                });
-    }
-
-    private BigDecimal parseRatio(String value, List<String> errors) {
-        if (value.isEmpty()) {
-            errors.add("家事按分率を入力してください。");
-            return ONE_HUNDRED;
+        String password = form.getCurrentPassword();
+        if (password == null || password.isEmpty()) {
+            return SettingOperationResult.invalid(List.of("現在のパスワードを入力してください。"));
         }
-        try {
-            BigDecimal ratio = new BigDecimal(value).setScale(2, RoundingMode.HALF_UP);
-            if (ratio.compareTo(ZERO) < 0 || ratio.compareTo(ONE_HUNDRED) > 0) {
-                errors.add("家事按分率は0〜100%の範囲で入力してください。");
-            }
-            return ratio;
-        } catch (NumberFormatException e) {
-            errors.add("家事按分率は数値で入力してください。");
-            return ONE_HUNDRED;
+        AppUser user = findActiveUser(appUserId);
+        if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+            return SettingOperationResult.invalid(List.of(PASSWORD_MISMATCH));
         }
+        user.setStatus(newStatus);
+        appUserRepository.save(user);
+        log.info("Account status changed. userId={}, status={}", appUserId, newStatus);
+        return SettingOperationResult.success(message);
     }
 
-    private String trimToEmpty(String value) {
-        return value == null ? "" : value.trim();
+    private AppUser findUser(Long appUserId) {
+        return appUserRepository.findById(appUserId)
+                .orElseThrow(() -> new EntryNotFoundException("User not found"));
     }
 
-    private Optional<User> findCurrentUser() {
-        Long userId = AuthUserContext.getCurrentUserId();
-        if (userId == null) {
-            return Optional.empty();
+    private AppUser findActiveUser(Long appUserId) {
+        AppUser user = findUser(appUserId);
+        if (!STATUS_ACTIVE.equalsIgnoreCase(user.getStatus())) {
+            throw new EntryNotFoundException("User not found");
         }
-        return userRepository.findById(userId);
-    }
-
-    private User requireCurrentUser() {
-        return findCurrentUser().orElseThrow(() -> new IllegalStateException("Current user not found"));
+        return user;
     }
 }
-
