@@ -3,17 +3,17 @@
 
 [Unit]
 Description=Apache Tomcat 11
-After=network.target mysql.service
-Wants=mysql.service
+After=network.target mariadb.service
+Wants=mariadb.service
 
 [Service]
 Type=forking
 User=tomcat
 Group=tomcat
-Environment="CATALINA_PID=/opt/tomcat/catalina.pid"
+Environment="CATALINA_PID=/opt/tomcat/run/catalina.pid"
 Environment="CATALINA_HOME=/opt/tomcat"
 Environment="CATALINA_BASE=/opt/tomcat"
-Environment="JAVA_HOME=/usr/lib/jvm/java-17-openjdk"
+Environment="JAVA_HOME=/usr/lib/jvm/java-21-amazon-corretto.aarch64"
 Environment="JAVA_OPTS=-Xms1024m -Xmx2048m -XX:+UseG1GC"
 
 ExecStart=/opt/tomcat/bin/catalina.sh start

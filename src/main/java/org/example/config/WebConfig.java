@@ -16,6 +16,7 @@ import org.springframework.context.support.PropertySourcesPlaceholderConfigurer;
 import org.springframework.dao.annotation.PersistenceExceptionTranslationPostProcessor;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.flywaydb.core.Flyway;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter;
@@ -103,6 +104,12 @@ public class WebConfig implements WebMvcConfigurer {
         dataSource.setPassword(datasourcePassword);
         if (datasourceUrl.startsWith(H2_URL_PREFIX)) {
             H2SchemaMigration.migrateIfConfigured(dataSource, datasourceUrl);
+        } else if (datasourceUrl.startsWith("jdbc:mysql:")) {
+            Flyway.configure()
+                    .dataSource(dataSource)
+                    .locations("classpath:db/migration")
+                    .load()
+                    .migrate();
         }
         return dataSource;
     }

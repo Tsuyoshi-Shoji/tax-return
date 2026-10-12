@@ -8,6 +8,8 @@ TOMCAT_HOME="/opt/tomcat"
 WAR_NAME="final-tax-return-1.0-SNAPSHOT.war"
 BACKUP_DIR="/opt/backups/war"
 MAX_BACKUPS=5
+JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-21-amazon-corretto.aarch64}"
+HEALTH_URL="http://localhost:8080/final-tax-return-1.0-SNAPSHOT/login"
 
 log() {
   echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "$DEPLOY_LOG"
@@ -32,7 +34,14 @@ trap 'log_error "Deployment failed at line $LINENO"; exit 1' ERR
 log_section "Deployment started - $(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
 
 mkdir -p "$BACKUP_DIR"
-mkdir -p "$TOMCAT_HOME/logs"
+mkdir -p "$TOMCAT_HOME"/{webapps,logs,work,temp,run}
+chown -R tomcat:tomcat "$TOMCAT_HOME/webapps" "$TOMCAT_HOME/logs" "$TOMCAT_HOME/work" "$TOMCAT_HOME/temp" "$TOMCAT_HOME/run"
+chgrp -R tomcat "$TOMCAT_HOME/bin" "$TOMCAT_HOME/conf" "$TOMCAT_HOME/lib"
+chmod 750 "$TOMCAT_HOME/bin" "$TOMCAT_HOME/conf" "$TOMCAT_HOME/lib"
+find "$TOMCAT_HOME/bin" -type f -name '*.sh' -exec chmod 750 {} +
+find "$TOMCAT_HOME/bin" "$TOMCAT_HOME/conf" "$TOMCAT_HOME/lib" -type f ! -name '*.sh' -exec chmod 640 {} +
+chown root:tomcat /opt/db-credentials.env
+chmod 640 /opt/db-credentials.env
 
 # ============================================================
 # リポジトリ更新
@@ -40,6 +49,10 @@ mkdir -p "$TOMCAT_HOME/logs"
 log_section "Step 1: Updating repository"
 
 cd "$REPO_DIR"
+if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+  log_error "Repository has uncommitted changes; refusing to reset or clean it"
+  exit 1
+fi
 git fetch origin main
 git reset --hard origin/main
 git clean -fd
@@ -53,7 +66,11 @@ log "Repository updated: $COMMIT_SHA"
 log_section "Step 2: Building application"
 
 cd "$REPO_DIR"
-mvn clean package -DskipTests -q 2>&1 | tail -5 >> "$DEPLOY_LOG"
+if [ ! -x "$JAVA_HOME/bin/java" ]; then
+  log_error "Java 21 was not found at $JAVA_HOME"
+  exit 1
+fi
+JAVA_HOME="$JAVA_HOME" mvn clean package -DskipTests -q 2>&1 | tail -5 >> "$DEPLOY_LOG"
 
 WAR_FILE="$REPO_DIR/target/$WAR_NAME"
 if [ ! -f "$WAR_FILE" ]; then
@@ -83,14 +100,16 @@ fi
 # ============================================================
 log_section "Step 4: Stopping Tomcat"
 
-if pgrep -f "catalina.sh" > /dev/null; then
+if pgrep -u tomcat -f "org.apache.catalina.startup.Bootstrap" > /dev/null; then
   log "Stopping Tomcat..."
-  "$TOMCAT_HOME/bin/catalina.sh" stop 60 -force 2>&1 | tail -3 >> "$DEPLOY_LOG" || true
+  runuser -u tomcat -- "$TOMCAT_HOME/bin/catalina.sh" stop 60 -force 2>&1 | tail -3 >> "$DEPLOY_LOG"
   sleep 5
 fi
 
-pkill -f "java.*tomcat" || true
-sleep 2
+if pgrep -u tomcat -f "org.apache.catalina.startup.Bootstrap" > /dev/null; then
+  log_error "Tomcat did not stop cleanly"
+  exit 1
+fi
 
 log "✓ Tomcat stopped"
 
@@ -123,7 +142,7 @@ log_section "Step 7: Starting Tomcat"
 
 rm -f "$TOMCAT_HOME/logs/catalina.out"
 cd "$TOMCAT_HOME"
-"$TOMCAT_HOME/bin/catalina.sh" start 2>&1 | tail -3 >> "$DEPLOY_LOG"
+runuser -u tomcat -- "$TOMCAT_HOME/bin/catalina.sh" start 2>&1 | tail -3 >> "$DEPLOY_LOG"
 
 sleep 15
 
@@ -139,7 +158,6 @@ log "✓ Tomcat started"
 # ============================================================
 log_section "Step 8: Health check"
 
-HEALTH_URL="http://localhost:8080/"
 RETRY_COUNT=30
 RETRY_INTERVAL=2
 

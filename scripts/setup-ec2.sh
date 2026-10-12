@@ -6,6 +6,7 @@ DATA_DIR="${DATA_DIR:-/data/mysql}"
 TOMCAT_HOME="${TOMCAT_HOME:-/opt/tomcat}"
 DB_USER="${DB_USER:-taxapp}"
 DB_NAME="${DB_NAME:-taxtax}"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "========================================"
 echo "EC2 Environment Setup - MySQL + Tomcat"
@@ -62,7 +63,7 @@ sudo dnf install -y \
   mariadb105 \
   maven \
   cronie \
-  wget tar git curl \
+  wget tar git \
   > /dev/null
 
 sudo chown -R mysql:mysql "$DATA_DIR"
@@ -153,9 +154,12 @@ DB_HOST=localhost
 ROOT_PASS=$ROOT_PASS
 EOF
 sudo chmod 600 /opt/db-credentials.env
-sudo chown root:root /opt/db-credentials.env
+sudo chown root:tomcat /opt/db-credentials.env
+sudo chmod 640 /opt/db-credentials.env
 
 echo "[4/6] Configuring Tomcat..."
+sudo mkdir -p "$TOMCAT_HOME"/{webapps,logs,work,temp,run}
+sudo chown -R tomcat:tomcat "$TOMCAT_HOME"/{webapps,logs,work,temp,run}
 sudo tee "$TOMCAT_HOME/bin/setenv.sh" > /dev/null <<'TOMCAT_EOF'
 #!/bin/bash
 if [ -f /opt/db-credentials.env ]; then
@@ -183,6 +187,11 @@ TOMCAT_EOF
 
 sudo chmod +x "$TOMCAT_HOME/bin/setenv.sh"
 sudo chown tomcat:tomcat "$TOMCAT_HOME/bin/setenv.sh"
+sudo install -o tomcat -g tomcat -m 755 "$SCRIPT_DIR/tomcat-setenv.sh" "$TOMCAT_HOME/bin/setenv.sh"
+sudo chgrp -R tomcat "$TOMCAT_HOME/bin" "$TOMCAT_HOME/conf" "$TOMCAT_HOME/lib"
+sudo chmod 750 "$TOMCAT_HOME/bin" "$TOMCAT_HOME/conf" "$TOMCAT_HOME/lib"
+sudo find "$TOMCAT_HOME/bin" -type f -name '*.sh' -exec chmod 750 {} +
+sudo find "$TOMCAT_HOME/bin" "$TOMCAT_HOME/conf" "$TOMCAT_HOME/lib" -type f ! -name '*.sh' -exec chmod 640 {} +
 
 echo "[5/6] Installing deployment scripts..."
 sudo mkdir -p /opt/backups/war
@@ -190,7 +199,8 @@ sudo chown root:root /opt/backups/war
 sudo chmod 755 /opt/backups/war
 
 sudo tee /opt/deploy.log > /dev/null
-sudo chmod 666 /opt/deploy.log
+sudo chown root:adm /opt/deploy.log
+sudo chmod 640 /opt/deploy.log
 
 echo "[6/6] Setting up monitoring & backups..."
 sudo mkdir -p /data/mysql/backups

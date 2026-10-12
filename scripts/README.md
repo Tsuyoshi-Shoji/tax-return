@@ -27,7 +27,7 @@ bash scripts/setup-ec2.sh
 ```
 
 #### 実行内容
-- Java 17 + Tomcat 11 インストール
+- Java 21 + Tomcat 11 インストール
 - MySQL インストール・初期化
 - EBS ボリュームマウント・設定
 - MySQL データベース・ユーザー作成
@@ -50,7 +50,7 @@ tail -f /var/log/setup-ec2.log
 - **実行タイミング**: GitHub Actions ワークフロー内（main ブッシュ時）
 - **実行時間**: 約 2-5 分
 - **前提条件**:
-  - Java 17・Maven インストール済み
+  - Java 21・Maven インストール済み
   - Tomcat 起動可能な状態
   - MySQL 起動中
 
@@ -70,7 +70,10 @@ ssh -i key.pem ec2-user@HOST 'sudo /opt/deploy.sh'
 - 古い WAR ファイル削除
 - 新しい WAR ファイルデプロイ
 - Tomcat 起動
-- ヘルスチェック（最大 30 回、2 秒間隔）
+- Flyway のバージョン管理済み DB マイグレーション適用後、Hibernate でスキーマ検証
+- アプリケーションのログイン画面をヘルスチェック（最大 30 回、2 秒間隔）
+
+DB マイグレーションは `src/main/resources/db/migration` にバージョン順で追加します。既存データベースを破壊する変更を追加せず、起動時に Hibernate の自動更新も行いません。
 
 #### ログ確認
 ```bash
@@ -88,8 +91,8 @@ mvn clean package -DskipTests
 sudo systemctl restart tomcat
 sudo systemctl status tomcat
 
-# ヘルスチェック失敗の場合
-curl http://localhost:8080/final-tax-return-1.0-SNAPSHOT/home
+# アプリケーションのヘルスチェック
+curl -i http://localhost:8080/final-tax-return-1.0-SNAPSHOT/login
 ```
 
 ---

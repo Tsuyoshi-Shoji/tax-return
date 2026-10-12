@@ -1,61 +1,19 @@
 #!/bin/bash
-# /opt/tomcat/bin/setenv.sh - Tomcat 環境変数設定
 
-# ============================================================
-# Java Memory Configuration
-# ============================================================
-# インスタンスサイズに応じて調整してください
-# t3.medium (4GB RAM): Xms=1024m Xmx=2048m
-# t3.large (8GB RAM):  Xms=2048m Xmx=4096m
-# t3.xlarge (16GB RAM): Xms=4096m Xmx=8192m
-
-export JAVA_OPTS="
-  -Xms1024m
-  -Xmx2048m
-  -XX:+UseG1GC
-  -XX:MaxGCPauseMillis=200
-  -XX:+ParallelRefProcEnabled
-  -XX:+UnlockDiagnosticVMOptions
-  -XX:G1NewCollectionHeuristicPercent=35
-  -XX:G1ReservePercent=20
-  -XX:InitiatingHeapOccupancyPercent=15
-  -Djava.awt.headless=true
-  -Dfile.encoding=UTF-8
-  -Duser.timezone=UTC
-  -Dspring.profiles.active=production
-"
-
-# ============================================================
-# Database Credentials
-# ============================================================
-if [ -f /opt/db-credentials.env ]; then
-  set -a
-  source /opt/db-credentials.env
-  set +a
+if [ ! -r /opt/db-credentials.env ]; then
+  echo "ERROR: /opt/db-credentials.env is not readable" >&2
+  exit 1
 fi
 
-# ============================================================
-# Application Configuration
-# ============================================================
-export CATALINA_OPTS="
-  $JAVA_OPTS
-  -Dapp.config=application-production.properties
-  -Dapp.datasource.url=jdbc:mysql://localhost:3306/${DB_NAME}
-  -Dapp.datasource.username=${DB_USER}
-  -Dapp.datasource.password=${DB_PASS}
-  -Dapp.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
-  -Dapp.jpa.hibernate.ddl-auto=validate
-  -Dapp.jpa.dialect=org.hibernate.dialect.MySQL8Dialect
-  -Dlogging.file.name=/opt/tomcat/logs/application.log
-"
+set -a
+source /opt/db-credentials.env
+set +a
 
-# ============================================================
-# Tomcat Security
-# ============================================================
-export CATALINA_PID=/opt/tomcat/catalina.pid
+if [ -z "${DB_NAME:-}" ] || [ -z "${DB_USER:-}" ] || [ -z "${DB_PASS:-}" ]; then
+  echo "ERROR: Database credentials are incomplete" >&2
+  exit 1
+fi
 
-# ============================================================
-# Optional: Debug Mode
-# ============================================================
-# Uncomment for development debugging
-# export CATALINA_OPTS="$CATALINA_OPTS -Xdebug -Xrunjdwp:transport=dt_socket,server=y,suspend=n,address=5005"
+export JAVA_OPTS="-Xms128m -Xmx256m -XX:+UseG1GC -Djava.awt.headless=true -Dfile.encoding=UTF-8 -Duser.timezone=UTC"
+export CATALINA_OPTS="-Dapp.config=application-production.properties -Dapp.datasource.url=jdbc:mysql://localhost:3306/${DB_NAME}?useSSL=false\&serverTimezone=UTC\&allowPublicKeyRetrieval=true -Dapp.datasource.username=${DB_USER} -Dapp.datasource.password=\${DB_PASS} -Dapp.datasource.driver-class-name=com.mysql.cj.jdbc.Driver -Dapp.jpa.hibernate.ddl-auto=validate -Dapp.jpa.dialect=org.hibernate.dialect.MySQL8Dialect -Dspring.profiles.active=production -Dspring.datasource.hikari.maximumPoolSize=3 -Dlogging.file.name=/opt/tomcat/logs/application.log"
+export CATALINA_PID=/opt/tomcat/run/catalina.pid
