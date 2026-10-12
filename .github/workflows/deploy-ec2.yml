@@ -7,29 +7,51 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    
+    env:
+      APP_NAME: final-tax-return-1.0-SNAPSHOT
+      APP_CONTEXT_PATH: /final-tax-return-1.0-SNAPSHOT
+      APP_PORT: 8080
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
           cache: maven
-      
+
       - name: Build WAR
         run: mvn clean package -DskipTests -q
-      
+
       - name: Verify WAR artifact
         run: |
-          WAR_FILE="target/final-tax-return-1.0-SNAPSHOT.war"
+          WAR_FILE="target/${APP_NAME}.war"
           if [ ! -f "$WAR_FILE" ]; then
             echo "❌ WAR file not found: $WAR_FILE"
             exit 1
           fi
           echo "✓ WAR file created: $(ls -lh $WAR_FILE | awk '{print $9, $5}')"
-      
+
+      - name: Resolve deployment target
+        id: target
+        shell: bash
+        run: |
+          HOST='${{ secrets.EC2_HOST }}'
+          HOST="${HOST#[}"
+          HOST="${HOST%]}"
+
+          if [[ "$HOST" == *:* ]]; then
+            CURL_HOST="[$HOST]"
+          else
+            CURL_HOST="$HOST"
+          fi
+
+          echo "host=$HOST" >> "$GITHUB_OUTPUT"
+          echo "base_url=http://$CURL_HOST:${APP_PORT}${APP_CONTEXT_PATH}" >> "$GITHUB_OUTPUT"
+          echo "health_url=http://$CURL_HOST:${APP_PORT}${APP_CONTEXT_PATH}/home" >> "$GITHUB_OUTPUT"
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@master
         with:
@@ -43,37 +65,35 @@ jobs:
             set -e
             source /opt/db-credentials.env
             /opt/deploy.sh
-      
+
       - name: Verify Deployment
         run: |
           echo "Waiting for application startup..."
           sleep 15
-          
           for i in {1..10}; do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-              "http://${{ secrets.EC2_HOST }}:8080/final-tax-return-1.0-SNAPSHOT/home" || echo "000")
-            
+            HTTP_CODE=$(curl -g -s -o /dev/null -w "%{http_code}" "${{ steps.target.outputs.health_url }}" || echo "000")
+
             if [ "$HTTP_CODE" = "200" ]; then
               echo "✓ Application is healthy (HTTP $HTTP_CODE)"
               exit 0
             fi
-            
+
             echo "Attempt $i: HTTP $HTTP_CODE - retrying..."
             sleep 3
           done
-          
+
           echo "❌ Application verification failed"
           exit 1
-      
+
       - name: Deployment Summary
         if: always()
         run: |
           if [ "${{ job.status }}" == "success" ]; then
             echo "✅ Deployment completed successfully"
-            echo "Application URL: http://${{ secrets.EC2_HOST }}:8080/final-tax-return-1.0-SNAPSHOT/"
+            echo "Application URL: ${{ steps.target.outputs.base_url }}/"
           else
             echo "❌ Deployment failed - check EC2 instance"
-            echo "Debug: ssh -i <key> ec2-user@${{ secrets.EC2_HOST }}"
+            echo "Debug: ssh -i <key> ec2-user@${{ steps.target.outputs.host }}"
             echo "Logs: tail -f /var/log/deploy.log"
             exit 1
           fi

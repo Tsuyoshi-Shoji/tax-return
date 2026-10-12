@@ -25,7 +25,9 @@
    - セキュリティグループ: 新規作成
      - インバウンドルール:
        - SSH (22): 自分の IP のみ
-       - HTTP (8080): 0.0.0.0/0 （または特定 IP）
+       - Tomcat (8080): 必要な送信元のみ
+         - IPv4: `0.0.0.0/0` または限定IP
+         - IPv6: `::/0` または限定IPv6
 
 5. **ストレージ設定**: 最小 30GB
 
@@ -115,7 +117,8 @@
 
    **Secret 1: `EC2_HOST`**
    - Name: `EC2_HOST`
-   - Value: EC2 インスタンスのパブリック IP
+   - Value: EC2 インスタンスのパブリック IP / IPv6 / ホスト名
+   - IPv6 を登録する場合は角括弧なしで入力
      ```
      54.123.45.67
      ```
@@ -164,6 +167,7 @@
 
 1. **アプリケーションが起動したか確認**
    ```bash
+   # IPv6 の場合は curl http://[<EC2_HOST>]:8080/final-tax-return-1.0-SNAPSHOT/
    curl http://<EC2_HOST>:8080/final-tax-return-1.0-SNAPSHOT/
    ```
 

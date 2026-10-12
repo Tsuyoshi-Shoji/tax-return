@@ -16,8 +16,8 @@ EC2 + MySQL + EBS 環境のデプロイメント完了チェックリスト
 
 - [ ] セキュリティグループ設定
   - [ ] インバウンド: 22/tcp (SSH) - 制限対象 IP から
-  - [ ] インバウンド: 80/tcp (HTTP) - 0.0.0.0/0
-  - [ ] インバウンド: 443/tcp (HTTPS) - 0.0.0.0/0 (後日)
+  - [ ] インバウンド: 8080/tcp (Tomcat) - 必要な送信元から
+  - [ ] IPv6 を使う場合: `::/0` または限定 IPv6
   - [ ] アウトバウンド: すべて許可
 
 - [ ] キーペア取得
@@ -111,7 +111,7 @@ sudo cat /opt/db-credentials.env
 リポジトリの Settings → Secrets に登録:
 
 ```
-EC2_HOST=<EC2 パブリック IP>
+EC2_HOST=<EC2 パブリック IP / IPv6 / ホスト名>
 EC2_PRIVATE_KEY=<キーペアの内容（-----BEGIN から -----END まで）>
 ```
 
@@ -160,6 +160,7 @@ git push origin main
 ### 4.1 ローカルからのアクセステスト
 
 ```bash
+# IPv6 の場合は curl http://[<EC2_PUBLIC_IP>]:8080/final-tax-return-1.0-SNAPSHOT/home
 curl http://<EC2_PUBLIC_IP>:8080/final-tax-return-1.0-SNAPSHOT/home
 ```
 
@@ -247,8 +248,7 @@ sudo firewall-cmd --list-all
 ```
 
 - [ ] SSH (22): 制限対象 IP から許可
-- [ ] HTTP (80): 0.0.0.0/0 から許可
-- [ ] HTTPS (443): 0.0.0.0/0 から許可 (オプション)
+- [ ] Tomcat (8080): 必要な送信元から許可
 - [ ] MySQL (3306): 内部のみ（外部からは拒否）
 
 ### 6.3 MySQL セキュリティ

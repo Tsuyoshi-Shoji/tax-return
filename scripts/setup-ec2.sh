@@ -1,25 +1,72 @@
 #!/bin/bash
 set -euo pipefail
 
+EBS_DEVICE="${EBS_DEVICE:-/dev/xvdf}"
+DATA_DIR="${DATA_DIR:-/data/mysql}"
+TOMCAT_HOME="${TOMCAT_HOME:-/opt/tomcat}"
+DB_USER="${DB_USER:-taxapp}"
+DB_NAME="${DB_NAME:-taxtax}"
+
 echo "========================================"
 echo "EC2 Environment Setup - MySQL + Tomcat"
 echo "========================================"
 
-if [ ! -d /data/mysql ]; then
-  echo "❌ /data/mysql not found. Please mount EBS volume first:"
-  echo "   sudo mkfs -t ext4 /dev/nvme1n1"
-  echo "   sudo mkdir -p /data/mysql"
-  echo "   sudo mount /dev/nvme1n1 /data/mysql"
-  exit 1
-fi
+prepare_ebs_volume() {
+  echo "[0/6] Preparing EBS volume..."
+
+  sudo mkdir -p "$DATA_DIR"
+
+  if mountpoint -q "$DATA_DIR"; then
+    echo "✓ $DATA_DIR is already mounted"
+    return
+  fi
+
+  DATA_DEVICE="$EBS_DEVICE"
+  if [ ! -b "$DATA_DEVICE" ]; then
+    ROOT_SOURCE=$(findmnt -no SOURCE /)
+    ROOT_DISK=$(lsblk -no PKNAME "$ROOT_SOURCE" 2>/dev/null || true)
+    if [ -n "$ROOT_DISK" ]; then
+      DATA_DEVICE=$(lsblk -dpno NAME,SIZE,TYPE,MOUNTPOINT | awk -v root="/dev/$ROOT_DISK" '$3=="disk" && $1 != root && $4=="" {print $1; exit}')
+    else
+      DATA_DEVICE=$(lsblk -dpno NAME,SIZE,TYPE,MOUNTPOINT | awk '$3=="disk" && $4=="" {print $1; exit}')
+    fi
+  fi
+
+  if [ -z "${DATA_DEVICE:-}" ] || [ ! -b "$DATA_DEVICE" ]; then
+    echo "❌ EBS volume not found. Attach a 20GiB EBS volume and retry."
+    lsblk
+    exit 1
+  fi
+
+  FS_TYPE=$(sudo blkid -o value -s TYPE "$DATA_DEVICE" 2>/dev/null || true)
+  if [ -z "$FS_TYPE" ]; then
+    echo "Formatting $DATA_DEVICE as ext4..."
+    sudo mkfs.ext4 -F "$DATA_DEVICE"
+  fi
+
+  UUID=$(sudo blkid -s UUID -o value "$DATA_DEVICE")
+  if ! grep -q "$UUID" /etc/fstab; then
+    echo "UUID=$UUID $DATA_DIR ext4 defaults,nofail 0 2" | sudo tee -a /etc/fstab > /dev/null
+  fi
+
+  sudo mount "$DATA_DEVICE" "$DATA_DIR"
+}
+
+prepare_ebs_volume
 
 echo "[1/6] Installing dependencies..."
-sudo yum update -y > /dev/null
-sudo yum install -y \
+sudo dnf update -y > /dev/null
+sudo dnf install -y \
   java-21-amazon-corretto-devel \
-  mysql-server \
+  mariadb105-server \
+  mariadb105 \
+  maven \
+  cronie \
   wget tar git curl \
   > /dev/null
+
+sudo chown -R mysql:mysql "$DATA_DIR"
+sudo chmod 750 "$DATA_DIR"
 
 echo "[2/6] Installing Tomcat..."
 if [ ! -d /opt/tomcat ]; then
@@ -33,11 +80,12 @@ if [ ! -d /opt/tomcat ]; then
 fi
 
 echo "[3/6] Setting up MySQL..."
-sudo systemctl stop mysqld || true
+sudo systemctl stop mariadb 2>/dev/null || true
+sudo systemctl stop mysqld 2>/dev/null || true
 
-sudo mkdir -p /data/mysql
-sudo chown -R mysql:mysql /data/mysql
-sudo chmod 750 /data/mysql
+sudo mkdir -p /var/log/mysql /var/run/mysqld
+sudo chown -R mysql:mysql /var/log/mysql /var/run/mysqld
+sudo chmod 755 /var/log/mysql /var/run/mysqld
 
 sudo tee /etc/my.cnf.d/mysql-custom.cnf > /dev/null <<'MYSQL_EOF'
 [mysqld]
@@ -55,16 +103,26 @@ slow_query_log=1
 slow_query_log_file=/var/log/mysql/slow-query.log
 long_query_time=2
 
-max_connections=100
-innodb_buffer_pool_size=256M
+max_connections=50
+innodb_buffer_pool_size=128M
 
 [mysqld_safe]
 log-error=/var/log/mysql/error.log
 pid-file=/var/run/mysqld/mysqld.pid
 MYSQL_EOF
 
-sudo systemctl enable mysqld
-sudo systemctl start mysqld
+if [ ! -d "$DATA_DIR/mysql" ] && [ ! -f "$DATA_DIR/ibdata1" ]; then
+  if command -v mariadb-install-db >/dev/null 2>&1; then
+    sudo mariadb-install-db --user=mysql --datadir="$DATA_DIR" >/dev/null
+  elif command -v mysql_install_db >/dev/null 2>&1; then
+    sudo mysql_install_db --user=mysql --datadir="$DATA_DIR" >/dev/null
+  fi
+fi
+
+sudo systemctl enable mariadb 2>/dev/null || true
+sudo systemctl enable mysqld 2>/dev/null || true
+
+sudo systemctl start mariadb 2>/dev/null || sudo systemctl start mysqld
 sleep 5
 
 ROOT_PASS=$(openssl rand -base64 16)
@@ -98,7 +156,7 @@ sudo chmod 600 /opt/db-credentials.env
 sudo chown root:root /opt/db-credentials.env
 
 echo "[4/6] Configuring Tomcat..."
-sudo tee /opt/tomcat/bin/setenv.sh > /dev/null <<'TOMCAT_EOF'
+sudo tee "$TOMCAT_HOME/bin/setenv.sh" > /dev/null <<'TOMCAT_EOF'
 #!/bin/bash
 if [ -f /opt/db-credentials.env ]; then
   source /opt/db-credentials.env
@@ -108,18 +166,19 @@ else
 fi
 
 export CATALINA_OPTS="
-  -Dspring.datasource.url=jdbc:mysql://localhost:3306/$DB_NAME?useSSL=true&serverTimezone=UTC&allowPublicKeyRetrieval=true
+  -Dspring.datasource.url=jdbc:mysql://localhost:3306/$DB_NAME?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
   -Dspring.datasource.username=$DB_USER
   -Dspring.datasource.password=$DB_PASS
   -Dserver.port=8080
   -Dspring.profiles.active=production
+  -Dspring.datasource.hikari.maximumPoolSize=3
 "
 
-export JAVA_OPTS="-Xms512m -Xmx1024m -XX:+UseG1GC -Djava.awt.headless=true"
+export JAVA_OPTS="-Xms128m -Xmx256m -XX:+UseG1GC -Djava.awt.headless=true"
 TOMCAT_EOF
 
-sudo chmod +x /opt/tomcat/bin/setenv.sh
-sudo chown tomcat:tomcat /opt/tomcat/bin/setenv.sh
+sudo chmod +x "$TOMCAT_HOME/bin/setenv.sh"
+sudo chown tomcat:tomcat "$TOMCAT_HOME/bin/setenv.sh"
 
 echo "[5/6] Installing deployment scripts..."
 sudo mkdir -p /opt/backups/war
@@ -155,10 +214,11 @@ sudo chmod +x /opt/backup-mysql.sh
 sudo chown root:root /opt/backup-mysql.sh
 
 (sudo crontab -l 2>/dev/null || true; echo "0 3 * * * /opt/backup-mysql.sh") | sudo crontab -
+sudo systemctl enable crond 2>/dev/null || true
+sudo systemctl start crond 2>/dev/null || true
 
 if command -v firewall-cmd &> /dev/null; then
-  sudo firewall-cmd --permanent --add-service=http > /dev/null 2>&1 || true
-  sudo firewall-cmd --permanent --add-service=https > /dev/null 2>&1 || true
+  sudo firewall-cmd --permanent --add-port=8080/tcp > /dev/null 2>&1 || true
   sudo firewall-cmd --permanent --remove-port=3306/tcp > /dev/null 2>&1 || true
   sudo firewall-cmd --reload > /dev/null 2>&1 || true
 fi
@@ -168,6 +228,7 @@ echo "========================================"
 echo "✅ Setup Complete!"
 echo "========================================"
 echo ""
+echo "EBS mounted at: $DATA_DIR"
 echo "Database Credentials saved to: /opt/db-credentials.env"
 echo "MySQL User: $DB_USER"
 echo "MySQL Database: $DB_NAME"

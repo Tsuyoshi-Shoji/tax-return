@@ -6,7 +6,7 @@
 
 本番環境に必要な秘密情報は **GitHub Secrets** で管理します。
 
-- **EC2_HOST**: EC2 インスタンス IP/ドメイン
+- **EC2_HOST**: EC2 インスタンス IP / IPv6 / ドメイン
 - **EC2_PRIVATE_KEY**: SSH 秘密鍵
 
 ### EC2 環境変数管理

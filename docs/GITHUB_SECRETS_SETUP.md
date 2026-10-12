@@ -7,7 +7,7 @@
 ## 必須 Secrets
 
 ### 1. EC2_HOST
-**説明**: EC2 インスタンスのパブリック IP またはドメイン名
+**説明**: EC2 インスタンスのパブリック IP / IPv6 / ドメイン名
 
 **取得方法**:
 ```bash
@@ -15,7 +15,7 @@
 # または EC2 インスタンス詳細 > パブリック IP アドレス
 ```
 
-**例**: `54.123.45.67` または `ec2-instance.example.com`
+**例**: `54.123.45.67` / `2406:da14:117f:7b2c:dd13:5665:e938:7d` / `ec2-instance.example.com`
 
 ### 2. EC2_PRIVATE_KEY
 **説明**: EC2 キーペアの秘密鍵
@@ -48,7 +48,8 @@ cat /path/to/your-key-pair.pem
 
 5. **EC2_HOST を追加**
    - Name: `EC2_HOST`
-   - Secret: `EC2 インスタンスのパブリック IP`
+    - Secret: `EC2 インスタンスのパブリック IP / IPv6 / ドメイン名`
+    - IPv6 は角括弧なしで入力
    - Add secret をクリック
 
 6. **EC2_PRIVATE_KEY を追加**
@@ -77,11 +78,11 @@ git push origin main
 - 秘密鍵の先頭 `-----BEGIN RSA PRIVATE KEY-----` から最後 `-----END RSA PRIVATE KEY-----` までをコピー
 
 ### ホスト接続エラー: "Could not resolve hostname"
-- EC2_HOST の値が正しいか確認（IP またはドメイン名）
+- EC2_HOST の値が正しいか確認（IP / IPv6 / ドメイン名）
 - EC2 インスタンスが起動状態か確認
 
 ### デプロイ完了後のヘルスチェック失敗
-- EC2 セキュリティグループで HTTP (8080) が許可されているか確認
+- EC2 セキュリティグループで Tomcat (8080) が許可されているか確認
 - EC2 インスタンスで Tomcat が起動しているか確認
   ```bash
   ssh -i your-key.pem ec2-user@<EC2_HOST>
