@@ -3,33 +3,21 @@ package org.example.features.setting.dto;
 import java.math.BigDecimal;
 
 public class SettingView {
-
-    private final String username;
+    private final String displayName;
     private final String email;
-    private final BigDecimal defaultBusinessUseRatio;
-    private final String accountStatus;
+    private final String status;
+    private final BigDecimal apportionmentRate;
 
-    public SettingView(String username, String email, BigDecimal defaultBusinessUseRatio, String accountStatus) {
-        this.username = username;
+    public SettingView(String displayName, String email, String status, BigDecimal apportionmentRate) {
+        this.displayName = displayName;
         this.email = email;
-        this.defaultBusinessUseRatio = defaultBusinessUseRatio;
-        this.accountStatus = accountStatus;
+        this.status = status;
+        this.apportionmentRate = apportionmentRate;
     }
 
-    public String getUsername() {
-        return username;
-    }
-
-    public String getEmail() {
-        return email;
-    }
-
-    public BigDecimal getDefaultBusinessUseRatio() {
-        return defaultBusinessUseRatio;
-    }
-
-    public String getAccountStatus() {
-        return accountStatus;
-    }
+    public String getDisplayName() { return displayName; }
+    public String getEmail() { return email; }
+    public String getStatus() { return status; }
+    public String getStatusLabel() { return "active".equalsIgnoreCase(status) ? "Active" : status; }
+    public BigDecimal getApportionmentRate() { return apportionmentRate; }
 }
-

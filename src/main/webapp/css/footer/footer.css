@@ -24,3 +24,20 @@
     text-align: center;
     color: var(--color-text);
 }
+
+.home-page .app-footer {
+    position: static;
+    width: auto;
+    height: auto;
+    min-height: 40px;
+    margin-left: var(--sidebar-width);
+    padding: 8px 16px;
+    border: 0;
+    background: #f2f8fd;
+    z-index: auto;
+}
+
+.home-page .app-footer p {
+    color: #52638a;
+    font-size: 11px;
+}

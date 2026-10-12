@@ -1,600 +1,253 @@
-﻿<%@ page contentType="text/html;charset=UTF-8" %>
+<%@ page contentType="text/html;charset=UTF-8" %>
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
 <%@ taglib prefix="fmt" uri="jakarta.tags.fmt" %>
+<fmt:setLocale value="ja_JP" scope="page" />
+<!DOCTYPE html>
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>損益検索・一覧</title>
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css" />
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/profit-loss/profit-loss.css" />
+    <title>損益一覧 | マネタックス</title>
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css?v=20261011c">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/home/home.css?v=20261011c">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/profit-loss/profit-loss.css?v=20261011d">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/profit-loss/profit-loss-detail.css?v=20261011c">
+    <script src="${pageContext.request.contextPath}/css/profit-loss/profit-loss.js?v=20261011c" defer></script>
 </head>
-<body>
-    <jsp:include page="/WEB-INF/views/Header/header.jsp" />
+<body class="home-page profit-loss-page">
+<jsp:include page="/WEB-INF/views/Header/header.jsp" />
+<div class="home-shell">
+    <jsp:include page="/WEB-INF/views/Common/sidebar.jsp" />
+    <main id="main-content" class="home-main profit-loss-main" tabindex="-1">
+        <div class="profit-loss-container">
+            <nav class="profit-loss-breadcrumb" aria-label="パンくず">
+                <ol>
+                    <li><a href="${pageContext.request.contextPath}/home">ホーム</a></li>
+                    <li aria-current="page">損益一覧</li>
+                </ol>
+            </nav>
 
-    <main>
-        <div class="container profit-loss-container">
-            <div class="page-header">
-                <h1>損益検索・一覧</h1>
-                <p class="page-subtitle">収益・支出を条件指定して確認できます。</p>
-            </div>
+            <section class="profit-loss-title-area" aria-labelledby="page-title">
+                <h1 id="page-title">損益一覧</h1>
+                <p id="page-description">収益・支出の一覧を確認できます。期間や条件で絞り込んで検索することができます。</p>
+            </section>
 
-            <c:if test="${not empty successMessage}">
-                <div class="success-message" role="status">
-                    <c:out value="${successMessage}" />
-                </div>
-            </c:if>
-
-            <c:if test="${not empty failureMessage}">
-                <div class="error-messages" role="alert">
-                    <p class="error-title"><c:out value="${failureMessage}" /></p>
-                </div>
-            </c:if>
-
-            <section class="search-container" aria-labelledby="searchTitle">
-                <div class="search-header">
-                    <h2 id="searchTitle">検索条件</h2>
-                    <p>未指定の条件は全件対象です。</p>
-                </div>
-
-                <form id="profitLossSearchForm" class="search-form" method="get" action="${pageContext.request.contextPath}/profit-loss" novalidate>
-                    <div class="form-group">
-                        <label for="dateFrom">発生日From</label>
-                        <input type="date" id="dateFrom" name="dateFrom" value="${param.dateFrom}" />
-                        <p id="dateFromError" class="error-message" aria-live="polite"></p>
+            <section class="profit-loss-card search-card" aria-labelledby="search-heading">
+                <h2 id="search-heading">検索条件</h2>
+                <c:if test="${not empty page.validationErrors}">
+                    <div id="search-error-panel" class="search-errors" role="alert" aria-live="polite">
+                        <ul>
+                            <c:forEach var="message" items="${page.validationErrors}">
+                                <li><c:out value="${message}" /></li>
+                            </c:forEach>
+                        </ul>
                     </div>
-
-                    <div class="form-group">
-                        <label for="dateTo">発生日To</label>
-                        <input type="date" id="dateTo" name="dateTo" value="${param.dateTo}" />
-                        <p id="dateToError" class="error-message" aria-live="polite"></p>
-                    </div>
-
-                    <div class="form-group full">
-                        <span class="group-label">区分</span>
-                        <div class="checkbox-group category-type-group" aria-label="区分の複数選択">
-                            <label><input type="checkbox" name="types" value="expense" <c:if test="${form.types.contains('expense')}">checked</c:if> /> 経費</label>
-                            <label><input type="checkbox" name="types" value="public" <c:if test="${form.types.contains('public')}">checked</c:if> /> 公的負担</label>
-                            <label><input type="checkbox" name="types" value="private" <c:if test="${form.types.contains('private')}">checked</c:if> /> 私的利用</label>
-                            <label><input type="checkbox" name="types" value="business" <c:if test="${form.types.contains('business')}">checked</c:if> /> 事業収入</label>
-                            <label><input type="checkbox" name="types" value="investment" <c:if test="${form.types.contains('investment')}">checked</c:if> /> 金融・投資収益</label>
-                            <label><input type="checkbox" name="types" value="temporary" <c:if test="${form.types.contains('temporary')}">checked</c:if> /> 一時収益</label>
-                            <label><input type="checkbox" name="types" value="nontaxable" <c:if test="${form.types.contains('nontaxable')}">checked</c:if> /> 非課税・対象外収益</label>
-                        </div>
-                    </div>
-
-                    <div class="form-group full">
-                        <span class="group-label">申告対象外データ</span>
-                        <div class="checkbox-group" aria-label="申告対象外データの表示条件">
-                            <label><input type="radio" name="showTaxExcluded" value="true" <c:if test="${form.showTaxExcluded}">checked</c:if> /> 表示する</label>
-                            <label><input type="radio" name="showTaxExcluded" value="false" <c:if test="${not form.showTaxExcluded}">checked</c:if> /> 表示しない</label>
-                        </div>
-                        <p class="help-text">編集や確認のため、申告対象外の収益を一覧に含めるか切り替えられます。</p>
-                    </div>
-
-                    <div class="form-group full">
-                        <label for="itemsDisplay">項目</label>
-                        <div class="custom-select" id="itemSelect">
-                            <button type="button" class="select-display" id="itemsDisplay" aria-expanded="false" aria-controls="itemOptionsPanel">
-                                <span class="selected-items" id="selectedItems">全項目</span>
-                            </button>
-                            <div class="select-options" id="itemOptionsPanel">
-                                <div class="select-search-box">
-                                    <input type="search" id="itemSearch" class="select-search-input" placeholder="項目名で検索" autocomplete="off" aria-label="項目検索" />
-                                    <p class="select-search-status" id="itemSearchStatus">全項目を表示中</p>
-                                    <div class="select-suggestion-box" id="itemSuggestionBox" hidden>
-                                        <p class="select-suggestion-title">候補</p>
-                                        <div class="select-suggestion-list" id="itemSuggestions"></div>
-                                    </div>
+                </c:if>
+                <form id="profit-loss-search-form" method="get" action="${pageContext.request.contextPath}/profit-loss" novalidate>
+                    <input type="hidden" id="income-page" name="incomePage" value="${page.incomeCurrentPage}" />
+                    <input type="hidden" id="expense-page" name="expensePage" value="${page.expenseCurrentPage}" />
+                    <div class="search-rows">
+                        <div class="search-row search-row-top">
+                            <div class="field-group">
+                                <label id="label-date-from" for="date-from">発生日From</label>
+                                <input id="date-from" name="dateFrom" type="date" value="<c:out value='${page.form.dateFrom}' />" />
+                            </div>
+                            <div class="field-group">
+                                <label id="label-date-to" for="date-to">発生日To</label>
+                                <input id="date-to" name="dateTo" type="date" value="<c:out value='${page.form.dateTo}' />" />
+                            </div>
+                            <div class="field-group">
+                                <span id="label-types" class="group-label">区分</span>
+                                <div class="inline-options">
+                                    <label class="check-option"><input type="checkbox" name="types" value="income" <c:if test="${page.incomeTypeSelected}">checked</c:if> />収益</label>
+                                    <label class="check-option"><input type="checkbox" name="types" value="expense" <c:if test="${page.expenseTypeSelected}">checked</c:if> />支出</label>
                                 </div>
-                                <div class="select-options-list" id="itemOptions"></div>
-                                <p class="select-empty-message" id="itemOptionsEmpty" hidden>一致する項目がありません。</p>
+                            </div>
+                            <div class="field-group">
+                                <span id="label-tax-target" class="group-label">申告対象外データ</span>
+                                <div class="inline-options">
+                                    <label class="radio-option"><input type="radio" name="taxTarget" value="show" <c:if test="${page.form.taxTarget ne 'hide'}">checked</c:if> />表示する</label>
+                                    <label class="radio-option"><input type="radio" name="taxTarget" value="hide" <c:if test="${page.form.taxTarget eq 'hide'}">checked</c:if> />表示しない</label>
+                                </div>
                             </div>
                         </div>
-                        <input type="hidden" id="items" name="items" value="${param.items}" />
-                        <p class="help-text">区分を未選択の場合は全区分の項目を表示します。</p>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="amountFrom">金額From</label>
-                        <input type="number" id="amountFrom" name="amountFrom" min="0" step="1" inputmode="numeric" value="${param.amountFrom}" />
-                        <p id="amountFromError" class="error-message" aria-live="polite"></p>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="amountTo">金額To</label>
-                        <input type="number" id="amountTo" name="amountTo" min="0" step="1" inputmode="numeric" value="${param.amountTo}" />
-                        <p id="amountToError" class="error-message" aria-live="polite"></p>
-                    </div>
-
-                    <input type="hidden" name="incomePage" id="incomePage" value="${empty param.incomePage ? '1' : param.incomePage}" />
-                    <input type="hidden" name="expensePage" id="expensePage" value="${empty param.expensePage ? '1' : param.expensePage}" />
-
-                    <div class="search-button-group">
-                        <button type="button" class="reset-button" id="clearButton">クリア</button>
-                        <button type="submit" class="search-button">検索</button>
+                        <div class="search-row search-row-bottom">
+                            <div class="field-group">
+                                <label id="label-items" for="button-items-toggle">項目</label>
+                                <div id="item-selector" class="item-selector">
+                                    <button id="button-items-toggle" class="item-selector-toggle" type="button" aria-haspopup="listbox" aria-expanded="false" aria-controls="items-dropdown">
+                                        <span id="items-selected-label">すべて</span>
+                                        <span class="ui-icon icon-chevron-down" aria-hidden="true"></span>
+                                    </button>
+                                    <div id="items-dropdown" class="items-dropdown" hidden>
+                                        <div class="items-dropdown-search-wrap">
+                                            <input id="items-search" class="items-search" type="text" placeholder="項目を検索" autocomplete="off" />
+                                        </div>
+                                        <ul id="items-options" class="items-options" role="listbox" aria-multiselectable="true">
+                                            <c:forEach var="option" items="${page.itemOptions}">
+                                                <li class="items-option-row" data-value="${option.value}" data-group="${option.group}">
+                                                    <label class="items-option-label">
+                                                        <input class="items-option-checkbox" type="checkbox" value="${option.value}" />
+                                                        <span><c:out value="${option.label}" /></span>
+                                                    </label>
+                                                </li>
+                                            </c:forEach>
+                                        </ul>
+                                    </div>
+                                    <div id="items-hidden-container">
+                                        <c:forEach var="selectedItem" items="${page.form.items}">
+                                            <input type="hidden" name="items" value="${selectedItem}" />
+                                        </c:forEach>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="field-group">
+                                <label id="label-amount-from" for="amount-from">金額From</label>
+                                <input id="amount-from" name="amountFrom" type="text" inputmode="numeric" placeholder="例）10000" value="<c:out value='${page.form.amountFrom}' />" />
+                            </div>
+                            <div class="field-group">
+                                <label id="label-amount-to" for="amount-to">金額To</label>
+                                <input id="amount-to" name="amountTo" type="text" inputmode="numeric" placeholder="例）100000" value="<c:out value='${page.form.amountTo}' />" />
+                            </div>
+                            <div class="field-group actions-cell">
+                                <button id="button-clear-conditions" class="button-secondary" type="button">条件クリア</button>
+                                <button id="button-search" class="button-primary" type="submit">検索</button>
+                            </div>
+                        </div>
                     </div>
                 </form>
             </section>
 
-            <section class="summary-section" aria-labelledby="summaryTitle">
-                <h2 id="summaryTitle" class="summary-title">損益サマリー</h2>
-                <div class="summary">
-                    <div class="summary-card income-card">
-                        <div class="card-content">
-                            <h3>総収益金額</h3>
-                            <div class="amount">¥<fmt:formatNumber value="${empty totalIncome ? 0 : totalIncome}" pattern="#,##0" /></div>
-                        </div>
+            <section class="summary-grid" aria-labelledby="heading-profit-loss-summary">
+                <h2 id="heading-profit-loss-summary" class="visually-hidden">損益集計</h2>
+                <article class="profit-loss-card summary-card">
+                    <div class="summary-icon summary-icon-blue"><span class="ui-icon icon-bars" aria-hidden="true"></span></div>
+                    <div>
+                        <h3>損益累計</h3>
+                        <p class="summary-amount"><c:if test="${page.totalProfit gt 0}">+</c:if><fmt:formatNumber value="${page.totalProfit}" pattern="#,##0" /> <small>円</small></p>
+                        <p class="summary-sub">収益 <fmt:formatNumber value="${page.summaryIncome}" pattern="#,##0" /> 円 − 支出 <fmt:formatNumber value="${page.summaryExpense}" pattern="#,##0" /> 円</p>
                     </div>
-                    <div class="summary-card expense-card">
-                        <div class="card-content">
-                            <h3>総支出金額</h3>
-                            <div class="amount">¥<fmt:formatNumber value="${empty totalExpense ? 0 : totalExpense}" pattern="#,##0" /></div>
-                        </div>
+                </article>
+                <article class="profit-loss-card summary-card">
+                    <div class="summary-icon summary-icon-green"><span class="ui-icon icon-trend" aria-hidden="true"></span></div>
+                    <div>
+                        <h3>収益累計</h3>
+                        <p class="summary-amount summary-income"><fmt:formatNumber value="${page.totalIncome}" pattern="#,##0" /> <small>円</small></p>
                     </div>
-                    <div class="summary-card profit-card">
-                        <div class="card-content">
-                            <h3>損益金額</h3>
-                            <div class="amount">¥<fmt:formatNumber value="${empty profitAmount ? 0 : profitAmount}" pattern="#,##0" /></div>
-                        </div>
+                </article>
+                <article class="profit-loss-card summary-card">
+                    <div class="summary-icon summary-icon-red"><span class="ui-icon icon-trend" aria-hidden="true"></span></div>
+                    <div>
+                        <h3>支出累計</h3>
+                        <p class="summary-amount summary-expense"><fmt:formatNumber value="${page.totalExpense}" pattern="#,##0" /> <small>円</small></p>
+                        <c:if test="${page.totalOwnerDraw gt 0}"><p class="summary-sub">家事按分の事業主貸 <fmt:formatNumber value="${page.totalOwnerDraw}" pattern="#,##0" /> 円（経費対象外）</p></c:if>
                     </div>
-                </div>
+                </article>
             </section>
 
-            <section class="data-table-section" aria-labelledby="incomeListTitle">
-                <div class="section-heading">
-                    <h2 id="incomeListTitle">収益一覧</h2>
-                    <span>1ページ10件表示</span>
+            <section class="profit-loss-card list-card" aria-labelledby="heading-income-list">
+                <div class="list-header">
+                    <h2 id="heading-income-list">収益一覧</h2>
+                    <div id="pagination-income" class="pagination-area">
+                        <span>全<c:out value="${page.incomeTotalCount}" />件 / 1ページ10件</span>
+                        <button class="page-nav" type="button" data-target-page="income-page" data-page="${page.incomeCurrentPage - 1}" <c:if test="${page.incomeCurrentPage le 1}">disabled</c:if>>‹</button>
+                        <c:forEach var="pageNo" items="${page.incomePageNumbers}">
+                            <button class="page-index ${pageNo eq page.incomeCurrentPage ? 'is-active' : ''}" type="button" data-target-page="income-page" data-page="${pageNo}"><c:out value="${pageNo}" /></button>
+                        </c:forEach>
+                        <button class="page-nav" type="button" data-target-page="income-page" data-page="${page.incomeCurrentPage + 1}" <c:if test="${page.incomeCurrentPage ge page.incomeTotalPages}">disabled</c:if>>›</button>
+                    </div>
                 </div>
-                <div class="table-wrapper">
-                    <table>
+                <div class="table-wrap">
+                    <table id="table-income-list" class="list-table">
                         <thead>
-                            <tr>
-                                <th>発生日</th>
-                                <th>区分</th>
-                                <th>項目</th>
-                                <th class="amount-column">金額</th>
-                                <th>詳細</th>
-                            </tr>
+                        <tr>
+                            <th>発生日</th>
+                            <th>区分</th>
+                            <th>項目</th>
+                            <th>詳細</th>
+                            <th class="align-right">金額</th>
+                            <th>申告対象</th>
+                            <th>詳細</th>
+                        </tr>
                         </thead>
                         <tbody>
-                            <c:choose>
-                                <c:when test="${not empty incomeRows}">
-                                    <c:forEach var="row" items="${incomeRows}">
-                                        <tr>
-                                            <td><c:out value="${row.date}" /></td>
-                                            <td><c:out value="${row.type}" /></td>
-                                            <td><c:out value="${row.item}" /></td>
-                                            <td class="amount-column">¥<fmt:formatNumber value="${row.amount}" pattern="#,##0" /></td>
-                                            <td>
-                                                <a class="detail-button" href="${pageContext.request.contextPath}/profit-loss/detail?recordType=income&id=${row.id}">詳細</a>
-                                            </td>
-                                        </tr>
-                                    </c:forEach>
-                                </c:when>
-                                <c:otherwise>
-                                    <tr><td colspan="5" class="empty-row">収益データはありません。</td></tr>
-                                </c:otherwise>
-                            </c:choose>
+                        <c:forEach var="row" items="${page.incomeRows}">
+                            <tr>
+                                <td><c:out value="${row.dateLabel}" /></td>
+                                <td><span class="type-pill type-income"><c:out value="${row.type}" /></span></td>
+                                <td><c:out value="${row.item}" /></td>
+                                <td><c:out value="${row.details}" default="-" /></td>
+                                <td class="align-right amount-income"><fmt:formatNumber value="${row.amount}" pattern="#,##0" /> 円</td>
+                                <td>
+                                    <c:choose>
+                                        <c:when test="${row.taxTarget}"><span class="target-pill target-yes">対象</span></c:when>
+                                        <c:otherwise><span class="target-pill target-no">対象外</span></c:otherwise>
+                                    </c:choose>
+                                </td>
+                                <td><a class="detail-link" href="${pageContext.request.contextPath}/profit-loss/detail?recordType=${row.recordType}&id=${row.id}">詳細</a></td>
+                            </tr>
+                        </c:forEach>
+                        <c:if test="${empty page.incomeRows}">
+                            <tr><td colspan="7" class="empty-row">該当する収益データはありません。</td></tr>
+                        </c:if>
                         </tbody>
                     </table>
                 </div>
-                <nav class="pagination" id="incomePagination" aria-label="収益一覧ページング" data-page-input="incomePage" data-current-page="${empty incomeCurrentPage ? 1 : incomeCurrentPage}" data-total-pages="${empty incomeTotalPages ? 1 : incomeTotalPages}"></nav>
             </section>
 
-            <section class="data-table-section" aria-labelledby="expenseListTitle">
-                <div class="section-heading">
-                    <h2 id="expenseListTitle">支出一覧</h2>
-                    <span>1ページ10件表示</span>
+            <section class="profit-loss-card list-card" aria-labelledby="heading-expense-list">
+                <div class="list-header">
+                    <h2 id="heading-expense-list">支出一覧</h2>
+                    <div id="pagination-expense" class="pagination-area">
+                        <span>全<c:out value="${page.expenseTotalCount}" />件 / 1ページ10件</span>
+                        <button class="page-nav" type="button" data-target-page="expense-page" data-page="${page.expenseCurrentPage - 1}" <c:if test="${page.expenseCurrentPage le 1}">disabled</c:if>>‹</button>
+                        <c:forEach var="pageNo" items="${page.expensePageNumbers}">
+                            <button class="page-index ${pageNo eq page.expenseCurrentPage ? 'is-active' : ''}" type="button" data-target-page="expense-page" data-page="${pageNo}"><c:out value="${pageNo}" /></button>
+                        </c:forEach>
+                        <button class="page-nav" type="button" data-target-page="expense-page" data-page="${page.expenseCurrentPage + 1}" <c:if test="${page.expenseCurrentPage ge page.expenseTotalPages}">disabled</c:if>>›</button>
+                    </div>
                 </div>
-                <div class="table-wrapper">
-                    <table>
+                <div class="table-wrap">
+                    <table id="table-expense-list" class="list-table">
                         <thead>
-                            <tr>
-                                <th>発生日</th>
-                                <th>区分</th>
-                                <th>項目</th>
-                                <th class="amount-column">金額</th>
-                                <th>詳細</th>
-                            </tr>
+                        <tr>
+                            <th>発生日</th>
+                            <th>区分</th>
+                            <th>項目</th>
+                            <th>詳細</th>
+                            <th class="align-right">金額</th>
+                            <th>申告対象</th>
+                            <th>詳細</th>
+                        </tr>
                         </thead>
                         <tbody>
-                            <c:choose>
-                                <c:when test="${not empty expenseRows}">
-                                    <c:forEach var="row" items="${expenseRows}">
-                                        <tr>
-                                            <td><c:out value="${row.date}" /></td>
-                                            <td><c:out value="${row.type}" /></td>
-                                            <td><c:out value="${row.item}" /></td>
-                                            <td class="amount-column">¥<fmt:formatNumber value="${row.amount}" pattern="#,##0" /></td>
-                                            <td>
-                                                <a class="detail-button" href="${pageContext.request.contextPath}/profit-loss/detail?recordType=expense&id=${row.id}">詳細</a>
-                                            </td>
-                                        </tr>
-                                    </c:forEach>
-                                </c:when>
-                                <c:otherwise>
-                                    <tr><td colspan="5" class="empty-row">支出データはありません。</td></tr>
-                                </c:otherwise>
-                            </c:choose>
+                        <c:forEach var="row" items="${page.expenseRows}">
+                            <tr>
+                                <td><c:out value="${row.dateLabel}" /></td>
+                                <td><span class="type-pill type-expense"><c:out value="${row.type}" /></span></td>
+                                <td><c:out value="${row.item}" /></td>
+                                <td><c:out value="${row.details}" default="-" /></td>
+                                <td class="align-right amount-expense"><fmt:formatNumber value="${row.amount}" pattern="#,##0" /> 円</td>
+                                <td>
+                                    <c:choose>
+                                        <c:when test="${row.taxTarget}"><span class="target-pill target-yes">対象</span></c:when>
+                                        <c:otherwise><span class="target-pill target-no">対象外</span></c:otherwise>
+                                    </c:choose>
+                                </td>
+                                <td><a class="detail-link" href="${pageContext.request.contextPath}/profit-loss/detail?recordType=${row.recordType}&id=${row.id}">詳細</a></td>
+                            </tr>
+                        </c:forEach>
+                        <c:if test="${empty page.expenseRows}">
+                            <tr><td colspan="7" class="empty-row">該当する支出データはありません。</td></tr>
+                        </c:if>
                         </tbody>
                     </table>
                 </div>
-                <nav class="pagination" id="expensePagination" aria-label="支出一覧ページング" data-page-input="expensePage" data-current-page="${empty expenseCurrentPage ? 1 : expenseCurrentPage}" data-total-pages="${empty expenseTotalPages ? 1 : expenseTotalPages}"></nav>
             </section>
         </div>
     </main>
-
-    <div id="errorModal" class="modal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="errorModalTitle">
-        <div class="modal-content modal-error">
-            <h2 id="errorModalTitle">入力エラー</h2>
-            <p id="errorMessage"></p>
-            <div class="modal-actions">
-                <button type="button" class="modal-button" id="closeErrorModal">閉じる</button>
-            </div>
-        </div>
-    </div>
-
-    <jsp:include page="/WEB-INF/views/Footer/footer.jsp" />
-
-    <script>
-        (function () {
-            'use strict';
-
-            const itemMaster = {
-                expense: ['通信・IT利用料', '設備・機材', '外注費', '広告宣伝費', '旅費交通費', '会議費', '接待交際費', '地代家賃', '水道光熱費', 'スペース利用料', '学習・教材費', '手数料', '保険（事業保険・賠償責任保険）', '税務相談費', '法務相談費', '消耗品費', '雑費'],
-                public: ['所得税', '住民税', '個人事業税', '固定資産税', '自動車税', '消費税', '国民健康保険', '国民年金', '介護保険', '証明書発行手数料', '行政手続料', '許可申請費', 'その他公的支出（罰金・延滞税、各種協会費など）'],
-                private: ['生活費', '趣味・娯楽', '教育費', '医療費', '交通費', '交際費', 'その他私費(雑費・貯金・投資など)'],
-                business: ['商品売上', 'サービス売上', '制作売上', '開発売上(業務委託)', '開発売上(請負)', 'コンサル売上', '広告収益', 'アフィリエイト', 'YouTube収益', 'SNS収益', 'ライセンス収益', 'サブスク収益', 'システム利用料', '手数料収益', 'イベント売上', 'その他事業収益'],
-                investment: ['株式配当', '売却益', 'FX収益', '仮想通貨利益', 'ステーキング', '投資信託収益', '銀行利息', '外貨利息', 'その他金融・投資収益'],
-                temporary: ['不用品売却', '臨時収入', '保険金', 'お祝い金', '懸賞', '返戻金', 'その他一時収益'],
-                nontaxable: ['借入金', '資本投入費', '建て替え金', '預かり金', '振替', '補助・給付金', 'その他非課税・対象外収益']
-            };
-
-            const form = document.getElementById('profitLossSearchForm');
-            const dateFrom = document.getElementById('dateFrom');
-            const dateTo = document.getElementById('dateTo');
-            const amountFrom = document.getElementById('amountFrom');
-            const amountTo = document.getElementById('amountTo');
-            const itemsHidden = document.getElementById('items');
-            const itemOptionsPanel = document.getElementById('itemOptionsPanel');
-            const itemOptions = document.getElementById('itemOptions');
-            const itemSearch = document.getElementById('itemSearch');
-            const itemSearchStatus = document.getElementById('itemSearchStatus');
-            const itemOptionsEmpty = document.getElementById('itemOptionsEmpty');
-            const itemSuggestionBox = document.getElementById('itemSuggestionBox');
-            const itemSuggestions = document.getElementById('itemSuggestions');
-            const selectedItems = document.getElementById('selectedItems');
-            const itemsDisplay = document.getElementById('itemsDisplay');
-            const errorModal = document.getElementById('errorModal');
-            const errorMessage = document.getElementById('errorMessage');
-
-            const MAX_SUGGESTION_COUNT = 8;
-
-            function selectedTypes() {
-                return Array.from(document.querySelectorAll('input[name="types"]:checked')).map(input => input.value);
-            }
-
-            function allTargetTypes() {
-                const selected = selectedTypes();
-                return selected.length > 0 ? selected : Object.keys(itemMaster);
-            }
-
-            function itemValue(type, label) {
-                return type + ':' + label;
-            }
-
-            function normalizeSearchText(value) {
-                return (value || '')
-                    .normalize('NFKC')
-                    .toLowerCase()
-                    .replace(/[\s　]+/g, '');
-            }
-
-            function updateItemSearchStatus(visibleCount, totalCount) {
-                const keyword = itemSearch.value.trim();
-                if (!keyword) {
-                    itemSearchStatus.textContent = '全' + totalCount + '件を表示中';
-                    return;
-                }
-                itemSearchStatus.textContent = visibleCount + '件 / 全' + totalCount + '件';
-            }
-
-            function checkedValueSet() {
-                return new Set(
-                    Array.from(itemOptions.querySelectorAll('input[type="checkbox"]:checked')).map(input => input.value)
-                );
-            }
-
-            function renderItemSuggestions(keyword) {
-                itemSuggestions.innerHTML = '';
-                if (!keyword) {
-                    itemSuggestionBox.hidden = true;
-                    return;
-                }
-
-                const checkedValues = checkedValueSet();
-                const candidates = [];
-                itemOptions.querySelectorAll('.option-item').forEach(option => {
-                    const searchText = option.dataset.searchText || '';
-                    const label = option.dataset.label || '';
-                    const value = option.dataset.value || '';
-                    const matchIndex = searchText.indexOf(keyword);
-                    if (matchIndex < 0) {
-                        return;
-                    }
-                    candidates.push({ value, label, matchIndex, selected: checkedValues.has(value) });
-                });
-
-                candidates.sort((a, b) => {
-                    if (a.matchIndex !== b.matchIndex) {
-                        return a.matchIndex - b.matchIndex;
-                    }
-                    return a.label.localeCompare(b.label, 'ja');
-                });
-
-                const topCandidates = candidates.slice(0, MAX_SUGGESTION_COUNT);
-                if (topCandidates.length === 0) {
-                    itemSuggestionBox.hidden = true;
-                    return;
-                }
-
-                topCandidates.forEach(candidate => {
-                    const button = document.createElement('button');
-                    button.type = 'button';
-                    button.className = candidate.selected
-                        ? 'select-suggestion-item is-selected'
-                        : 'select-suggestion-item';
-                    button.textContent = candidate.label;
-                    button.dataset.value = candidate.value;
-                    button.addEventListener('click', () => {
-                        const checkbox = itemOptions.querySelector('input[type="checkbox"][value="' + candidate.value + '"]');
-                        if (!checkbox) {
-                            return;
-                        }
-                        checkbox.checked = !checkbox.checked;
-                        updateSelectedItems();
-                        const normalizedKeyword = normalizeSearchText(itemSearch.value);
-                        renderItemSuggestions(normalizedKeyword);
-                    });
-                    itemSuggestions.appendChild(button);
-                });
-
-                itemSuggestionBox.hidden = false;
-            }
-
-            function filterItemOptions() {
-                const keyword = normalizeSearchText(itemSearch.value);
-                let totalCount = 0;
-                let visibleCount = 0;
-
-                itemOptions.querySelectorAll('.option-group').forEach(group => {
-                    let groupVisibleCount = 0;
-                    group.querySelectorAll('.option-item').forEach(option => {
-                        totalCount += 1;
-                        const searchText = option.dataset.searchText || '';
-                        const visible = !keyword || searchText.includes(keyword);
-                        option.classList.toggle('is-hidden', !visible);
-                        if (visible) {
-                            groupVisibleCount += 1;
-                            visibleCount += 1;
-                        }
-                    });
-                    group.classList.toggle('is-hidden', groupVisibleCount === 0);
-                });
-
-                itemOptionsEmpty.hidden = visibleCount !== 0;
-                updateItemSearchStatus(visibleCount, totalCount);
-                renderItemSuggestions(keyword);
-            }
-
-            function renderItemOptions() {
-                const current = new Set((itemsHidden.value || '').split(',').filter(Boolean));
-                itemOptions.innerHTML = '';
-                allTargetTypes().forEach(type => {
-                    const group = document.createElement('div');
-                    group.className = 'option-group';
-                    const title = document.createElement('strong');
-                    title.textContent = typeLabel(type);
-                    group.appendChild(title);
-                    itemMaster[type].forEach(label => {
-                        const value = itemValue(type, label);
-                        const option = document.createElement('label');
-                        option.className = 'option-item';
-                        option.dataset.searchText = normalizeSearchText(label);
-                        option.dataset.label = label;
-                        option.dataset.value = value;
-                        const checkbox = document.createElement('input');
-                        checkbox.type = 'checkbox';
-                        checkbox.value = value;
-                        checkbox.checked = current.has(value);
-                        checkbox.addEventListener('change', updateSelectedItems);
-                        option.appendChild(checkbox);
-                        option.appendChild(document.createTextNode(label));
-                        group.appendChild(option);
-                    });
-                    itemOptions.appendChild(group);
-                });
-                updateSelectedItems();
-                filterItemOptions();
-            }
-
-            function typeLabel(type) {
-                const labels = {
-                    expense: '費用区分',
-                    public: '公的負担区分',
-                    private: '私的利用区分',
-                    business: '事業収入区分',
-                    investment: '金融・投資収益区分',
-                    temporary: '一時収益区分',
-                    nontaxable: '非課税・対象外収益区分'
-                };
-                return labels[type] || type;
-            }
-
-            function updateSelectedItems() {
-                const checked = Array.from(itemOptions.querySelectorAll('input[type="checkbox"]:checked'));
-                itemsHidden.value = checked.map(input => input.value).join(',');
-                selectedItems.textContent = checked.length === 0 ? '全項目' : checked.map(input => input.value.split(':')[1]).join('、');
-            }
-
-            function parseLocalDate(value) {
-                if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-                    return null;
-                }
-                const parts = value.split('-').map(Number);
-                const date = new Date(parts[0], parts[1] - 1, parts[2]);
-                if (date.getFullYear() !== parts[0] || date.getMonth() !== parts[1] - 1 || date.getDate() !== parts[2]) {
-                    return null;
-                }
-                return date;
-            }
-
-            function showError(message) {
-                errorMessage.textContent = message;
-                errorModal.classList.add('show');
-                errorModal.setAttribute('aria-hidden', 'false');
-            }
-
-            function closeError() {
-                errorModal.classList.remove('show');
-                errorModal.setAttribute('aria-hidden', 'true');
-            }
-
-            function validateSearch() {
-                const from = dateFrom.value ? parseLocalDate(dateFrom.value) : null;
-                const to = dateTo.value ? parseLocalDate(dateTo.value) : null;
-                if (dateFrom.value && !from) {
-                    showError('発生日Fromには存在する日付を指定してください。');
-                    return false;
-                }
-                if (dateTo.value && !to) {
-                    showError('発生日Toには存在する日付を指定してください。');
-                    return false;
-                }
-                if (from && to && to < from) {
-                    showError('発生日Toは発生日From以降の日付を指定してください。');
-                    return false;
-                }
-                if (amountFrom.value && !/^\d+$/.test(amountFrom.value)) {
-                    showError('金額Fromは数値で入力してください。');
-                    return false;
-                }
-                if (amountTo.value && !/^\d+$/.test(amountTo.value)) {
-                    showError('金額Toは数値で入力してください。');
-                    return false;
-                }
-                if (amountFrom.value && amountTo.value && Number(amountTo.value) < Number(amountFrom.value)) {
-                    showError('金額Toは金額From以上を指定してください。');
-                    return false;
-                }
-                return true;
-            }
-
-            function renderPagination(element) {
-                const total = Number(element.dataset.totalPages || '1');
-                const current = Number(element.dataset.currentPage || '1');
-                const inputId = element.dataset.pageInput;
-                element.innerHTML = '';
-                if (total <= 1) {
-                    return;
-                }
-
-                const pages = [];
-                const start = Math.max(1, Math.min(current - 2, total - 4));
-                const end = Math.min(total, start + 4);
-                if (start > 1) {
-                    pages.push(1, '...');
-                }
-                for (let page = start; page <= end; page++) {
-                    pages.push(page);
-                }
-                if (end < total) {
-                    pages.push('...', total);
-                }
-
-                addPageButton(element, '前へ', Math.max(1, current - 1), inputId, current === 1);
-                pages.forEach(page => {
-                    if (page === '...') {
-                        const span = document.createElement('span');
-                        span.textContent = '...';
-                        span.className = 'page-ellipsis';
-                        element.appendChild(span);
-                    } else {
-                        addPageButton(element, String(page), page, inputId, page === current);
-                    }
-                });
-                addPageButton(element, '次へ', Math.min(total, current + 1), inputId, current === total);
-            }
-
-            function addPageButton(container, label, page, inputId, disabled) {
-                const button = document.createElement('button');
-                button.type = 'button';
-                button.textContent = label;
-                button.disabled = disabled;
-                button.className = disabled ? 'page-button is-current' : 'page-button';
-                button.addEventListener('click', () => {
-                    document.getElementById(inputId).value = String(page);
-                    form.submit();
-                });
-                container.appendChild(button);
-            }
-
-            document.querySelectorAll('input[name="types"]').forEach(input => {
-                input.addEventListener('change', () => {
-                    itemsHidden.value = '';
-                    itemSearch.value = '';
-                    renderItemOptions();
-                });
-            });
-
-            itemSearch.addEventListener('input', filterItemOptions);
-
-            itemsDisplay.addEventListener('click', event => {
-                event.stopPropagation();
-                itemOptionsPanel.classList.toggle('open');
-                const isOpen = itemOptionsPanel.classList.contains('open');
-                itemsDisplay.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-                if (isOpen) {
-                    itemSearch.focus();
-                    itemSearch.select();
-                }
-            });
-
-            itemOptionsPanel.addEventListener('click', event => event.stopPropagation());
-            document.addEventListener('click', () => {
-                itemOptionsPanel.classList.remove('open');
-                itemsDisplay.setAttribute('aria-expanded', 'false');
-            });
-
-            document.getElementById('clearButton').addEventListener('click', () => {
-                form.reset();
-                itemsHidden.value = '';
-                itemSearch.value = '';
-                document.getElementById('incomePage').value = '1';
-                document.getElementById('expensePage').value = '1';
-                renderItemOptions();
-                form.submit();
-            });
-
-            form.addEventListener('submit', event => {
-                if (!validateSearch()) {
-                    event.preventDefault();
-                }
-            });
-
-            document.getElementById('closeErrorModal').addEventListener('click', closeError);
-            errorModal.addEventListener('click', event => {
-                if (event.target === errorModal) {
-                    closeError();
-                }
-            });
-
-            renderItemOptions();
-            document.querySelectorAll('.pagination').forEach(renderPagination);
-        })();
-    </script>
+</div>
+<jsp:include page="/WEB-INF/views/Footer/footer.jsp" />
+<jsp:include page="/WEB-INF/views/Common/app-dialog.jsp" />
 </body>
 </html>
-
-

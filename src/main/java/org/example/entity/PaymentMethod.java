@@ -1,32 +1,31 @@
 package org.example.entity;
 
+import java.time.LocalDateTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
-import jakarta.persistence.Version;
-
-import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "m_payment_method")
+@Table(name = "payment_method")
 public class PaymentMethod {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "payment_method_id")
     private Long id;
 
-    @Column(name = "payment_method_name", nullable = false, length = 100)
-    private String paymentMethodName;
+    @Column(name = "method_code", nullable = false, length = 50)
+    private String methodCode;
 
-    @Column(name = "display_order", nullable = false)
-    private Integer displayOrder;
+    @Column(name = "method_name", nullable = false, length = 100)
+    private String methodName;
 
-    @Column(name = "status", nullable = false, length = 20)
-    private String status;
+    @Column(name = "is_active", nullable = false)
+    private boolean active;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
@@ -34,23 +33,43 @@ public class PaymentMethod {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
-    @Version
-    @Column(name = "version", nullable = false)
-    private Long version;
+    @PrePersist
+    public void prePersist() {
+        LocalDateTime now = LocalDateTime.now();
+        createdAt = now;
+        updatedAt = now;
+    }
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    public String getPaymentMethodName() { return paymentMethodName; }
-    public void setPaymentMethodName(String paymentMethodName) { this.paymentMethodName = paymentMethodName; }
-    public Integer getDisplayOrder() { return displayOrder; }
-    public void setDisplayOrder(Integer displayOrder) { this.displayOrder = displayOrder; }
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
-    public Long getVersion() { return version; }
-    public void setVersion(Long version) { this.version = version; }
+    @PreUpdate
+    public void preUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public String getMethodCode() {
+        return methodCode;
+    }
+
+    public void setMethodCode(String methodCode) {
+        this.methodCode = methodCode;
+    }
+
+    public String getMethodName() {
+        return methodName;
+    }
+
+    public void setMethodName(String methodName) {
+        this.methodName = methodName;
+    }
+
+    public boolean isActive() {
+        return active;
+    }
+
+    public void setActive(boolean active) {
+        this.active = active;
+    }
 }
-

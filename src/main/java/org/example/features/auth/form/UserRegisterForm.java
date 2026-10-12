@@ -1,10 +1,19 @@
 package org.example.features.auth.form;
 
 public class UserRegisterForm {
-
+    private String name;
     private String email;
     private String password;
     private String confirmPassword;
+    private boolean termsAgreement;
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
 
     public String getEmail() {
         return email;
@@ -29,5 +38,12 @@ public class UserRegisterForm {
     public void setConfirmPassword(String confirmPassword) {
         this.confirmPassword = confirmPassword;
     }
-}
 
+    public boolean isTermsAgreement() {
+        return termsAgreement;
+    }
+
+    public void setTermsAgreement(boolean termsAgreement) {
+        this.termsAgreement = termsAgreement;
+    }
+}
