@@ -53,18 +53,50 @@ jobs:
           echo "health_url=http://$CURL_HOST:${APP_PORT}${APP_CONTEXT_PATH}/home" >> "$GITHUB_OUTPUT"
 
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ec2-user
-          key: ${{ secrets.EC2_PRIVATE_KEY }}
-          port: 22
-          timeout: 120s
-          command_timeout: 180s
-          script: |
-            set -e
-            source /opt/db-credentials.env
-            /opt/deploy.sh
+        shell: bash
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_PRIVATE_KEY: ${{ secrets.EC2_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${EC2_HOST:-}" ]; then
+            echo "EC2_HOST secret is not set"
+            exit 1
+          fi
+
+          SSH_HOST="${EC2_HOST#[}"
+          SSH_HOST="${SSH_HOST%]}"
+
+          mkdir -p ~/.ssh
+          KEY_FILE="$HOME/.ssh/ec2_deploy_key"
+          KNOWN_HOSTS="$HOME/.ssh/known_hosts"
+
+          printf '%s\n' "$EC2_PRIVATE_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          : > "$KNOWN_HOSTS"
+
+          ADDRESS_FAMILY="any"
+          if [[ "$SSH_HOST" == *:* ]]; then
+            ADDRESS_FAMILY="inet6"
+            ssh-keyscan -6 -H "$SSH_HOST" >> "$KNOWN_HOSTS" 2>/dev/null
+          else
+            ssh-keyscan -H "$SSH_HOST" >> "$KNOWN_HOSTS" 2>/dev/null
+          fi
+
+          cat > "$HOME/.ssh/config" <<EOF
+          Host ec2-deploy
+            HostName $SSH_HOST
+            User ec2-user
+            IdentityFile $KEY_FILE
+            IdentitiesOnly yes
+            UserKnownHostsFile $KNOWN_HOSTS
+            StrictHostKeyChecking yes
+            AddressFamily $ADDRESS_FAMILY
+          EOF
+          chmod 600 "$HOME/.ssh/config"
+
+          ssh ec2-deploy 'bash -lc "set -euo pipefail; source /opt/db-credentials.env; sudo /opt/deploy.sh"'
 
       - name: Verify Deployment
         run: |
@@ -87,13 +119,25 @@ jobs:
 
       - name: Deployment Summary
         if: always()
+        shell: bash
+        env:
+          BASE_URL: ${{ steps.target.outputs.base_url }}
+          DEPLOY_HOST: ${{ steps.target.outputs.host }}
         run: |
           if [ "${{ job.status }}" == "success" ]; then
             echo "✅ Deployment completed successfully"
-            echo "Application URL: ${{ steps.target.outputs.base_url }}/"
+            if [ -n "${BASE_URL:-}" ]; then
+              echo "Application URL: ${BASE_URL}/"
+            else
+              echo "Application URL: unavailable"
+            fi
           else
             echo "❌ Deployment failed - check EC2 instance"
-            echo "Debug: ssh -i <key> ec2-user@${{ steps.target.outputs.host }}"
+            if [ -n "${DEPLOY_HOST:-}" ]; then
+              echo "Debug: ssh -i <key> ec2-user@${DEPLOY_HOST}"
+            else
+              echo "Debug: ssh -i <key> ec2-user@<EC2_HOST>"
+            fi
             echo "Logs: tail -f /var/log/deploy.log"
             exit 1
           fi
