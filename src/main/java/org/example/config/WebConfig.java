@@ -35,8 +35,9 @@ import org.springframework.web.servlet.view.InternalResourceViewResolver;
 @EnableTransactionManagement
 @EnableJpaRepositories(basePackages = "org.example.repository")
 @ComponentScan(basePackages = "org.example")
-@PropertySource("classpath:application.properties")
+@PropertySource("classpath:${app.config:application.properties}")
 public class WebConfig implements WebMvcConfigurer {
+    private static final String H2_URL_PREFIX = "jdbc:h2:";
 
     @Value("${app.datasource.url}")
     private String datasourceUrl;
@@ -46,6 +47,15 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Value("${app.datasource.password}")
     private String datasourcePassword;
+
+    @Value("${app.datasource.driver-class-name}")
+    private String datasourceDriverClassName;
+
+    @Value("${app.jpa.hibernate.ddl-auto}")
+    private String hibernateDdlAuto;
+
+    @Value("${app.jpa.dialect}")
+    private String hibernateDialect;
 
     @Bean
     public static PropertySourcesPlaceholderConfigurer propertySourcesPlaceholderConfigurer() {
@@ -79,17 +89,21 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Bean
     public DataSource dataSource() {
-        try {
-            Files.createDirectories(Path.of("local-db"));
-        } catch (IOException e) {
-            throw new IllegalStateException("Failed to create local-db directory", e);
+        if (datasourceUrl.startsWith(H2_URL_PREFIX)) {
+            try {
+                Files.createDirectories(Path.of("local-db"));
+            } catch (IOException e) {
+                throw new IllegalStateException("Failed to create local-db directory", e);
+            }
         }
         DriverManagerDataSource dataSource = new DriverManagerDataSource();
-        dataSource.setDriverClassName("org.h2.Driver");
+        dataSource.setDriverClassName(datasourceDriverClassName);
         dataSource.setUrl(datasourceUrl);
         dataSource.setUsername(datasourceUsername);
         dataSource.setPassword(datasourcePassword);
-        H2SchemaMigration.migrateIfConfigured(dataSource, datasourceUrl);
+        if (datasourceUrl.startsWith(H2_URL_PREFIX)) {
+            H2SchemaMigration.migrateIfConfigured(dataSource, datasourceUrl);
+        }
         return dataSource;
     }
 
@@ -103,8 +117,8 @@ public class WebConfig implements WebMvcConfigurer {
         em.setJpaVendorAdapter(vendorAdapter);
 
         Properties properties = new Properties();
-        properties.put("hibernate.hbm2ddl.auto", "update");
-        properties.put("hibernate.dialect", "org.hibernate.dialect.H2Dialect");
+        properties.put("hibernate.hbm2ddl.auto", hibernateDdlAuto);
+        properties.put("hibernate.dialect", hibernateDialect);
         properties.put("hibernate.show_sql", "false");
         properties.put("hibernate.format_sql", "false");
         em.setJpaProperties(properties);

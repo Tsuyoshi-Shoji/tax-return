@@ -166,9 +166,13 @@ else
 fi
 
 export CATALINA_OPTS="
-  -Dspring.datasource.url=jdbc:mysql://localhost:3306/$DB_NAME?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-  -Dspring.datasource.username=$DB_USER
-  -Dspring.datasource.password=$DB_PASS
+  -Dapp.config=application-production.properties
+  -Dapp.datasource.url=jdbc:mysql://localhost:3306/$DB_NAME?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
+  -Dapp.datasource.username=$DB_USER
+  -Dapp.datasource.password=$DB_PASS
+  -Dapp.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
+  -Dapp.jpa.hibernate.ddl-auto=validate
+  -Dapp.jpa.dialect=org.hibernate.dialect.MySQL8Dialect
   -Dserver.port=8080
   -Dspring.profiles.active=production
   -Dspring.datasource.hikari.maximumPoolSize=3
