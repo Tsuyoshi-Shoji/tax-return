@@ -78,6 +78,11 @@ scripts/RunMigration.class
 *.p12
 *.jks
 
+# Private-access (WireGuard/Nginx) real credentials - keep only *.example templates
+scripts/private-access/wg0.conf
+scripts/private-access/client.conf
+scripts/private-access/*.crt
+
 # Local secret files (must not be committed)
 .env
 .env.local

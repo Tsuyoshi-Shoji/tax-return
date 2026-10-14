@@ -2,6 +2,8 @@
 
 本番環境の各種操作手順を記載しています。
 
+> 私用端末限定構成では [WireGuard + HTTPS手順](PRIVATE-ACCESS.md) を優先する。障害時もアプリの公開ポートを開けない。Tomcatの起動方式は実構成に従う（現在のデプロイスクリプトは `catalina.sh` を使用）。
+
 ## 緊急対応
 
 ### アプリケーション起動・停止
@@ -236,13 +238,12 @@ ssh-keygen -l -f /etc/ssh/ssh_host_rsa_key.pub
 # インバウンドルール確認
 sudo firewall-cmd --list-all
 
-# ポート許可
-sudo firewall-cmd --permanent --add-port=8080/tcp
-sudo firewall-cmd --permanent --add-port=3306/tcp  # ローカルのみ推奨
-
-# サービス許可
-sudo firewall-cmd --permanent --add-service=http
-sudo firewall-cmd --permanent --add-service=https
+# 外部公開はWireGuardのみ
+sudo firewall-cmd --permanent --add-port=51820/udp
+sudo firewall-cmd --permanent --remove-service=http
+sudo firewall-cmd --permanent --remove-service=https
+sudo firewall-cmd --permanent --remove-port=8080/tcp
+sudo firewall-cmd --permanent --remove-port=3306/tcp
 
 # 設定リロード
 sudo firewall-cmd --reload

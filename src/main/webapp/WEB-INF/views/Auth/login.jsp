@@ -48,6 +48,7 @@
         </div>
 
         <form id="loginForm" class="auth-form" method="post" action="${pageContext.request.contextPath}/login" novalidate>
+            <input type="hidden" name="csrfToken" value="<c:out value='${loginCsrfToken}' />" />
             <div class="form-group">
                 <label id="label-address" for="form-address">メールアドレス <span class="required">*</span></label>
                 <div class="field-shell field-shell-with-icon">

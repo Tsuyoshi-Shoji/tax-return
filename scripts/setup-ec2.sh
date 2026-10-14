@@ -160,34 +160,9 @@ sudo chmod 640 /opt/db-credentials.env
 echo "[4/6] Configuring Tomcat..."
 sudo mkdir -p "$TOMCAT_HOME"/{webapps,logs,work,temp,run}
 sudo chown -R tomcat:tomcat "$TOMCAT_HOME"/{webapps,logs,work,temp,run}
-sudo tee "$TOMCAT_HOME/bin/setenv.sh" > /dev/null <<'TOMCAT_EOF'
-#!/bin/bash
-if [ -f /opt/db-credentials.env ]; then
-  source /opt/db-credentials.env
-else
-  echo "ERROR: /opt/db-credentials.env not found" >&2
-  exit 1
-fi
-
-export CATALINA_OPTS="
-  -Dapp.config=application-production.properties
-  -Dapp.datasource.url=jdbc:mysql://localhost:3306/$DB_NAME?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true
-  -Dapp.datasource.username=$DB_USER
-  -Dapp.datasource.password=$DB_PASS
-  -Dapp.datasource.driver-class-name=com.mysql.cj.jdbc.Driver
-  -Dapp.jpa.hibernate.ddl-auto=validate
-  -Dapp.jpa.dialect=org.hibernate.dialect.MySQL8Dialect
-  -Dserver.port=8080
-  -Dspring.profiles.active=production
-  -Dspring.datasource.hikari.maximumPoolSize=3
-"
-
-export JAVA_OPTS="-Xms128m -Xmx256m -XX:+UseG1GC -Djava.awt.headless=true"
-TOMCAT_EOF
-
-sudo chmod +x "$TOMCAT_HOME/bin/setenv.sh"
-sudo chown tomcat:tomcat "$TOMCAT_HOME/bin/setenv.sh"
 sudo install -o tomcat -g tomcat -m 755 "$SCRIPT_DIR/tomcat-setenv.sh" "$TOMCAT_HOME/bin/setenv.sh"
+sudo install -o root -g tomcat -m 640 "$SCRIPT_DIR/private-access/tomcat-server.xml" "$TOMCAT_HOME/conf/server.xml"
+sudo install -o root -g tomcat -m 640 "$SCRIPT_DIR/private-access/tomcat-context.xml" "$TOMCAT_HOME/conf/context.xml"
 sudo chgrp -R tomcat "$TOMCAT_HOME/bin" "$TOMCAT_HOME/conf" "$TOMCAT_HOME/lib"
 sudo chmod 750 "$TOMCAT_HOME/bin" "$TOMCAT_HOME/conf" "$TOMCAT_HOME/lib"
 sudo find "$TOMCAT_HOME/bin" -type f -name '*.sh' -exec chmod 750 {} +
@@ -232,9 +207,9 @@ sudo systemctl enable crond 2>/dev/null || true
 sudo systemctl start crond 2>/dev/null || true
 
 if command -v firewall-cmd &> /dev/null; then
-  sudo firewall-cmd --permanent --add-port=8080/tcp > /dev/null 2>&1 || true
-  sudo firewall-cmd --permanent --remove-port=3306/tcp > /dev/null 2>&1 || true
-  sudo firewall-cmd --reload > /dev/null 2>&1 || true
+  sudo firewall-cmd --permanent --remove-port=8080/tcp
+  sudo firewall-cmd --permanent --remove-port=3306/tcp
+  sudo firewall-cmd --reload
 fi
 
 echo ""
@@ -249,7 +224,8 @@ echo "MySQL Database: $DB_NAME"
 echo ""
 echo "Next steps:"
 echo "1. Configure GitHub Secrets in repository"
-echo "2. Push to main branch to trigger deployment"
+echo "2. Configure WireGuard-only HTTPS access: docs/PRIVATE-ACCESS.md"
+echo "3. Push to main branch to trigger deployment"
 echo ""
 echo "Useful commands:"
 echo "  tail -f /var/log/deploy.log"

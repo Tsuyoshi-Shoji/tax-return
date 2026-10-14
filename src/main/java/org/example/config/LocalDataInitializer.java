@@ -19,11 +19,13 @@ import org.example.repository.IncomeEntryRepository;
 import org.example.repository.UserSettingRepository;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.context.annotation.Profile;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
+@Profile("development & !production")
 public class LocalDataInitializer {
     private final AppUserRepository appUserRepository;
     private final UserSettingRepository userSettingRepository;

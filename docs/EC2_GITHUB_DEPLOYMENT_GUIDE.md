@@ -1,5 +1,7 @@
 # EC2 + GitHub Actions デプロイガイド
 
+> 私用端末限定の運用では [WireGuard + HTTPS手順](PRIVATE-ACCESS.md) を優先する。アプリ用の公開ポートは開けず、VPNと制限された管理経路だけを使用する。
+
 このガイドでは、AWS EC2 + EBS + GitHub Actions を使用した本番環境への自動デプロイを構築します。
 
 ## 前提条件

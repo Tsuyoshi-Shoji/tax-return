@@ -1,0 +1,9 @@
+[Interface]
+Address = 10.77.0.2/32
+PrivateKey = REPLACE_WITH_THIS_DEVICE_PRIVATE_KEY
+
+[Peer]
+PublicKey = REPLACE_WITH_SERVER_PUBLIC_KEY
+Endpoint = REPLACE_WITH_EC2_PUBLIC_ADDRESS:51820
+AllowedIPs = 10.77.0.1/32
+PersistentKeepalive = 25

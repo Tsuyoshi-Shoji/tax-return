@@ -11,19 +11,25 @@ import org.example.features.auth.dto.AuthOperationResult;
 import org.example.features.auth.form.LoginForm;
 import org.example.features.auth.form.UserRegisterForm;
 import org.example.features.auth.service.AuthService;
+import org.example.features.common.session.FormCsrfTokenManager;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 @Controller
 public class AuthController {
-    private final AuthService authService;
+    private static final String LOGIN_CSRF_SCOPE = "login";
 
-    public AuthController(AuthService authService) {
+    private final AuthService authService;
+    private final FormCsrfTokenManager csrfTokenManager;
+
+    public AuthController(AuthService authService, FormCsrfTokenManager csrfTokenManager) {
         this.authService = authService;
+        this.csrfTokenManager = csrfTokenManager;
     }
 
     @GetMapping("/login")
@@ -41,25 +47,33 @@ public class AuthController {
         if (successMessage != null && !successMessage.isBlank()) {
             model.addAttribute("successMessage", successMessage);
         }
+        model.addAttribute("loginCsrfToken", csrfTokenManager.issue(request.getSession(true), LOGIN_CSRF_SCOPE));
         return "Auth/login";
     }
 
     @PostMapping("/login")
     public String login(
             @ModelAttribute("loginForm") LoginForm loginForm,
+            @RequestParam(name = "csrfToken", required = false) String csrfToken,
             Model model,
             HttpServletRequest request,
             HttpServletResponse response) {
+        HttpSession existing = request.getSession(false);
+        if (existing == null || !csrfTokenManager.isValid(existing, LOGIN_CSRF_SCOPE, csrfToken)) {
+            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+            applyFailure(model, "loginForm", loginForm,
+                    "ログイン画面を再読み込みして、もう一度お試しください。", List.of());
+            model.addAttribute("loginCsrfToken", csrfTokenManager.issue(request.getSession(true), LOGIN_CSRF_SCOPE));
+            return "Auth/login";
+        }
         AuthOperationResult result = authService.login(loginForm);
         if (!result.isSuccess()) {
             response.setStatus(result.getStatusCode());
             applyFailure(model, "loginForm", loginForm, result.getMessage(), result.getValidationErrors());
+            model.addAttribute("loginCsrfToken", csrfTokenManager.issue(existing, LOGIN_CSRF_SCOPE));
             return "Auth/login";
         }
-        HttpSession existing = request.getSession(false);
-        if (existing != null) {
-            existing.invalidate();
-        }
+        existing.invalidate();
         HttpSession session = request.getSession(true);
         AuthUserContext context = result.getUserContext();
         session.setAttribute(AuthSessionAttributes.CURRENT_USER, context);

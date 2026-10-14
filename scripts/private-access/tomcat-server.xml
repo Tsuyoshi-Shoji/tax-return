@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Server port="-1">
+    <Listener className="org.apache.catalina.core.JreMemoryLeakPreventionListener" />
+    <Listener className="org.apache.catalina.core.ThreadLocalLeakPreventionListener" />
+    <Service name="Catalina">
+        <Connector address="127.0.0.1" port="8080" protocol="HTTP/1.1"
+                   connectionTimeout="20000" maxThreads="200"
+                   scheme="https" secure="true" proxyPort="443" />
+        <Engine name="Catalina" defaultHost="localhost">
+            <Host name="localhost" appBase="webapps" unpackWARs="true" autoDeploy="true" />
+        </Engine>
+    </Service>
+</Server>

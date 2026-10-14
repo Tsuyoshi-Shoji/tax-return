@@ -46,7 +46,7 @@ public class WebConfig implements WebMvcConfigurer {
     @Value("${app.datasource.username}")
     private String datasourceUsername;
 
-    @Value("${app.datasource.password}")
+    @Value("${DB_PASS:${app.datasource.password}}")
     private String datasourcePassword;
 
     @Value("${app.datasource.driver-class-name}")

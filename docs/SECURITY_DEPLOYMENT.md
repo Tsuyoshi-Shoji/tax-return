@@ -1,5 +1,7 @@
 # 本番環境セキュリティガイド
 
+私用端末からのアクセスは [WireGuard限定アクセス手順](PRIVATE-ACCESS.md) を適用する。アプリのHTTP/HTTPSポートはインターネットに公開しない。
+
 ## 秘密情報管理
 
 ### GitHub Secrets（推奨）
@@ -14,19 +16,30 @@
 1. **自動生成ファイル**: `/opt/db-credentials.env`
    - `setup-ec2.sh` 実行時に自動生成
    - ランダムなパスワード設定（OpenSSL）
-   - パーミッション: `600` (root のみ読み取り可能)
+   - 所有者・パーミッション: `root:tomcat` / `640`（rootとTomcat専用グループのみ）
 
 2. **セキュアな読み込み**:
    ```bash
-   source /opt/db-credentials.env  # Tomcat setenv.sh で使用
+   # setenv.sh が読み込み、DB_PASSのみJavaプロセス環境へ渡す。
+   # パスワードを -D 引数やログへ出力しない。
    ```
 
 3. **アクセス制限**:
    ```bash
    # ファイル権限確認
    ls -la /opt/db-credentials.env
-   # -rw------- 1 root root  ...
+   # -rw-r----- 1 root tomcat ...
    ```
+
+プロセス環境はrootや同じ実行ユーザーから読めるため、Tomcatユーザーを他用途と共用しない。環境変数の全文を診断ログに出力しない。
+
+### デモアカウント
+
+固定認証情報の初期データ投入は `development` プロファイルを明示した場合だけ実行し、`production` が同時に指定されている場合も実行しない。既存DBのデモアカウントは自動削除しない。管理者がデータの所有者を確認し、必要な退避後に無効化する。
+
+### ログインCSRF
+
+ログイン画面でセッションに紐づくCSRFトークンを発行し、POSTで検証する。欠落・不一致・別セッションのトークンは認証処理前に403で拒否する。認証失敗時は再試行でき、成功時は既存セッションを破棄する。
 
 ## ログ管理とマスキング
 
@@ -61,13 +74,8 @@ server.error.include-stacktrace=never
 ### EC2 インスタンス
 
 **ファイアウォール設定**:
-```bash
-# HTTP/HTTPS のみ許可
-sudo firewall-cmd --permanent --add-service=http
-sudo firewall-cmd --permanent --add-service=https
-sudo firewall-cmd --permanent --remove-port=3306/tcp
-sudo firewall-cmd --reload
-```
+
+[私用アクセス手順](PRIVATE-ACCESS.md) に従い、外向きのアプリ用TCPポートを閉じ、VPN用UDP 51820だけを許可する。HTTPS 443は `wg0` 上のみ、Tomcat 8080はloopback上のみとする。AWSセキュリティグループとホスト側の両方を確認する。
 
 **SSH アクセス**:
 - EC2 キーペア認証のみ（パスワード認証無効）

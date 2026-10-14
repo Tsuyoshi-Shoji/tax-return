@@ -1,5 +1,7 @@
 # EC2 + MySQL + EBS デプロイメント ガイド
 
+> 私用端末限定の運用では [WireGuard + HTTPS手順](PRIVATE-ACCESS.md) を優先する。本資料の公開HTTP/HTTPS設定は使用せず、TCP 80・443・8080・3306をインターネットへ公開しない。
+
 このドキュメントは、tax-return アプリケーションを AWS EC2 に配置し、MySQL をデータベース、EBS をストレージとして使用する構成のデプロイメント手順です。
 
 ## アーキテクチャ
@@ -296,11 +298,13 @@ sudo mount /dev/nvme1n1 /data/mysql
 # ポート確認
 sudo firewall-cmd --list-all
 
-# HTTP/HTTPS 許可
-sudo firewall-cmd --permanent --add-service=http
-sudo firewall-cmd --permanent --add-service=https
+# WireGuard ポートのみ許可（外向きインターフェース側）
+sudo firewall-cmd --permanent --add-port=51820/udp
 
-# MySQL ポート不許可
+# アプリ公開ポートは閉じる
+sudo firewall-cmd --permanent --remove-service=http
+sudo firewall-cmd --permanent --remove-service=https
+sudo firewall-cmd --permanent --remove-port=8080/tcp
 sudo firewall-cmd --permanent --remove-port=3306/tcp
 
 # 設定リロード
