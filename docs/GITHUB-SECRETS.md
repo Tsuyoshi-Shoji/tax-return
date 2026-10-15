@@ -6,6 +6,16 @@ GitHub Actions から EC2 へ SSH デプロイする場合に必要な認証情�
 を優先してください。`EC2_HOST`はパブリックIPv4を使用し、`EC2_KNOWN_HOSTS`も必須です。
 AWSの長期アクセスキーは使用しません。
 
+## Runner と接続経路の前提
+
+現在は`ubuntu-latest`からパブリックIPv4へ接続し、ランナーのIPv4 `/32`だけを一時許可します。
+IPv6-onlyやVPN内アドレスへの接続、`EC2_DEPLOY_RUNNER`による専用runnerの選択は今回の方式では使用しません。
+
+- EC2側のSSH待受、ネットワークACL、ホストファイアウォールの接続元制限も確認してください。SGの変更だけでは他のレイヤーの拒否は解除されません。
+- TCP 80・443・8080・3306 を公開する必要はありません。デプロイ後の確認は SSH 経由で EC2 の `http://127.0.0.1:8080/final-tax-return-1.0-SNAPSHOT/login` に対して行います。利用者の接続先は [VPN 内 HTTPS](PRIVATE-ACCESS.md) です。
+
+この設定と以下のSecrets登録は管理者が別途行う必要があります。復旧のためにアプリの公開ポートを開けないでください。
+
 ## 設定手順
 
 ### 1. EC2 キーペア情報取得
@@ -42,7 +52,7 @@ cat ~/.ssh/your-key-pair.pem
 gh auth login
 
 # Secrets 登録
-gh secret set EC2_HOST --body "your-ec2-public-ip-or-hostname"
+gh secret set EC2_HOST --body "your-ec2-public-ipv4"
 gh secret set EC2_PRIVATE_KEY < ~/.ssh/your-key-pair.pem
 ```
 
@@ -88,11 +98,29 @@ MIIEpAIBAAKCAQEA2xk7z8+...
 - 改行を含める
 - テキストの前後に余分なスペースを含めない
 
+#### Secret 3: EC2_KNOWN_HOSTS
+
+EC2 の SSH ホスト公開鍵を、`EC2_HOST` と同じパブリックIPv4の `known_hosts` エントリーとして登録します。管理済みの EC2 コンソール等で `/etc/ssh/ssh_host_ed25519_key.pub` とそのフィンガープリントを確認し、信頼済みの値を使用してください。接続時の未検証の `ssh-keyscan` 結果をそのまま信頼しないでください。
+
+```text
+<EC2_HOST> ssh-ed25519 <検証済みのホスト公開鍵>
+```
+
+検証済みエントリーを管理用端末の Git 管理外のファイルに保存して登録します：
+
+```bash
+gh secret set EC2_KNOWN_HOSTS < ~/.ssh/ec2-deploy-known_hosts
+```
+
+ホスト鍵の変更時は管理経路から正当性を再確認して更新します。`StrictHostKeyChecking` を無効化しないでください。
+
 ### 4. Secrets 検証
 
 `EC2_KNOWN_HOSTS`とOIDC用Variablesも登録したうえでpushします。
 Actionsの「Validate deployment settings」「Configure short-lived AWS credentials」
 「Temporarily allow runner SSH」「Revoke this run's SSH permission」を確認してください。
+
+ワークフローの `Deploy and verify via SSH` は、ホスト鍵検証を有効にして `sudo -n /opt/deploy.sh` を実行します。EC2 側でこの管理済みスクリプトに限定したパスワード不要の sudo 許可が必要です。DB 認証情報は EC2 側のスクリプトで読み込むため、SSH ユーザーによる `/opt/db-credentials.env` の読み込みや GitHub へのコピーは不要です。SSH 鍵と設定はジョブの一時ディレクトリに作成され、終了時に削除されます。
 
 ### 5. キーペアのセキュリティ
 
@@ -196,7 +224,7 @@ gh secret set EC2_PRIVATE_KEY < ~/.ssh/your-key-pair.pem
 
 ### Q: "Host key verification failed"エラー
 
-**原因:** EC2_HOST が正しくない、またはホスト名に誤字
+**原因:** 接続先と `EC2_KNOWN_HOSTS` が一致しない、またはホスト鍵が変更された
 
 **対応:**
 ```bash
@@ -204,8 +232,8 @@ gh secret set EC2_PRIVATE_KEY < ~/.ssh/your-key-pair.pem
 aws ec2 describe-instances --instance-ids i-xxxxxxxxx \
   --query 'Reservations[0].Instances[0].PublicIpAddress'
 
-# GitHub Secrets を更新
-gh secret set EC2_HOST --body "正確なIP"
+# 管理済みの経路でホスト鍵と接続先を再確認して Secrets を更新
+gh secret set EC2_KNOWN_HOSTS < ~/.ssh/ec2-deploy-known_hosts
 ```
 
 ### Q: "Connection timed out"エラー
