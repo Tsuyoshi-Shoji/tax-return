@@ -2,6 +2,8 @@
     "use strict";
 
     const MAX_AMOUNT = 9999999999999n;
+    const DEFAULT_MONTHLY_ROWS = 5;
+    const MAX_MONTHLY_ROWS = 50;
     const FORBIDDEN_DETAILS = /[<>"'`\\]/;
     const numberFormatter = new Intl.NumberFormat("ja-JP");
 
@@ -55,6 +57,16 @@
             return null;
         }
         return { normalized, stamp: Date.UTC(year, month - 1, day) };
+    };
+
+    const parseTargetMonth = (value) => {
+        const normalized = (value || "").trim();
+        const match = /^(\d{4})-(\d{2})$/.exec(normalized);
+        if (!match) return null;
+        const year = Number(match[1]);
+        const month = Number(match[2]);
+        if (month < 1 || month > 12) return null;
+        return { normalized, year, month };
     };
 
     const focusFirstInvalid = (fieldOrder, fieldElements) => {
@@ -124,6 +136,19 @@
         const validationDialogList = byId("validation-dialog-list");
         const confirmationDialog = byId("confirmation-dialog");
         const confirmationSubmitButton = byId("button-confirm-submit");
+        const modeRadios = isIncome ? [] : Array.from(document.querySelectorAll('input[name="entryMode"][form="entry-form"]'));
+        const normalModeSection = byId("normal-mode-section");
+        const normalModeActions = byId("normal-mode-actions");
+        const monthlyModeSection = byId("monthly-mode-section");
+        const monthlyRowsContainer = byId("monthly-rows");
+        const targetMonthInput = byId("target-month");
+        const add5RowsButton = byId("button-add-5-rows");
+        const clearMonthlyButton = byId("button-clear-monthly");
+        const submitMonthlyButton = byId("button-register-monthly");
+        const monthlyModeBadge = byId("monthly-mode-badge");
+        const pageDescription = byId("page-description");
+        const monthlyModeDescription = byId("monthly-mode-description");
+        const monthlyRowCount = byId("monthly-row-count");
 
         const fieldOrder = [typeFieldName, "category", "date", "amount", methodFieldName];
         if (!isIncome) fieldOrder.push("homeApportionment");
@@ -146,11 +171,20 @@
         let confirmationFlowRequired = form.dataset.confirmationRequired === "true" && !!(confirmationToken && confirmationToken.value.trim());
         let allowConfirmedSubmit = false;
         let isSubmitting = false;
-        let lastDialogOrigin = submitButton || form;
+        let lastDialogOrigin = submitButton || submitMonthlyButton || form;
+
+        const isMonthlyModeSelected = () => {
+            if (isIncome) return false;
+            const selected = modeRadios.find((radio) => radio.checked);
+            return !!selected && selected.value === "monthly";
+        };
+
+        const getCurrentSubmitButton = () => (isMonthlyModeSelected() ? submitMonthlyButton : submitButton);
 
         const setSubmittingState = (submitting) => {
             isSubmitting = submitting;
             if (submitButton) submitButton.disabled = submitting;
+            if (submitMonthlyButton) submitMonthlyButton.disabled = submitting;
             if (confirmationSubmitButton) confirmationSubmitButton.disabled = submitting;
         };
 
@@ -165,7 +199,8 @@
             const errorNode = form.querySelector(`[data-error-for="${fieldName}"]`);
             if (errorNode) errorNode.textContent = message || "";
             const elements = fieldElements[fieldName] || [];
-            elements.forEach((element) => {
+            const dynamicTargets = Array.from(form.querySelectorAll(`[data-error-field="${fieldName}"]`));
+            [...elements, ...dynamicTargets].forEach((element) => {
                 if (!element) return;
                 if (message) {
                     element.setAttribute("aria-invalid", "true");
@@ -319,11 +354,21 @@
 
         const applyValidationResult = (errors) => {
             fieldOrder.forEach((fieldName) => setError(fieldName, errors[fieldName] || ""));
+            if (monthlyRowsContainer) {
+                monthlyRowsContainer.querySelectorAll("[data-error-for]").forEach((node) => {
+                    const fieldName = node.getAttribute("data-error-for");
+                    if (!fieldName) return;
+                    setError(fieldName, errors[fieldName] || "");
+                });
+            }
+            setError("targetMonth", errors.targetMonth || "");
+            setError("monthlyRows", errors.monthlyRows || "");
+            setError("entryMode", errors.entryMode || "");
         };
 
         const showValidationDialog = (errors) => {
             if (!window.AppDialog) return;
-            lastDialogOrigin = document.activeElement instanceof HTMLElement ? document.activeElement : submitButton || form;
+            lastDialogOrigin = document.activeElement instanceof HTMLElement ? document.activeElement : getCurrentSubmitButton() || form;
             window.AppDialog.alert({
                 message: "未入力または修正が必要な項目があります。内容をご確認のうえ、再度お進みください。",
                 details: Object.values(errors),
@@ -359,7 +404,7 @@
         const showConfirmationDialog = () => {
             if (!confirmationDialog) return;
             populateConfirmationDialog();
-            lastDialogOrigin = document.activeElement instanceof HTMLElement ? document.activeElement : submitButton || form;
+            lastDialogOrigin = document.activeElement instanceof HTMLElement ? document.activeElement : getCurrentSubmitButton() || form;
             openDialog(confirmationDialog, lastDialogOrigin);
         };
 
@@ -367,17 +412,265 @@
             allowConfirmedSubmit = true;
             closeDialog(confirmationDialog, "confirm");
             if (typeof form.requestSubmit === "function") {
-                form.requestSubmit(submitButton || undefined);
+                form.requestSubmit(getCurrentSubmitButton() || undefined);
             } else {
                 setSubmittingState(true);
                 form.submit();
             }
         };
 
+        const toggleModePanels = () => {
+            if (isIncome) return;
+            const monthly = isMonthlyModeSelected();
+            if (normalModeSection) normalModeSection.hidden = monthly;
+            if (normalModeActions) normalModeActions.hidden = monthly;
+            if (monthlyModeSection) monthlyModeSection.hidden = !monthly;
+            if (add5RowsButton) add5RowsButton.hidden = !monthly;
+            if (monthlyModeBadge) monthlyModeBadge.hidden = !monthly;
+            if (pageDescription && monthlyModeDescription) {
+                pageDescription.hidden = monthly;
+                monthlyModeDescription.hidden = !monthly;
+            }
+        };
+
+        const getCheckedValue = (row, selector) => {
+            const checked = row ? row.querySelector(`${selector}:checked`) : null;
+            return checked ? (checked.value || "").trim() : "";
+        };
+
+        const resetMonthlyRowInputs = (row) => {
+            row.querySelectorAll("input, select").forEach((input) => {
+                if (input.type === "checkbox") {
+                    input.checked = false;
+                } else if (input.type === "radio") {
+                    if (input.classList.contains("monthly-expense-type")) {
+                        input.checked = input.value === defaultType;
+                    } else if (input.classList.contains("monthly-payment-method")) {
+                        input.checked = input.value === defaultMethod;
+                    } else {
+                        input.checked = false;
+                    }
+                } else {
+                    input.value = "";
+                }
+                input.removeAttribute("aria-invalid");
+            });
+            const category = row.querySelector(".monthly-category");
+            if (category) category.dataset.selected = "";
+            row.querySelectorAll("[data-error-for]").forEach((node) => {
+                node.textContent = "";
+            });
+        };
+
+        const reindexMonthlyRow = (row, index) => {
+            const replaceIndex = (value) => value.replace(/monthlyRows\[\d+]/, `monthlyRows[${index}]`);
+            row.dataset.rowIndex = String(index);
+            row.setAttribute("aria-label", `明細${index + 1}`);
+            const removeButton = row.querySelector(".button-remove-row");
+            if (removeButton) {
+                removeButton.id = `button-remove-row-${index}`;
+                removeButton.setAttribute("aria-label", `明細${index + 1}を削除`);
+            }
+            row.querySelectorAll("[name], [data-error-for], [data-error-field]").forEach((element) => {
+                if (element.name) element.name = replaceIndex(element.name);
+                const errorFor = element.getAttribute("data-error-for");
+                if (errorFor) element.setAttribute("data-error-for", replaceIndex(errorFor));
+                const errorField = element.getAttribute("data-error-field");
+                if (errorField) element.setAttribute("data-error-field", replaceIndex(errorField));
+            });
+        };
+
+        const getMonthlyRows = () => (monthlyRowsContainer
+            ? Array.from(monthlyRowsContainer.querySelectorAll(".entry-monthly-row"))
+            : []);
+
+        const renderMonthlyCategoryOptions = (row, resetSelection) => {
+            if (!row) return;
+            const typeSelect = row.querySelector(".monthly-expense-type");
+            const categorySelect = row.querySelector(".monthly-category");
+            if (!typeSelect || !categorySelect) return;
+            const selectedType = (typeSelect.value || "").trim();
+            const previousValue = resetSelection ? "" : (categorySelect.value || categorySelect.dataset.selected || "").trim();
+            const fragment = document.createDocumentFragment();
+            const placeholder = document.createElement("option");
+            placeholder.value = "";
+            placeholder.textContent = monthlyRowsContainer?.dataset.itemsPlaceholder || "項目を選択してください";
+            fragment.appendChild(placeholder);
+            let matched = false;
+            sourceOptions.forEach((option) => {
+                if ((option.dataset.group || "") !== selectedType) return;
+                const clone = option.cloneNode(true);
+                if (previousValue && previousValue === clone.value) {
+                    clone.selected = true;
+                    matched = true;
+                }
+                fragment.appendChild(clone);
+            });
+            categorySelect.replaceChildren(fragment);
+            if (!matched) categorySelect.value = "";
+            categorySelect.disabled = !selectedType;
+            categorySelect.dataset.selected = categorySelect.value;
+        };
+
+        const renumberMonthlyRows = () => {
+            const rows = getMonthlyRows();
+            rows.forEach((row, index) => reindexMonthlyRow(row, index));
+            rows.forEach((row) => {
+                const button = row.querySelector(".button-remove-row");
+                if (button) button.disabled = rows.length <= 1;
+            });
+            if (monthlyRowCount) monthlyRowCount.textContent = String(rows.length);
+        };
+
+        const createMonthlyRow = (index) => {
+            const rows = getMonthlyRows();
+            const template = rows[0];
+            if (!template) return null;
+            const clone = template.cloneNode(true);
+            // 同名ラジオの選択状態が既存行へ波及しないよう、DOM挿入前に添字を振り直す
+            reindexMonthlyRow(clone, index);
+            resetMonthlyRowInputs(clone);
+            return clone;
+        };
+
+        const addMonthlyRows = (count) => {
+            if (!monthlyRowsContainer) return;
+            const currentCount = getMonthlyRows().length;
+            if (currentCount + count > MAX_MONTHLY_ROWS) {
+                if (window.AppDialog) {
+                    window.AppDialog.alert({
+                        message: `月間登録モードの入力行は最大${MAX_MONTHLY_ROWS}件です。`,
+                        details: [`現在 ${currentCount} 件です。これ以上追加できません。`],
+                        buttons: [{ label: "内容を確認", primary: true }]
+                    });
+                } else {
+                    window.alert(`月間登録モードの入力行は最大${MAX_MONTHLY_ROWS}件です。`);
+                }
+                return;
+            }
+            for (let i = 0; i < count; i += 1) {
+                const row = createMonthlyRow(currentCount + i);
+                if (!row) break;
+                monthlyRowsContainer.appendChild(row);
+                renderMonthlyCategoryOptions(row, true);
+            }
+            renumberMonthlyRows();
+        };
+
+        const clearMonthlyRows = () => {
+            const rows = getMonthlyRows();
+            if (rows.length === 0 || !monthlyRowsContainer) return;
+            const first = rows[0];
+            monthlyRowsContainer.replaceChildren(first);
+            reindexMonthlyRow(first, 0);
+            resetMonthlyRowInputs(first);
+            renderMonthlyCategoryOptions(first, true);
+            for (let i = 1; i < DEFAULT_MONTHLY_ROWS; i += 1) {
+                const row = createMonthlyRow(i);
+                if (!row) break;
+                monthlyRowsContainer.appendChild(row);
+                renderMonthlyCategoryOptions(row, true);
+            }
+            if (targetMonthInput) targetMonthInput.value = "";
+            renumberMonthlyRows();
+            clearConfirmationState();
+        };
+
+        const validateMonthlyForm = () => {
+            const errors = {};
+            const targetMonth = parseTargetMonth(targetMonthInput ? targetMonthInput.value : "");
+            if (!(targetMonthInput && targetMonthInput.value.trim())) {
+                errors.targetMonth = "登録対象月を選択してください。";
+            } else if (!targetMonth) {
+                errors.targetMonth = "登録対象月の形式が不正です。";
+            }
+            const rows = getMonthlyRows();
+            if (rows.length < 1) {
+                errors.monthlyRows = "登録する支出行を1行以上入力してください。";
+                return { errors, highAmountFound: false };
+            }
+            let highAmountFound = false;
+            rows.forEach((row, index) => {
+                const path = (field) => `monthlyRows[${index}].${field}`;
+                const categorySelect = row.querySelector('.monthly-category');
+                const dateInputRow = row.querySelector('input[name$=".date"]');
+                const amountInputRow = row.querySelector('input[name$=".amount"]');
+                const detailsInputRow = row.querySelector('input[name$=".details"]');
+                const apportionCheckbox = row.querySelector('input[name$=".homeApportionment"]');
+
+                const selectedType = getCheckedValue(row, ".monthly-expense-type");
+                const selectedCategory = categorySelect ? categorySelect.value.trim() : "";
+                const selectedMethod = getCheckedValue(row, ".monthly-payment-method");
+                const parsedDate = parseIsoDate(dateInputRow ? dateInputRow.value : "");
+                const amount = parseAmount(amountInputRow ? amountInputRow.value : "");
+                const details = detailsInputRow ? detailsInputRow.value.trim() : "";
+
+                if (!selectedType) {
+                    errors[path("expenseType")] = "区分を選択してください。";
+                }
+                const validCategory = sourceOptions.some((option) => option.value === selectedCategory && option.dataset.group === selectedType);
+                if (!selectedCategory) {
+                    errors[path("category")] = "項目を選択してください。";
+                } else if (!validCategory) {
+                    errors[path("category")] = "選択された項目がマスタに存在しません。";
+                }
+                if (!(dateInputRow && dateInputRow.value.trim())) {
+                    errors[path("date")] = "支出発生日を選択してください。";
+                } else if (!parsedDate) {
+                    errors[path("date")] = "存在する日付を選択してください。";
+                } else if (todayStamp !== null && parsedDate.stamp > todayStamp) {
+                    errors[path("date")] = "登録日より未来の日付は選択できません。";
+                } else if (targetMonth && (new Date(parsedDate.stamp).getUTCFullYear() !== targetMonth.year
+                    || new Date(parsedDate.stamp).getUTCMonth() + 1 !== targetMonth.month)) {
+                    errors[path("date")] = "支出発生日は対象月内の日付を入力してください。";
+                }
+
+                if (!(amountInputRow && amountInputRow.value.trim())) {
+                    errors[path("amount")] = "金額を入力してください。";
+                } else if (amount === null) {
+                    errors[path("amount")] = "金額は数値のみで入力してください。";
+                } else if (amount < 1n) {
+                    errors[path("amount")] = "金額は1円以上で入力してください。";
+                } else if (amount > MAX_AMOUNT) {
+                    errors[path("amount")] = "金額は9999999999999円以下で入力してください。";
+                }
+
+                if (!selectedMethod) {
+                    errors[path("paymentMethodId")] = "支払方法を選択してください。";
+                }
+                if (!details) {
+                    errors[path("details")] = "支出詳細を入力してください。";
+                } else if (countCodePoints(details) > 255) {
+                    errors[path("details")] = "支出詳細は1〜255文字で入力してください。";
+                } else if (FORBIDDEN_DETAILS.test(details)) {
+                    errors[path("details")] = "支出詳細に使用できない文字が含まれています。";
+                }
+                if (apportionCheckbox && apportionCheckbox.checked && apportionmentRateHundredths === null) {
+                    errors[path("homeApportionment")] = "設定されている家事按分率が不正です。設定画面で0〜100%の範囲に修正してください。";
+                }
+                if (amount !== null && amount >= 100000000n) {
+                    highAmountFound = true;
+                }
+            });
+            return { errors, highAmountFound };
+        };
+
         updateSubmitLabel();
         renderCategoryOptions(false);
         updateCounter();
         updateApportionmentPreview();
+        if (!isIncome) {
+            toggleModePanels();
+            getMonthlyRows().forEach((row) => renderMonthlyCategoryOptions(row, false));
+            renumberMonthlyRows();
+        }
+
+        modeRadios.forEach((radio) => {
+            radio.addEventListener("change", () => {
+                clearConfirmationState();
+                toggleModePanels();
+            });
+        });
 
         typeRadios.forEach((radio) => {
             radio.addEventListener("change", () => {
@@ -440,6 +733,65 @@
             });
         }
 
+        if (monthlyRowsContainer) {
+            monthlyRowsContainer.addEventListener("change", (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLElement)) return;
+                if (target.classList.contains("monthly-expense-type")) {
+                    const row = target.closest(".entry-monthly-row");
+                    renderMonthlyCategoryOptions(row, true);
+                    const category = row ? row.querySelector(".monthly-category") : null;
+                    const categoryField = category ? category.getAttribute("data-error-field") : "";
+                    if (categoryField) clearFieldError(categoryField);
+                }
+                const errorField = target.getAttribute("data-error-field");
+                if (errorField) clearFieldError(errorField);
+                clearConfirmationState();
+            });
+            monthlyRowsContainer.addEventListener("input", (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLElement)) return;
+                const errorField = target.getAttribute("data-error-field");
+                if (errorField) clearFieldError(errorField);
+                clearConfirmationState();
+            });
+            monthlyRowsContainer.addEventListener("click", (event) => {
+                const target = event.target;
+                if (!(target instanceof Element)) return;
+                const removeButton = target.closest(".button-remove-row");
+                if (!removeButton) return;
+                event.preventDefault();
+                const row = removeButton.closest(".entry-monthly-row");
+                if (!row) return;
+                const rows = getMonthlyRows();
+                if (rows.length <= 1) return;
+                const removedIndex = rows.indexOf(row);
+                row.remove();
+                renumberMonthlyRows();
+                clearConfirmationState();
+                const remaining = getMonthlyRows();
+                const nextRow = remaining[Math.min(removedIndex, remaining.length - 1)];
+                const nextFocus = nextRow ? nextRow.querySelector(".button-remove-row:not(:disabled)") || nextRow.querySelector("input, select") : null;
+                if (nextFocus) nextFocus.focus();
+            });
+        }
+
+        if (add5RowsButton) {
+            add5RowsButton.addEventListener("click", () => {
+                addMonthlyRows(5);
+                clearConfirmationState();
+            });
+        }
+
+        if (clearMonthlyButton) {
+            clearMonthlyButton.addEventListener("click", () => {
+                clearMonthlyRows();
+                clearFieldError("targetMonth");
+                clearFieldError("monthlyRows");
+                if (targetMonthInput) targetMonthInput.focus();
+            });
+        }
+
         if (clearButton) {
             clearButton.addEventListener("click", () => {
                 typeRadios.forEach((radio, index) => {
@@ -470,7 +822,15 @@
                 return;
             }
 
-            const { errors } = validateForm();
+            let errors;
+            let highAmountFound = false;
+            if (isMonthlyModeSelected()) {
+                const monthlyResult = validateMonthlyForm();
+                errors = monthlyResult.errors;
+                highAmountFound = monthlyResult.highAmountFound;
+            } else {
+                errors = validateForm().errors;
+            }
             applyValidationResult(errors);
             if (Object.keys(errors).length > 0) {
                 event.preventDefault();
@@ -478,10 +838,35 @@
                 return;
             }
 
-            if (confirmationFlowRequired && confirmationToken && confirmationToken.value.trim() && !allowConfirmedSubmit) {
+            if (isMonthlyModeSelected() && confirmationFlowRequired && confirmationToken && confirmationToken.value.trim() && !allowConfirmedSubmit) {
+                event.preventDefault();
+                const confirmed = window.confirm("高額支出を含むため確認して送信します。よろしいですか？");
+                if (!confirmed) {
+                    clearConfirmationState();
+                    return;
+                }
+                allowConfirmedSubmit = true;
+                if (typeof form.requestSubmit === "function") {
+                    form.requestSubmit(getCurrentSubmitButton() || undefined);
+                } else {
+                    setSubmittingState(true);
+                    form.submit();
+                }
+                return;
+            }
+
+            if (!isMonthlyModeSelected() && confirmationFlowRequired && confirmationToken && confirmationToken.value.trim() && !allowConfirmedSubmit) {
                 event.preventDefault();
                 showConfirmationDialog();
                 return;
+            }
+
+            if (isMonthlyModeSelected() && highAmountFound && !confirmationFlowRequired) {
+                const confirmed = window.confirm("100,000,000円以上の支出が含まれます。このまま送信しますか？");
+                if (!confirmed) {
+                    event.preventDefault();
+                    return;
+                }
             }
 
             allowConfirmedSubmit = false;

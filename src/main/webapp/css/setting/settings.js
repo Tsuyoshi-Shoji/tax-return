@@ -53,6 +53,27 @@
         });
     }
 
+    var taxBasicInfoForm = byId('tax-basic-info-form');
+    if (taxBasicInfoForm) {
+        taxBasicInfoForm.addEventListener('submit', function (event) {
+            var messages = [];
+            var businessName = byId('input-business-name').value.trim();
+            var industry = byId('input-industry').value.trim();
+            var phone = byId('input-phone').value.trim();
+            var address = byId('input-address').value.trim();
+            if (businessName.length > 200) { messages.push('屋号は200文字以内で入力してください。'); }
+            if (industry.length > 100) { messages.push('業種は100文字以内で入力してください。'); }
+            if (phone && !/^[0-9+()\-\s]{1,30}$/.test(phone)) {
+                messages.push('電話番号は30文字以内で、数字と +()- のみ使用できます。');
+            }
+            if (address.length > 255) { messages.push('住所は255文字以内で入力してください。'); }
+            if (messages.length) {
+                event.preventDefault();
+                window.AppDialog.alert({ message: '入力内容をご確認ください。', details: messages, buttons: [{ label: '内容を確認', primary: true }] });
+            }
+        });
+    }
+
     var ratioInput = byId('input-apportionment-rate');
     var ratioError = byId('ratio-error');
     var result = byId('example-result');

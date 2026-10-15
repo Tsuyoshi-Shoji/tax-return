@@ -2,6 +2,7 @@ package org.example.features.entry.service;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 import org.example.entity.ExpenseItem;
 import org.example.entity.FiscalYear;
@@ -29,6 +30,8 @@ public class ValidatedEntryCommand {
     private final String details;
     private final String payloadHash;
     private final boolean confirmationRequired;
+    private final String targetMonth;
+    private final List<ValidatedEntryCommand> monthlyEntries;
 
     public ValidatedEntryCommand(
             EntryKind kind,
@@ -49,6 +52,50 @@ public class ValidatedEntryCommand {
             String details,
             String payloadHash,
             boolean confirmationRequired) {
+        this(
+                kind,
+                appUserId,
+                editId,
+                version,
+                fiscalYear,
+                incomeItem,
+                expenseItem,
+                receiveMethod,
+                paymentMethod,
+                transactionDate,
+                amount,
+                excludeFromReturn,
+                homeApportionment,
+                homeApportionmentRate,
+                deductibleAmount,
+                details,
+                payloadHash,
+                confirmationRequired,
+                "",
+                List.of());
+    }
+
+    private ValidatedEntryCommand(
+            EntryKind kind,
+            Long appUserId,
+            Long editId,
+            Long version,
+            FiscalYear fiscalYear,
+            IncomeItem incomeItem,
+            ExpenseItem expenseItem,
+            ReceiveMethod receiveMethod,
+            PaymentMethod paymentMethod,
+            LocalDate transactionDate,
+            BigDecimal amount,
+            boolean excludeFromReturn,
+            boolean homeApportionment,
+            BigDecimal homeApportionmentRate,
+            BigDecimal deductibleAmount,
+            String details,
+            String payloadHash,
+            boolean confirmationRequired,
+            String targetMonth,
+            List<ValidatedEntryCommand> monthlyEntries) {
         this.kind = kind;
         this.appUserId = appUserId;
         this.editId = editId;
@@ -67,6 +114,37 @@ public class ValidatedEntryCommand {
         this.details = details;
         this.payloadHash = payloadHash;
         this.confirmationRequired = confirmationRequired;
+        this.targetMonth = targetMonth == null ? "" : targetMonth;
+        this.monthlyEntries = monthlyEntries == null ? List.of() : List.copyOf(monthlyEntries);
+    }
+
+    public static ValidatedEntryCommand monthlyExpenseBatch(
+            Long appUserId,
+            String targetMonth,
+            List<ValidatedEntryCommand> monthlyEntries,
+            String payloadHash,
+            boolean confirmationRequired) {
+        return new ValidatedEntryCommand(
+                EntryKind.EXPENSE,
+                appUserId,
+                null,
+                0L,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                false,
+                BigDecimal.ZERO,
+                BigDecimal.ZERO,
+                "",
+                payloadHash,
+                confirmationRequired,
+                targetMonth,
+                monthlyEntries);
     }
 
     public EntryKind getKind() {
@@ -139,5 +217,17 @@ public class ValidatedEntryCommand {
 
     public boolean isConfirmationRequired() {
         return confirmationRequired;
+    }
+
+    public String getTargetMonth() {
+        return targetMonth;
+    }
+
+    public List<ValidatedEntryCommand> getMonthlyEntries() {
+        return monthlyEntries;
+    }
+
+    public boolean isMonthlyMode() {
+        return !monthlyEntries.isEmpty();
     }
 }

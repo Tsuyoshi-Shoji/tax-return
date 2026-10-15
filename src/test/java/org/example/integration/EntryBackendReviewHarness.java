@@ -49,8 +49,10 @@ import org.example.repository.FiscalYearRepository;
 import org.example.repository.IncomeCategoryRepository;
 import org.example.repository.IncomeEntryRepository;
 import org.example.repository.IncomeItemRepository;
+import org.example.repository.JournalEntryRepository;
 import org.example.repository.PaymentMethodRepository;
 import org.example.repository.ReceiveMethodRepository;
+import org.example.repository.TaxDeductionRecordRepository;
 import org.example.repository.UserSettingRepository;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -81,7 +83,117 @@ public final class EntryBackendReviewHarness {
         verifyConcurrentClosureBlocksSave(baseDir.resolve("closure"));
         verifyConcurrentFinalizationBlocksSave(baseDir.resolve("finalize"));
         verifyExpandedCatalogs(baseDir.resolve("catalogs"));
+        verifyRuleAlignedBusinessLogic(baseDir.resolve("rule-aligned"));
         System.out.println("Entry backend review harness passed");
+    }
+
+    private void verifyRuleAlignedBusinessLogic(Path dbDir) throws Exception {
+        String url = createDbUrl(dbDir, "rule-aligned-db");
+        try (HarnessContext harness = openHarness(url)) {
+            seedCurrentAppData(harness);
+
+            EntryPageData expensePage = harness.entryService.loadPage(EntryKind.EXPENSE, USER_ID, null);
+            String expenseMethodId = expensePage.getMethods().stream()
+                    .filter(option -> "現金".equals(option.getLabel()))
+                    .map(option -> option.getId())
+                    .findFirst()
+                    .orElseThrow();
+            String livingExpensesItemId = expensePage.getItems().stream()
+                    .filter(item -> "other".equals(item.getGroup()))
+                    .filter(item -> "生活費".equals(item.getLabel()))
+                    .map(item -> item.getId())
+                    .findFirst()
+                    .orElseThrow();
+            String erroneousPaymentItemId = expensePage.getItems().stream()
+                    .filter(item -> "other".equals(item.getGroup()))
+                    .filter(item -> "誤出金・返金処理".equals(item.getLabel()))
+                    .map(item -> item.getId())
+                    .findFirst()
+                    .orElseThrow();
+
+            EntryForm invalidApportionment = new EntryForm();
+            invalidApportionment.setExpenseType("other");
+            invalidApportionment.setCategory(livingExpensesItemId);
+            invalidApportionment.setDate("2025-05-01");
+            invalidApportionment.setAmount("12000");
+            invalidApportionment.setPaymentMethodId(expenseMethodId);
+            invalidApportionment.setHomeApportionment(true);
+            invalidApportionment.setExcludeFromReturn(false);
+            invalidApportionment.setDetails("私用の生活費");
+            EntryPrepareResult rejected = harness.entryService.prepareSubmission(EntryKind.EXPENSE, USER_ID, invalidApportionment);
+            require(rejected.getValidatedEntry() == null, "other支出で按分適用が通ってしまいました");
+            require(rejected.getPageData().getFieldErrors().containsKey("homeApportionment"), "按分禁止エラーがありません");
+
+            EntryForm transferExpense = new EntryForm();
+            transferExpense.setExpenseType("other");
+            transferExpense.setCategory(livingExpensesItemId);
+            transferExpense.setDate("2025-05-02");
+            transferExpense.setAmount("13000");
+            transferExpense.setPaymentMethodId(expenseMethodId);
+            transferExpense.setExcludeFromReturn(false);
+            transferExpense.setDetails("私用の生活費");
+            ValidatedEntryCommand transferExpenseCommand = requireCommand(harness.entryService
+                    .prepareSubmission(EntryKind.EXPENSE, USER_ID, transferExpense));
+            require(transferExpenseCommand.isExcludeFromReturn(), "other支出が申告対象外に強制されていません");
+            harness.entryService.save(transferExpenseCommand);
+
+            EntryForm adjustmentExpense = new EntryForm();
+            adjustmentExpense.setExpenseType("other");
+            adjustmentExpense.setCategory(erroneousPaymentItemId);
+            adjustmentExpense.setDate("2025-05-03");
+            adjustmentExpense.setAmount("14000");
+            adjustmentExpense.setPaymentMethodId(expenseMethodId);
+            adjustmentExpense.setExcludeFromReturn(false);
+            adjustmentExpense.setDetails("誤出金の返金調整");
+            ValidatedEntryCommand adjustmentExpenseCommand = requireCommand(harness.entryService
+                    .prepareSubmission(EntryKind.EXPENSE, USER_ID, adjustmentExpense));
+            harness.entryService.save(adjustmentExpenseCommand);
+
+            EntryPageData incomePage = harness.entryService.loadPage(EntryKind.INCOME, USER_ID, null);
+            String incomeMethodId = incomePage.getMethods().stream()
+                    .filter(option -> "現金".equals(option.getLabel()))
+                    .map(option -> option.getId())
+                    .findFirst()
+                    .orElseThrow();
+            String ownerLoanItemId = incomePage.getItems().stream()
+                    .filter(item -> "other".equals(item.getGroup()))
+                    .filter(item -> "事業主借入金（事業主借）".equals(item.getLabel()))
+                    .map(item -> item.getId())
+                    .findFirst()
+                    .orElseThrow();
+
+            EntryForm transferIncome = new EntryForm();
+            transferIncome.setIncomeType("other");
+            transferIncome.setCategory(ownerLoanItemId);
+            transferIncome.setDate("2025-05-04");
+            transferIncome.setAmount("20000");
+            transferIncome.setReceiveMethodId(incomeMethodId);
+            transferIncome.setExcludeFromReturn(false);
+            transferIncome.setDetails("個人資金の事業投入");
+            ValidatedEntryCommand transferIncomeCommand = requireCommand(harness.entryService
+                    .prepareSubmission(EntryKind.INCOME, USER_ID, transferIncome));
+            require(transferIncomeCommand.isExcludeFromReturn(), "other収益が申告対象外に強制されていません");
+            harness.entryService.save(transferIncomeCommand);
+
+            harness.tx.executeWithoutResult(status -> {
+                List<ExpenseEntry> expenses = harness.expenseEntries.findAllOwnedByFiscalYear(FISCAL_YEAR_ID, USER_ID);
+                ExpenseEntry transfer = expenses.stream().filter(e -> "私用の生活費".equals(e.getDetails())).findFirst().orElseThrow();
+                require(transfer.isExcludeFromReturn(), "生活費が申告対象外になっていません");
+                require(new BigDecimal("0.00").compareTo(transfer.getDeductibleAmount()) == 0, "生活費の控除額が0ではありません");
+                require("TRANSFER".equals(transfer.getAccountingTransaction().getTransactionType()), "生活費の取引種別がTRANSFERではありません");
+
+                ExpenseEntry adjustment = expenses.stream().filter(e -> "誤出金の返金調整".equals(e.getDetails())).findFirst().orElseThrow();
+                require("ADJUSTMENT".equals(adjustment.getAccountingTransaction().getTransactionType()), "誤出金調整の取引種別がADJUSTMENTではありません");
+
+                List<org.example.entity.IncomeEntry> incomes = harness.incomeEntries.findAllOwnedByFiscalYear(FISCAL_YEAR_ID, USER_ID);
+                org.example.entity.IncomeEntry transferIn = incomes.stream()
+                        .filter(e -> "個人資金の事業投入".equals(e.getDetails()))
+                        .findFirst()
+                        .orElseThrow();
+                require(transferIn.isExcludeFromReturn(), "事業主借入金が申告対象外になっていません");
+                require("TRANSFER".equals(transferIn.getAccountingTransaction().getTransactionType()), "事業主借入金の取引種別がTRANSFERではありません");
+            });
+        }
     }
 
     private void verifyExpandedCatalogs(Path dbDir) throws Exception {
@@ -543,7 +655,9 @@ public final class EntryBackendReviewHarness {
                 ExpenseCategoryRepository expenseCategoryRepository,
                 ExpenseItemRepository expenseItemRepository,
                 ReceiveMethodRepository receiveMethodRepository,
-                PaymentMethodRepository paymentMethodRepository) {
+                PaymentMethodRepository paymentMethodRepository,
+                JournalEntryRepository journalEntryRepository,
+                TaxDeductionRecordRepository taxDeductionRecordRepository) {
             return new EntryServiceImpl(
                     businessProfileRepository,
                     fiscalYearRepository,
@@ -556,7 +670,9 @@ public final class EntryBackendReviewHarness {
                     expenseCategoryRepository,
                     expenseItemRepository,
                     receiveMethodRepository,
-                    paymentMethodRepository);
+                    paymentMethodRepository,
+                    journalEntryRepository,
+                    taxDeductionRecordRepository);
         }
     }
 

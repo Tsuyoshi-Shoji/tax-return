@@ -1,5 +1,8 @@
 package org.example.features.entry.form;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class EntryForm {
     private Long editId;
     private Long version;
@@ -13,6 +16,9 @@ public class EntryForm {
     private boolean excludeFromReturn;
     private boolean homeApportionment;
     private String details;
+    private String entryMode;
+    private String targetMonth;
+    private List<MonthlyExpenseRowForm> monthlyRows = new ArrayList<>();
     private String csrfToken;
     private String submissionToken;
     private String confirmationToken;
@@ -111,6 +117,34 @@ public class EntryForm {
 
     public void setDetails(String details) {
         this.details = details;
+    }
+
+    public String getEntryMode() {
+        return entryMode;
+    }
+
+    public void setEntryMode(String entryMode) {
+        this.entryMode = entryMode;
+    }
+
+    public String getTargetMonth() {
+        return targetMonth;
+    }
+
+    public void setTargetMonth(String targetMonth) {
+        this.targetMonth = targetMonth;
+    }
+
+    public List<MonthlyExpenseRowForm> getMonthlyRows() {
+        return monthlyRows;
+    }
+
+    public void setMonthlyRows(List<MonthlyExpenseRowForm> monthlyRows) {
+        this.monthlyRows = monthlyRows == null ? new ArrayList<>() : monthlyRows;
+    }
+
+    public boolean isMonthlyMode() {
+        return "monthly".equalsIgnoreCase(entryMode);
     }
 
     public String getCsrfToken() {

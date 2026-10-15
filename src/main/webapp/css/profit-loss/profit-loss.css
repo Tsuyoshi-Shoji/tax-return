@@ -49,6 +49,7 @@
 .search-rows { display: grid; gap: 10px; }
 .search-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1fr); gap: 0 21px; }
 .search-row-bottom { align-items: end; }
+.search-row .field-group { min-width: 0; }
 
 .field-group label,
 .group-label { display: block; margin: 0 0 5px; font-size: 13px; font-weight: 700; color: #10225f; }

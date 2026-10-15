@@ -56,6 +56,9 @@ public class SettlementAdjustment {
     @Column(name = "blue_deduction", nullable = false)
     private int blueDeduction = 65;
 
+    @Column(name = "settlement_status", length = 20)
+    private String settlementStatus = "UNSETTLED";
+
     @Version
     @Column(name = "version")
     private Long version;
@@ -101,5 +104,7 @@ public class SettlementAdjustment {
     public void setClosingCash(BigDecimal v) { this.closingCash = v; }
     public int getBlueDeduction() { return blueDeduction; }
     public void setBlueDeduction(int blueDeduction) { this.blueDeduction = blueDeduction; }
+    public String getSettlementStatus() { return settlementStatus; }
+    public void setSettlementStatus(String settlementStatus) { this.settlementStatus = settlementStatus; }
     public Long getVersion() { return version; }
 }

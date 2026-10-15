@@ -8,9 +8,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>損益一覧 | マネタックス</title>
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css?v=20261011c">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css?v=20261016a">
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/home/home.css?v=20261011c">
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/profit-loss/profit-loss.css?v=20261011d">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/profit-loss/profit-loss.css?v=20261016a">
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/profit-loss/profit-loss-detail.css?v=20261011c">
     <script src="${pageContext.request.contextPath}/css/profit-loss/profit-loss.js?v=20261011c" defer></script>
 </head>

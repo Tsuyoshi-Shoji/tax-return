@@ -41,6 +41,12 @@ public class AccountingTransaction {
     @Column(name = "status", nullable = false, length = 20)
     private String status;
 
+    @Column(name = "settlement_status", length = 20)
+    private String settlementStatus;
+
+    @Column(name = "settlement_reference_id")
+    private Long settlementReferenceId;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -109,5 +115,21 @@ public class AccountingTransaction {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getSettlementStatus() {
+        return settlementStatus;
+    }
+
+    public void setSettlementStatus(String settlementStatus) {
+        this.settlementStatus = settlementStatus;
+    }
+
+    public Long getSettlementReferenceId() {
+        return settlementReferenceId;
+    }
+
+    public void setSettlementReferenceId(Long settlementReferenceId) {
+        this.settlementReferenceId = settlementReferenceId;
     }
 }
