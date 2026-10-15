@@ -2,6 +2,10 @@
 
 GitHub Actions から EC2 へ SSH デプロイする場合に必要な認証情報を Secrets に登録します。
 
+現在の一時SSH許可方式の設定は、[OIDC・専用SG・Variables/Secretsの手順](GITHUB-ACTIONS-SSH.md)
+を優先してください。`EC2_HOST`はパブリックIPv4を使用し、`EC2_KNOWN_HOSTS`も必須です。
+AWSの長期アクセスキーは使用しません。
+
 ## 設定手順
 
 ### 1. EC2 キーペア情報取得
@@ -49,15 +53,11 @@ gh secret set EC2_PRIVATE_KEY < ~/.ssh/your-key-pair.pem
 | 項目 | 値 |
 |---|---|
 | **Name** | `EC2_HOST` |
-| **Secret** | EC2 インスタンスのパブリック IP / IPv6 / ホスト名 |
+| **Secret** | EC2 インスタンスのパブリックIPv4（現在の一時許可方式） |
 
 **例:**
 ```
 203.0.113.45
-または
-2406:da14:117f:7b2c:dd13:5665:e938:7d
-または
-ec2-203-0-113-45.ap-northeast-1.compute.amazonaws.com
 ```
 
 **取得方法:**
@@ -90,17 +90,9 @@ MIIEpAIBAAKCAQEA2xk7z8+...
 
 ### 4. Secrets 検証
 
-登録後、GitHub Actions ワークフロー実行時に以下が確認できます：
-
-```yaml
-# .github/workflows/deploy-ec2.yml
-- name: Deploy via SSH
-  uses: appleboy/ssh-action@master
-  with:
-    host: ${{ secrets.EC2_HOST }}
-    username: ec2-user
-    key: ${{ secrets.EC2_PRIVATE_KEY }}
-```
+`EC2_KNOWN_HOSTS`とOIDC用Variablesも登録したうえでpushします。
+Actionsの「Validate deployment settings」「Configure short-lived AWS credentials」
+「Temporarily allow runner SSH」「Revoke this run's SSH permission」を確認してください。
 
 ### 5. キーペアのセキュリティ
 
@@ -225,8 +217,8 @@ gh secret set EC2_HOST --body "正確なIP"
 # EC2 セキュリティグループを確認
 aws ec2 describe-security-groups --group-ids sg-xxxxxxxxx
 
-# SSH (22) インバウンドルール追加（GitHub Actions IP対応が必要）
-# または、0.0.0.0/0 で一時的に許可（本番非推奨）
+# Actions専用SGへのランナーIPv4/32一時許可が成功したか確認する。
+# 0.0.0.0/0や::/0でのSSH公開は行わない。
 ```
 
 ### Q: SSH キーペアのフォーマットエラー
