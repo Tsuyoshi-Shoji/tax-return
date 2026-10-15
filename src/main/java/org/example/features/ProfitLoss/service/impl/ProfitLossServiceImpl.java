@@ -34,6 +34,7 @@ import org.example.repository.ExpenseItemRepository;
 import org.example.repository.FiscalYearRepository;
 import org.example.repository.IncomeEntryRepository;
 import org.example.repository.IncomeItemRepository;
+import org.example.repository.JournalEntryRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,6 +50,7 @@ public class ProfitLossServiceImpl implements ProfitLossService {
     private final ExpenseEntryRepository expenseEntryRepository;
     private final IncomeItemRepository incomeItemRepository;
     private final ExpenseItemRepository expenseItemRepository;
+    private final JournalEntryRepository journalEntryRepository;
 
     public ProfitLossServiceImpl(
             BusinessProfileRepository businessProfileRepository,
@@ -56,13 +58,15 @@ public class ProfitLossServiceImpl implements ProfitLossService {
             IncomeEntryRepository incomeEntryRepository,
             ExpenseEntryRepository expenseEntryRepository,
             IncomeItemRepository incomeItemRepository,
-            ExpenseItemRepository expenseItemRepository) {
+            ExpenseItemRepository expenseItemRepository,
+            JournalEntryRepository journalEntryRepository) {
         this.businessProfileRepository = businessProfileRepository;
         this.fiscalYearRepository = fiscalYearRepository;
         this.incomeEntryRepository = incomeEntryRepository;
         this.expenseEntryRepository = expenseEntryRepository;
         this.incomeItemRepository = incomeItemRepository;
         this.expenseItemRepository = expenseItemRepository;
+        this.journalEntryRepository = journalEntryRepository;
     }
 
     @Override
@@ -221,6 +225,7 @@ public class ProfitLossServiceImpl implements ProfitLossService {
             IncomeEntry e = incomeEntryRepository.findOwnedByIdForUpdate(id, appUserId)
                     .orElseThrow(() -> new EntryNotFoundException("Entry not found"));
             requireDeletable(lockMessage(e.getFiscalYear(), e.getAccountingTransaction()));
+            deleteJournalEntry(e.getAccountingTransaction());
             e.markDeleted();
             incomeEntryRepository.save(e);
             return;
@@ -233,11 +238,19 @@ public class ProfitLossServiceImpl implements ProfitLossService {
             ExpenseEntry e = expenseEntryRepository.findOwnedByIdForUpdate(id, appUserId)
                     .orElseThrow(() -> new EntryNotFoundException("Entry not found"));
             requireDeletable(lockMessage(e.getFiscalYear(), e.getAccountingTransaction()));
+            deleteJournalEntry(e.getAccountingTransaction());
             e.markDeleted();
             expenseEntryRepository.save(e);
             return;
         }
         throw new EntryNotFoundException("Unknown record type");
+    }
+
+    private void deleteJournalEntry(AccountingTransaction transaction) {
+        if (transaction != null) {
+            journalEntryRepository.findByAccountingTransactionId(transaction.getId())
+                    .ifPresent(journalEntryRepository::delete);
+        }
     }
 
     private void requireDeletable(String lockMessage) {
