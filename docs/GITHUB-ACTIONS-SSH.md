@@ -75,6 +75,16 @@ GitHub Environmentはこのワークフローでは使用しない。後から�
       "Resource": "arn:aws:ec2:REGION:ACCOUNT_ID:security-group/SECURITY_GROUP_ID",
       "Condition": {
         "StringEquals": {
+          "ec2:Region": "REGION"
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": "ec2:AuthorizeSecurityGroupIngress",
+      "Resource": "arn:aws:ec2:REGION:ACCOUNT_ID:security-group-rule/*",
+      "Condition": {
+        "StringEquals": {
           "aws:RequestTag/ManagedBy": "github-actions-ssh",
           "aws:RequestTag/Repository": "Tsuyoshi-Shoji/tax-return"
         }
@@ -102,6 +112,10 @@ GitHub Environmentはこのワークフローでは使用しない。後から�
 ```
 
 Describeはリソース単位の制限ができないため`*`とする。変更操作は専用SGに限定する。
+`AuthorizeSecurityGroupIngress`はSG側と作成ルール側の許可を分ける。
+`aws:RequestTag`はルール側で評価されるため、SG側の許可には付けない。
+ルールARNは作成前にIDが決まらないため`security-group-rule/*`とし、
+同じリクエストで必要となるSG側の許可を専用SGに限定する。
 このポリシーだけでTCP 22や`/32`を強制できるわけではなく、これらはスクリプトで検証する。
 ロールは対象SGの他のインバウンドルールも削除できるため、管理用SGとの共用は禁止する。
 `main`のブランチ保護・変更レビューを設定し、ワークフローの編集権限も管理する。
