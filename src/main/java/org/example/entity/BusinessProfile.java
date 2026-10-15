@@ -28,6 +28,9 @@ public class BusinessProfile {
     @Column(name = "business_name", length = 200)
     private String businessName;
 
+    @Column(name = "industry", length = 100)
+    private String industry;
+
     @Column(name = "filing_type", nullable = false, length = 50)
     private String filingType;
 
@@ -76,6 +79,14 @@ public class BusinessProfile {
 
     public String getBusinessName() {
         return businessName;
+    }
+
+    public String getIndustry() {
+        return industry;
+    }
+
+    public void setIndustry(String industry) {
+        this.industry = industry;
     }
 
     public String getFilingType() {

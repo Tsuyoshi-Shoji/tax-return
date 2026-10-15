@@ -16,7 +16,9 @@ import org.example.entity.BusinessProfile;
 import org.example.entity.ExpenseEntry;
 import org.example.entity.FiscalYear;
 import org.example.entity.IncomeEntry;
+import org.example.entity.JournalEntry;
 import org.example.entity.SettlementAdjustment;
+import org.example.entity.TransactionSettlement;
 import org.example.features.entry.EntryNotFoundException;
 import org.example.features.report.dto.ReportMonthRow;
 import org.example.features.report.dto.ReportYearOption;
@@ -36,7 +38,9 @@ import org.example.repository.BusinessProfileRepository;
 import org.example.repository.ExpenseEntryRepository;
 import org.example.repository.FiscalYearRepository;
 import org.example.repository.IncomeEntryRepository;
+import org.example.repository.JournalEntryRepository;
 import org.example.repository.SettlementAdjustmentRepository;
+import org.example.repository.TransactionSettlementRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,6 +55,10 @@ public class TaxReturnServiceImpl implements TaxReturnService {
     private static final String INVENTORY_LABEL = "棚卸調整";
     private static final String OWNER_DRAW_LABEL = "事業主貸";
     private static final String COMPOUND_COUNTER_LABEL = "諸口";
+    private static final String SETTLEMENT_STATUS_SETTLED = "SETTLED";
+    private static final String SETTLEMENT_STATUS_UNSETTLED = "UNSETTLED";
+    private static final String SETTLEMENT_STATUS_PARTIALLY_SETTLED = "PARTIALLY_SETTLED";
+    private static final String SOURCE_TYPE_SETTLEMENT = "SETTLEMENT_ADJUSTMENT";
 
     private final BusinessProfileRepository businessProfileRepository;
     private final FiscalYearRepository fiscalYearRepository;
@@ -58,6 +66,8 @@ public class TaxReturnServiceImpl implements TaxReturnService {
     private final ExpenseEntryRepository expenseEntryRepository;
     private final AccountingTransactionRepository transactionRepository;
     private final SettlementAdjustmentRepository settlementRepository;
+    private final JournalEntryRepository journalEntryRepository;
+    private final TransactionSettlementRepository transactionSettlementRepository;
 
     public TaxReturnServiceImpl(
             BusinessProfileRepository businessProfileRepository,
@@ -65,13 +75,17 @@ public class TaxReturnServiceImpl implements TaxReturnService {
             IncomeEntryRepository incomeEntryRepository,
             ExpenseEntryRepository expenseEntryRepository,
             AccountingTransactionRepository transactionRepository,
-            SettlementAdjustmentRepository settlementRepository) {
+            SettlementAdjustmentRepository settlementRepository,
+            JournalEntryRepository journalEntryRepository,
+            TransactionSettlementRepository transactionSettlementRepository) {
         this.businessProfileRepository = businessProfileRepository;
         this.fiscalYearRepository = fiscalYearRepository;
         this.incomeEntryRepository = incomeEntryRepository;
         this.expenseEntryRepository = expenseEntryRepository;
         this.transactionRepository = transactionRepository;
         this.settlementRepository = settlementRepository;
+        this.journalEntryRepository = journalEntryRepository;
+        this.transactionSettlementRepository = transactionSettlementRepository;
     }
 
     @Override
@@ -103,11 +117,16 @@ public class TaxReturnServiceImpl implements TaxReturnService {
         }
 
         long draftCount = transactionRepository.countByFiscalYearIdAndStatus(selected.getId(), DRAFT);
+        long unsettledCount = transactionRepository
+                .findByFiscalYearIdAndSettlementStatusInOrderByTransactionDateAscIdAsc(
+                        selected.getId(),
+                        List.of(SETTLEMENT_STATUS_UNSETTLED, SETTLEMENT_STATUS_PARTIALLY_SETTLED))
+                .size();
         List<String> errors = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
         List<CheckItem> checks = new ArrayList<>();
         BasicInfo basic = basicInfo(profile, deduction);
-        buildChecks(basic, current, saved, bs, draftCount, deduction, months, errors, warnings, checks);
+        buildChecks(basic, current, saved, bs, draftCount, unsettledCount, deduction, months, errors, warnings, checks);
 
         SettlementForm form = overrideForm != null ? overrideForm : toForm(saved);
         return new TaxReturnPageData(
@@ -154,7 +173,10 @@ public class TaxReturnServiceImpl implements TaxReturnService {
         entity.setUnreceivedIncome(unreceived);
         entity.setOpeningBalance(openingBalance);
         entity.setClosingCash(closingCash);
-        settlementRepository.save(entity);
+        entity.setSettlementStatus(resolveSettlementStatus(receivable, payable, unpaid, unreceived));
+        SettlementAdjustment savedAdjustment = settlementRepository.save(entity);
+        applySettlementAllocationByAdjustment(fiscalYear.getId(), savedAdjustment);
+        upsertSettlementJournalEntry(fiscalYear, savedAdjustment);
         return List.of();
     }
 
@@ -185,6 +207,7 @@ public class TaxReturnServiceImpl implements TaxReturnService {
     private SettlementAdjustment newSettlement(FiscalYear fiscalYear) {
         SettlementAdjustment entity = new SettlementAdjustment();
         entity.setFiscalYear(fiscalYear);
+        entity.setSettlementStatus(SETTLEMENT_STATUS_UNSETTLED);
         return entity;
     }
 
@@ -235,7 +258,7 @@ public class TaxReturnServiceImpl implements TaxReturnService {
                 ? "青色申告（" + deduction + "万円控除）"
                 : "白色申告";
         return new BasicInfo(
-                user.getDisplayName(), profile.getBusinessName(), null, null, null, user.getEmail(), filing);
+                user.getDisplayName(), profile.getBusinessName(), profile.getIndustry(), user.getPhone(), user.getAddress(), user.getEmail(), filing);
     }
 
     private SettlementForm toForm(SettlementAdjustment s) {
@@ -319,11 +342,16 @@ public class TaxReturnServiceImpl implements TaxReturnService {
         incomeItems.forEach((k, v) -> calc.plRows.add(new PlRow(k, v)));
         expenseItems.forEach((k, v) -> calc.plRows.add(new PlRow(k, v)));
 
-        sortable.sort(Comparator
-                .comparing((Object[] o) -> (java.time.LocalDate) o[0])
-                .thenComparing(o -> (Long) o[1], Comparator.nullsLast(Comparator.naturalOrder()))
-                .thenComparing(o -> (Integer) o[2]));
-        sortable.forEach(o -> calc.journal.add((JournalLine) o[3]));
+        List<JournalLine> persisted = buildJournalFromPersistedEntries(fiscalYear.getId());
+        if (!persisted.isEmpty()) {
+            calc.journal.addAll(persisted);
+        } else {
+            sortable.sort(Comparator
+                    .comparing((Object[] o) -> (java.time.LocalDate) o[0])
+                    .thenComparing(o -> (Long) o[1], Comparator.nullsLast(Comparator.naturalOrder()))
+                    .thenComparing(o -> (Integer) o[2]));
+            sortable.forEach(o -> calc.journal.add((JournalLine) o[3]));
+        }
         return calc;
     }
 
@@ -334,6 +362,207 @@ public class TaxReturnServiceImpl implements TaxReturnService {
             summary = summary.substring(0, 60) + "…";
         }
         return new JournalLine(date.replace('-', '/'), summary, debit, debitAmount, credit, creditAmount);
+    }
+
+    private String resolveSettlementStatus(
+            BigDecimal accountsReceivable,
+            BigDecimal accountsPayable,
+            BigDecimal unpaidExpenses,
+            BigDecimal unreceivedIncome) {
+        BigDecimal pending = safeAmount(accountsReceivable)
+                .add(safeAmount(accountsPayable))
+                .add(safeAmount(unpaidExpenses))
+                .add(safeAmount(unreceivedIncome));
+        return pending.signum() == 0 ? SETTLEMENT_STATUS_SETTLED : SETTLEMENT_STATUS_UNSETTLED;
+    }
+
+    private void applySettlementAllocationByAdjustment(Long fiscalYearId, SettlementAdjustment adjustment) {
+        if (adjustment == null || adjustment.getId() == null) {
+            return;
+        }
+        transactionSettlementRepository.deleteBySettlementAdjustmentId(adjustment.getId());
+
+        List<org.example.entity.AccountingTransaction> candidates = transactionRepository
+                .findByFiscalYearIdAndSettlementStatusInOrderByTransactionDateAscIdAsc(
+                        fiscalYearId,
+                        List.of(SETTLEMENT_STATUS_UNSETTLED, SETTLEMENT_STATUS_PARTIALLY_SETTLED));
+
+        BigDecimal totalOutstanding = BigDecimal.ZERO;
+        Map<Long, BigDecimal> outstandingById = new LinkedHashMap<>();
+        for (org.example.entity.AccountingTransaction transaction : candidates) {
+            BigDecimal total = safeAmount(transaction.getTotalAmount());
+            BigDecimal settled = safeAmount(transactionSettlementRepository.sumSettledAmountBySourceTransactionId(transaction.getId()));
+            BigDecimal outstanding = total.subtract(settled);
+            if (outstanding.signum() < 0) {
+                outstanding = BigDecimal.ZERO;
+            }
+            outstandingById.put(transaction.getId(), outstanding);
+            totalOutstanding = totalOutstanding.add(outstanding);
+        }
+
+        BigDecimal pendingAmount = safeAmount(adjustment.getAccountsReceivable())
+                .add(safeAmount(adjustment.getAccountsPayable()))
+                .add(safeAmount(adjustment.getUnpaidExpenses()))
+                .add(safeAmount(adjustment.getUnreceivedIncome()));
+        BigDecimal settleBudget = totalOutstanding.subtract(pendingAmount);
+        if (settleBudget.signum() < 0) {
+            settleBudget = BigDecimal.ZERO;
+        }
+
+        for (org.example.entity.AccountingTransaction transaction : candidates) {
+            if (settleBudget.signum() <= 0) {
+                break;
+            }
+            BigDecimal outstanding = outstandingById.getOrDefault(transaction.getId(), BigDecimal.ZERO);
+            if (outstanding.signum() <= 0) {
+                continue;
+            }
+            BigDecimal applied = outstanding.min(settleBudget);
+            if (applied.signum() <= 0) {
+                continue;
+            }
+            TransactionSettlement settlement = new TransactionSettlement();
+            settlement.setSourceTransaction(transaction);
+            settlement.setSettlementAdjustment(adjustment);
+            settlement.setSettledAmount(applied);
+            transactionSettlementRepository.save(settlement);
+            settleBudget = settleBudget.subtract(applied);
+        }
+
+        refreshTransactionSettlementStatus(fiscalYearId);
+    }
+
+    private void refreshTransactionSettlementStatus(Long fiscalYearId) {
+        List<org.example.entity.AccountingTransaction> transactions = transactionRepository
+                .findByFiscalYearIdOrderByTransactionDateAscIdAsc(fiscalYearId);
+        for (org.example.entity.AccountingTransaction transaction : transactions) {
+            BigDecimal total = safeAmount(transaction.getTotalAmount());
+            BigDecimal settled = safeAmount(transactionSettlementRepository.sumSettledAmountBySourceTransactionId(transaction.getId()));
+            if (settled.signum() <= 0) {
+                if (transaction.getSettlementStatus() == null || transaction.getSettlementStatus().isBlank()) {
+                    transaction.setSettlementStatus(SETTLEMENT_STATUS_UNSETTLED);
+                }
+                transaction.setSettlementReferenceId(null);
+                transactionRepository.save(transaction);
+                continue;
+            }
+            if (settled.compareTo(total) >= 0) {
+                transaction.setSettlementStatus(SETTLEMENT_STATUS_SETTLED);
+            } else {
+                transaction.setSettlementStatus(SETTLEMENT_STATUS_PARTIALLY_SETTLED);
+            }
+            transaction.setSettlementReferenceId(
+                    transactionSettlementRepository.findLatestSettlementAdjustmentIdBySourceTransactionId(transaction.getId()));
+            transactionRepository.save(transaction);
+        }
+    }
+
+    private void upsertSettlementJournalEntry(FiscalYear fiscalYear, SettlementAdjustment adjustment) {
+        if (fiscalYear == null || adjustment == null) {
+            return;
+        }
+        JournalEntry entry = journalEntryRepository.findBySourceTypeAndSourceId(SOURCE_TYPE_SETTLEMENT, adjustment.getId())
+                .orElseGet(JournalEntry::new);
+        entry.setFiscalYear(fiscalYear);
+        entry.setAccountingTransaction(null);
+        entry.setSourceType(SOURCE_TYPE_SETTLEMENT);
+        entry.setSourceId(adjustment.getId());
+        entry.setEntryDate(fiscalYear.getPeriodEnd());
+        entry.setSummary("決算整理仕訳");
+        entry.setStatus(DRAFT);
+
+        List<org.example.entity.JournalLine> lines = new ArrayList<>();
+        int lineNo = 1;
+
+        BigDecimal depreciation = safeAmount(adjustment.getDepreciation());
+        if (depreciation.signum() > 0) {
+            lines.add(buildPersistedLine(lineNo++, "D", DEPRECIATION_LABEL, depreciation, "決算整理"));
+            lines.add(buildPersistedLine(lineNo++, "C", "減価償却累計額", depreciation, "決算整理"));
+        }
+
+        BigDecimal inventoryDelta = safeAmount(adjustment.getOpeningInventory()).subtract(safeAmount(adjustment.getClosingInventory()));
+        if (inventoryDelta.signum() > 0) {
+            lines.add(buildPersistedLine(lineNo++, "D", "仕入高", inventoryDelta, "棚卸調整"));
+            lines.add(buildPersistedLine(lineNo++, "C", "棚卸資産", inventoryDelta, "棚卸調整"));
+        } else if (inventoryDelta.signum() < 0) {
+            BigDecimal abs = inventoryDelta.abs();
+            lines.add(buildPersistedLine(lineNo++, "D", "棚卸資産", abs, "棚卸調整"));
+            lines.add(buildPersistedLine(lineNo++, "C", "仕入高", abs, "棚卸調整"));
+        }
+
+        entry.setLines(lines);
+        journalEntryRepository.save(entry);
+    }
+
+    private org.example.entity.JournalLine buildPersistedLine(
+            int lineNo,
+            String debitCredit,
+            String accountName,
+            BigDecimal amount,
+            String memo) {
+        org.example.entity.JournalLine line = new org.example.entity.JournalLine();
+        line.setLineNo(lineNo);
+        line.setDebitCredit(debitCredit);
+        line.setAccountName(accountName);
+        line.setAmount(safeAmount(amount));
+        line.setMemo(memo);
+        return line;
+    }
+
+    private List<JournalLine> buildJournalFromPersistedEntries(Long fiscalYearId) {
+        List<JournalEntry> entries = journalEntryRepository.findAllWithLinesByFiscalYearId(fiscalYearId);
+        List<JournalLine> converted = new ArrayList<>();
+        for (JournalEntry entry : entries) {
+            List<org.example.entity.JournalLine> debitLines = entry.getLines().stream()
+                    .filter(line -> "D".equalsIgnoreCase(line.getDebitCredit()))
+                    .sorted(Comparator.comparing(org.example.entity.JournalLine::getLineNo))
+                    .toList();
+            List<org.example.entity.JournalLine> creditLines = entry.getLines().stream()
+                    .filter(line -> "C".equalsIgnoreCase(line.getDebitCredit()))
+                    .sorted(Comparator.comparing(org.example.entity.JournalLine::getLineNo))
+                    .toList();
+            if (debitLines.isEmpty() || creditLines.isEmpty()) {
+                continue;
+            }
+            String creditAccount = creditLines.size() == 1
+                    ? creditLines.get(0).getAccountName()
+                    : COMPOUND_COUNTER_LABEL;
+            BigDecimal creditAmount = creditLines.stream()
+                    .map(org.example.entity.JournalLine::getAmount)
+                    .reduce(BigDecimal.ZERO, BigDecimal::add);
+            String date = entry.getEntryDate() == null ? "" : entry.getEntryDate().toString().replace('-', '/');
+            String summary = entry.getSummary() == null ? "" : entry.getSummary();
+            for (int i = 0; i < debitLines.size(); i++) {
+                org.example.entity.JournalLine debit = debitLines.get(i);
+                if (i == 0) {
+                    converted.add(new JournalLine(
+                            date,
+                            summary,
+                            debit.getAccountName(),
+                            safeAmount(debit.getAmount()),
+                            creditAccount,
+                            safeAmount(creditAmount),
+                            false));
+                } else {
+                    converted.add(new JournalLine(
+                            date,
+                            summary,
+                            debit.getAccountName(),
+                            safeAmount(debit.getAmount()),
+                            null,
+                            null,
+                            true));
+                }
+            }
+        }
+        return converted;
+    }
+
+    private BigDecimal safeAmount(BigDecimal value) {
+        if (value == null) {
+            return BigDecimal.ZERO;
+        }
+        return value;
     }
 
     private static List<List<JournalLine>> journalEntries(List<JournalLine> journal) {
@@ -409,6 +638,7 @@ public class TaxReturnServiceImpl implements TaxReturnService {
     }
 
     private void buildChecks(BasicInfo basic, Calc calc, SettlementAdjustment saved, BalanceSheet bs, long draftCount,
+            long unsettledCount,
             int deduction, List<ReportMonthRow> months, List<String> errors, List<String> warnings,
             List<CheckItem> checks) {
         if (basic.getName() == null || basic.getName().isBlank()) {
@@ -439,6 +669,9 @@ public class TaxReturnServiceImpl implements TaxReturnService {
         if (draftCount > 0) {
             warnings.add("未確認の仕訳が" + draftCount + "件あります。");
         }
+        if (unsettledCount > 0) {
+            warnings.add("未消込の取引が" + unsettledCount + "件あります。");
+        }
         if (deduction == 65) {
             warnings.add("65万円控除は複式簿記による記帳・貸借対照表の添付などの要件を満たす必要があります。");
         }
@@ -454,6 +687,8 @@ public class TaxReturnServiceImpl implements TaxReturnService {
                 balanced ? "入力完了" : "貸借が一致していません"));
         checks.add(new CheckItem("check-journal", "仕訳", draftCount == 0,
                 draftCount == 0 ? "入力完了" : "未確認の仕訳が" + draftCount + "件あります"));
+        checks.add(new CheckItem("check-settlement", "消込", unsettledCount == 0,
+                unsettledCount == 0 ? "入力完了" : "未消込の取引が" + unsettledCount + "件あります"));
     }
 
     private Diff diff(BigDecimal current, BigDecimal prior, boolean upIsGood) {

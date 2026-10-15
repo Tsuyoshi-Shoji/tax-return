@@ -19,29 +19,64 @@
 <c:set var="methodRequiredMessage" value="${isIncome ? '受取方法を選択してください。' : '支払方法を選択してください。'}" />
 <c:set var="selectedType" value="${isIncome ? entryForm.incomeType : entryForm.expenseType}" />
 <c:set var="selectedMethod" value="${isIncome ? entryForm.receiveMethodId : entryForm.paymentMethodId}" />
+<c:set var="selectedEntryMode" value="${empty entryForm.entryMode ? 'normal' : entryForm.entryMode}" />
 <c:set var="defaultType" value="${empty categories ? '' : categories[0].id}" />
 <c:set var="defaultMethod" value="${empty methods ? '' : methods[0].id}" />
 <fmt:setLocale value="ja_JP" scope="page" />
 <div class="entry-container">
-    <nav class="entry-breadcrumb" aria-label="パンくず">
-        <ol>
-            <li><a href="${pageContext.request.contextPath}/home">ホーム</a></li>
-            <li aria-current="page"><c:out value="${pageTitle}" /></li>
-        </ol>
-    </nav>
+    <div class="entry-topbar">
+        <nav class="entry-breadcrumb" aria-label="パンくず">
+            <ol>
+                <li><a href="${pageContext.request.contextPath}/home">ホーム</a></li>
+                <li aria-current="page"><c:out value="${pageTitle}" /></li>
+            </ol>
+        </nav>
+        <c:if test="${not isIncome}">
+            <section class="entry-mode-switch" aria-labelledby="entry-mode-label">
+                <span id="entry-mode-label" class="entry-mode-switch-label">登録モード</span>
+                <div class="entry-mode-segment" role="radiogroup" aria-labelledby="entry-mode-label">
+                    <label class="entry-mode-option">
+                        <input id="entry-mode-normal" class="entry-mode-input" type="radio" name="entryMode" value="normal" form="entry-form" <c:if test="${selectedEntryMode ne 'monthly'}">checked</c:if>>
+                        <span class="entry-mode-option-text">通常モード</span>
+                    </label>
+                    <label class="entry-mode-option">
+                        <input id="entry-mode-monthly" class="entry-mode-input" type="radio" name="entryMode" value="monthly" form="entry-form" <c:if test="${selectedEntryMode eq 'monthly'}">checked</c:if>>
+                        <span class="entry-mode-option-text">月間一括登録モード</span>
+                    </label>
+                </div>
+                <p id="error-entryMode" class="entry-field-error" data-error-for="entryMode"><c:out value="${fieldErrors.entryMode}" /></p>
+            </section>
+        </c:if>
+    </div>
 
     <section class="entry-card" aria-labelledby="page-title">
         <div class="entry-card-header">
-            <div>
-                <h1 id="page-title"><c:out value="${pageTitle}" /></h1>
-                <p id="page-description"><c:out value="${pageDescription}" /></p>
+            <div class="entry-card-heading">
+                <div class="entry-card-title-row">
+                    <h1 id="page-title"><c:out value="${pageTitle}" /></h1>
+                    <c:if test="${not isIncome}">
+                        <span id="monthly-mode-badge" class="entry-mode-badge" <c:if test="${selectedEntryMode ne 'monthly'}">hidden</c:if>>月間一括登録モード</span>
+                    </c:if>
+                </div>
+                <p id="page-description" class="entry-page-description" <c:if test="${not isIncome and selectedEntryMode eq 'monthly'}">hidden</c:if>><c:out value="${pageDescription}" /></p>
+                <c:if test="${not isIncome}">
+                    <p id="monthly-mode-description" class="entry-page-description" <c:if test="${selectedEntryMode ne 'monthly'}">hidden</c:if>>カード利用分を月末にまとめて登録できます。月間の支出を一括入力してください。</p>
+                </c:if>
             </div>
-            <c:if test="${not empty fiscalYearLabel}">
-                <p class="entry-fiscal-year">対象年度：<c:out value="${fiscalYearLabel}" /></p>
-            </c:if>
+            <div class="entry-card-header-side">
+                <c:if test="${not empty fiscalYearLabel}">
+                    <p class="entry-fiscal-year">対象年度：<c:out value="${fiscalYearLabel}" /></p>
+                </c:if>
+                <c:if test="${not isIncome}">
+                    <button id="button-add-5-rows" class="entry-button entry-button-outline entry-button-add" type="button" aria-controls="monthly-rows" <c:if test="${selectedEntryMode ne 'monthly'}">hidden</c:if>>
+                        <span class="entry-button-icon entry-button-icon-plus" aria-hidden="true"></span>行を5件追加
+                    </button>
+                </c:if>
+            </div>
         </div>
 
-        <form class="entry-form"
+        <form id="entry-form"
+              class="entry-form"
               method="post"
               action="${pageContext.request.contextPath}/${entryKind}"
               novalidate
@@ -57,6 +92,7 @@
             <input type="hidden" name="submissionToken" value="${fn:escapeXml(entryForm.submissionToken)}">
             <input type="hidden" id="confirmation-token" name="confirmationToken" value="${fn:escapeXml(entryForm.confirmationToken)}">
 
+            <section id="normal-mode-section" class="entry-mode-panel" <c:if test="${not isIncome and selectedEntryMode eq 'monthly'}">hidden</c:if>>
             <div class="entry-grid">
                 <div class="entry-row" data-field-group="${fn:escapeXml(typeFieldName)}">
                     <div class="entry-label-wrap">
@@ -237,6 +273,132 @@
                     </div>
                 </div>
             </div>
+            </section>
+
+            <c:if test="${not isIncome}">
+                <section id="monthly-mode-section" class="entry-mode-panel entry-monthly-panel" aria-label="月間一括登録" <c:if test="${selectedEntryMode ne 'monthly'}">hidden</c:if>>
+                    <div class="entry-monthly-toolbar" data-field-group="targetMonth">
+                        <label id="label-target-month" class="entry-monthly-toolbar-label" for="target-month">登録対象月 <span class="entry-required" aria-hidden="true">*</span></label>
+                        <input id="target-month"
+                               type="month"
+                               name="targetMonth"
+                               value="${fn:escapeXml(entryForm.targetMonth)}"
+                               aria-required="true"
+                               aria-describedby="error-targetMonth"
+                               <c:if test="${not empty fieldErrors.targetMonth}">aria-invalid="true"</c:if>>
+                        <p id="error-targetMonth" class="entry-field-error" data-error-for="targetMonth"><c:out value="${fieldErrors.targetMonth}" /></p>
+                    </div>
+                    <p class="entry-field-error entry-monthly-rows-error" data-error-for="monthlyRows"><c:out value="${fieldErrors.monthlyRows}" /></p>
+
+                    <c:set var="monthlyRowLastIndex" value="${empty entryForm.monthlyRows ? 4 : fn:length(entryForm.monthlyRows) - 1}" />
+                    <div class="entry-monthly-scroll" role="region" aria-label="支出明細（横スクロールできます）" tabindex="0">
+                        <div id="monthly-rows" class="entry-monthly-rows" data-items-placeholder="項目を選択してください">
+                            <c:forEach var="index" begin="0" end="${monthlyRowLastIndex}">
+                                <c:remove var="row" />
+                                <c:if test="${not empty entryForm.monthlyRows}">
+                                    <c:set var="row" value="${entryForm.monthlyRows[index]}" />
+                                </c:if>
+                                <c:set var="rowType" value="${empty row.expenseType ? defaultType : row.expenseType}" />
+                                <c:set var="rowMethod" value="${empty row.paymentMethodId ? defaultMethod : row.paymentMethodId}" />
+                                <c:set var="rowPath" value="monthlyRows[${index}]" />
+                                <article class="entry-monthly-row" data-row-index="${index}" aria-label="明細${index + 1}">
+                                    <div class="entry-monthly-grid">
+                                        <fieldset class="entry-monthly-field entry-monthly-field-type">
+                                            <legend class="entry-monthly-label">区分</legend>
+                                            <div class="entry-monthly-choices">
+                                                <c:forEach var="category" items="${categories}">
+                                                    <label class="entry-radio entry-radio-compact">
+                                                        <input type="radio"
+                                                               class="monthly-expense-type"
+                                                               name="${rowPath}.expenseType"
+                                                               value="${fn:escapeXml(category.id)}"
+                                                               data-error-field="${rowPath}.expenseType"
+                                                               <c:if test="${category.id eq rowType}">checked</c:if>>
+                                                        <span><c:out value="${category.label}" /></span>
+                                                    </label>
+                                                </c:forEach>
+                                            </div>
+                                        </fieldset>
+                                        <label class="entry-monthly-field entry-monthly-field-item">
+                                            <span class="entry-monthly-label">項目</span>
+                                            <select name="${rowPath}.category" class="monthly-category" data-selected="${fn:escapeXml(row.category)}" data-error-field="${rowPath}.category">
+                                                <option value="">項目を選択してください</option>
+                                                <c:forEach var="item" items="${items}">
+                                                    <c:if test="${item.group eq rowType}">
+                                                        <option value="${fn:escapeXml(item.id)}" <c:if test="${item.id eq row.category}">selected</c:if>><c:out value="${item.label}" /></option>
+                                                    </c:if>
+                                                </c:forEach>
+                                            </select>
+                                        </label>
+                                        <label class="entry-monthly-field entry-monthly-field-date">
+                                            <span class="entry-monthly-label">支出発生日</span>
+                                            <input type="date" name="${rowPath}.date" value="${fn:escapeXml(row.date)}" max="${fn:escapeXml(today)}" data-error-field="${rowPath}.date">
+                                        </label>
+                                        <label class="entry-monthly-field entry-monthly-field-amount">
+                                            <span class="entry-monthly-label">金額</span>
+                                            <span class="entry-amount-wrap">
+                                                <input type="text" name="${rowPath}.amount" value="${fn:escapeXml(row.amount)}" inputmode="numeric" pattern="[0-9]*" placeholder="例）100000" data-error-field="${rowPath}.amount">
+                                                <span class="entry-amount-suffix" aria-hidden="true">円</span>
+                                            </span>
+                                        </label>
+                                        <fieldset class="entry-monthly-field entry-monthly-field-method">
+                                            <legend class="entry-monthly-label">支払い方法</legend>
+                                            <div class="entry-monthly-choices">
+                                                <c:forEach var="method" items="${methods}">
+                                                    <label class="entry-radio entry-radio-compact">
+                                                        <input type="radio"
+                                                               class="monthly-payment-method"
+                                                               name="${rowPath}.paymentMethodId"
+                                                               value="${fn:escapeXml(method.id)}"
+                                                               data-error-field="${rowPath}.paymentMethodId"
+                                                               <c:if test="${method.id eq rowMethod}">checked</c:if>>
+                                                        <span><c:out value="${method.label}" /></span>
+                                                    </label>
+                                                </c:forEach>
+                                            </div>
+                                        </fieldset>
+                                        <div class="entry-monthly-field-options">
+                                            <label class="entry-check entry-check-compact">
+                                                <input type="checkbox" name="${rowPath}.excludeFromReturn" value="true" <c:if test="${row.excludeFromReturn}">checked</c:if>>
+                                                <span>申告対象外</span>
+                                            </label>
+                                            <label class="entry-check entry-check-compact">
+                                                <input type="checkbox" name="${rowPath}.homeApportionment" value="true" data-error-field="${rowPath}.homeApportionment" <c:if test="${row.homeApportionment}">checked</c:if>>
+                                                <span>家事按分適用</span>
+                                            </label>
+                                        </div>
+                                        <label class="entry-monthly-field-details">
+                                            <span class="entry-monthly-label-inline">支出詳細</span>
+                                            <input type="text" name="${rowPath}.details" value="${fn:escapeXml(row.details)}" maxlength="255" placeholder="内容を入力してください" data-error-field="${rowPath}.details">
+                                        </label>
+                                        <button class="entry-button entry-button-muted entry-monthly-remove button-remove-row" id="button-remove-row-${index}" type="button" aria-label="明細${index + 1}を削除">
+                                            <span class="entry-button-icon entry-button-icon-trash" aria-hidden="true"></span>削除
+                                        </button>
+                                        <div class="entry-monthly-errors">
+                                            <p class="entry-field-error" data-error-for="${rowPath}.expenseType"></p>
+                                            <p class="entry-field-error" data-error-for="${rowPath}.category"></p>
+                                            <p class="entry-field-error" data-error-for="${rowPath}.date"></p>
+                                            <p class="entry-field-error" data-error-for="${rowPath}.amount"></p>
+                                            <p class="entry-field-error" data-error-for="${rowPath}.paymentMethodId"></p>
+                                            <p class="entry-field-error" data-error-for="${rowPath}.details"></p>
+                                            <p class="entry-field-error" data-error-for="${rowPath}.homeApportionment"></p>
+                                        </div>
+                                    </div>
+                                </article>
+                            </c:forEach>
+                        </div>
+                    </div>
+
+                    <div class="entry-monthly-actions">
+                        <p class="entry-monthly-count" aria-live="polite">入力件数 <strong id="monthly-row-count"><c:out value="${monthlyRowLastIndex + 1}" /></strong>件</p>
+                        <div class="entry-monthly-buttons">
+                            <button id="button-clear-monthly" class="entry-button entry-button-secondary" type="button">クリア</button>
+                            <button id="button-register-monthly" class="entry-button entry-button-primary" type="submit">一括登録</button>
+                        </div>
+                    </div>
+                </section>
+            </c:if>
+
 
             <c:if test="${confirmationRequired}">
                 <section class="entry-confirmation-panel" aria-labelledby="confirmation-panel-title">
@@ -245,7 +407,7 @@
                 </section>
             </c:if>
 
-            <div class="entry-actions">
+            <div id="normal-mode-actions" class="entry-actions" <c:if test="${not isIncome and selectedEntryMode eq 'monthly'}">hidden</c:if>>
                 <button id="button-clear" class="entry-button entry-button-secondary" type="button">クリア</button>
                 <button id="button-register"
                         class="entry-button entry-button-primary"

@@ -9,10 +9,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>確定申告 | マネタックス</title>
-    <link rel="stylesheet" href="${ctx}/css/style.css?v=20261011c">
+    <link rel="stylesheet" href="${ctx}/css/style.css?v=20261016a">
     <link rel="stylesheet" href="${ctx}/css/home/home.css?v=20261011c">
     <link rel="stylesheet" href="${ctx}/css/profit-loss/profit-loss.css?v=20261011d">
-    <link rel="stylesheet" href="${ctx}/css/tax-return/tax-return.css?v=20261011c">
+    <link rel="stylesheet" href="${ctx}/css/tax-return/tax-return.css?v=20261016a">
     <script src="${ctx}/css/tax-return/tax-return.js?v=20261011c" defer></script>
 </head>
 <body class="home-page profit-loss-page tax-return-page">

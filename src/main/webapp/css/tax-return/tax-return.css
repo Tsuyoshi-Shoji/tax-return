@@ -94,6 +94,13 @@
 .tr-output { display: flex; flex-wrap: wrap; gap: 12px; }
 .tr-ledger-title { margin: 16px 0 6px; font-size: 15px; color: #10225f; }
 
+.tr-tab,
+.tr-card-label,
+.tr-diff,
+.tr-btn {
+    white-space: nowrap;
+}
+
 .tr-dialog { max-width: 520px; padding: 20px 24px; border: 0; border-radius: 10px; box-shadow: 0 12px 40px rgba(16, 34, 95, .25); }
 .tr-dialog::backdrop { background: rgba(16, 34, 95, .35); }
 .tr-dialog h2 { margin: 0 0 12px; font-size: 18px; color: #0b1a57; }
@@ -112,6 +119,67 @@
     .tr-checks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
+@media (max-width: 760px) {
+    .tr-tabs {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+    }
+
+    .tr-section {
+        padding: 16px 14px;
+        overflow-x: hidden;
+    }
+
+    /* Keep section container within viewport; scroll inside content blocks only. */
+    .tr-info-grid,
+    .tr-bs,
+    .tr-settlement,
+    .tr-checks,
+    .tr-output {
+        overflow-x: auto;
+        max-width: 100%;
+    }
+
+    .tr-info-grid > .tr-info,
+    .tr-bs > table,
+    .tr-bs > .tr-balance,
+    .tr-check,
+    .tr-output > .tr-btn {
+        min-width: 280px;
+    }
+
+    .tr-settlement {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 10px;
+    }
+
+    .tr-settlement .tr-field {
+        flex: 0 0 280px;
+    }
+
+    .tr-cards {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 12px;
+        overflow-x: auto;
+        max-width: 100%;
+    }
+
+    .tr-cards .tr-card {
+        flex: 0 0 300px;
+    }
+
+    .tr-table-scroll {
+        max-width: 100%;
+        overflow-x: auto;
+    }
+
+    .tr-table {
+        min-width: 640px;
+    }
+}
+
 @media print {
     body.tr-printing .home-sidebar,
     body.tr-printing header,
@@ -126,6 +194,7 @@
     body.tr-printing .tr-section-head a { display: none !important; }
     body.tr-printing .home-main { margin: 0; padding: 0; }
     body.tr-printing .tr-section { break-inside: avoid; box-shadow: none; }
+    body.tr-printing .tr-section { overflow: visible; }
     body.tr-printing .tr-two-col { display: block; }
     body.tr-printing .tr-section.print-only:not(.print-hide) { display: block; }
     body.tr-printing .print-only { display: table-row-group; }

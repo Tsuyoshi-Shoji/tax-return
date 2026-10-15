@@ -20,6 +20,14 @@ public interface AccountingTransactionRepository extends JpaRepository<Accountin
 
     long countByFiscalYearIdAndStatus(Long fiscalYearId, String status);
 
+    List<AccountingTransaction> findByFiscalYearIdAndSettlementStatus(Long fiscalYearId, String settlementStatus);
+
+    List<AccountingTransaction> findByFiscalYearIdAndSettlementStatusInOrderByTransactionDateAscIdAsc(
+            Long fiscalYearId,
+            List<String> settlementStatuses);
+
+    List<AccountingTransaction> findByFiscalYearIdOrderByTransactionDateAscIdAsc(Long fiscalYearId);
+
     @Query("""
             select tx
             from AccountingTransaction tx

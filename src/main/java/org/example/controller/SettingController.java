@@ -9,6 +9,7 @@ import org.example.features.setting.form.AccountActionForm;
 import org.example.features.setting.form.BusinessUseRatioForm;
 import org.example.features.setting.form.PasswordForm;
 import org.example.features.setting.form.ProfileForm;
+import org.example.features.setting.form.TaxBasicInfoForm;
 import org.example.features.setting.service.SettingService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
@@ -50,6 +51,11 @@ public class SettingController {
     @InitBinder("ratioForm")
     void bindRatio(WebDataBinder binder) {
         binder.setAllowedFields("ratio", "csrfToken");
+    }
+
+    @InitBinder("taxBasicInfoForm")
+    void bindTaxBasicInfo(WebDataBinder binder) {
+        binder.setAllowedFields("businessName", "industry", "phone", "address", "csrfToken");
     }
 
     @InitBinder({"disableForm", "deleteForm"})
@@ -95,6 +101,21 @@ public class SettingController {
         }
         model.addAttribute("passwordForm", new PasswordForm());
         return render(request, response, model, "password", result);
+    }
+
+    @PostMapping("/settings/tax-basic-info")
+    public String taxBasicInfo(
+            @ModelAttribute("taxBasicInfoForm") TaxBasicInfoForm form,
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Model model,
+            RedirectAttributes redirectAttributes) {
+        AuthUserContext context = authorize(request, form.getCsrfToken());
+        SettingOperationResult result = call(() -> settingService.updateTaxBasicInfo(context.getUserId(), form));
+        if (result.isSuccess()) {
+            return success(redirectAttributes, result);
+        }
+        return render(request, response, model, "taxBasicInfo", result);
     }
 
     @PostMapping("/settings/business-use-ratio")
@@ -160,6 +181,14 @@ public class SettingController {
         }
         if (!model.containsAttribute("passwordForm")) {
             model.addAttribute("passwordForm", new PasswordForm());
+        }
+        if (!model.containsAttribute("taxBasicInfoForm")) {
+            TaxBasicInfoForm taxBasicInfoForm = new TaxBasicInfoForm();
+            taxBasicInfoForm.setBusinessName(view.getBusinessName());
+            taxBasicInfoForm.setIndustry(view.getIndustry());
+            taxBasicInfoForm.setPhone(view.getPhone());
+            taxBasicInfoForm.setAddress(view.getAddress());
+            model.addAttribute("taxBasicInfoForm", taxBasicInfoForm);
         }
         if (!model.containsAttribute("ratioForm")) {
             BusinessUseRatioForm ratioForm = new BusinessUseRatioForm();

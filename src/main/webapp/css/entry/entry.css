@@ -56,6 +56,13 @@
     margin-bottom: 18px;
 }
 
+.entry-topbar {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
 .entry-breadcrumb ol {
     list-style: none;
     display: flex;
@@ -110,7 +117,7 @@
     color: #0d1a54;
 }
 
-#page-description {
+.entry-page-description {
     margin-top: 10px;
     color: #425e93;
     font-size: clamp(18px, 1.2vw, 20px);
@@ -161,6 +168,466 @@
 
 .entry-form {
     min-width: 0;
+}
+
+.entry-page [hidden] {
+    display: none !important;
+}
+
+/* ---------- 登録モード切替（セグメントボタン） ---------- */
+.entry-mode-switch {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px 12px;
+    margin: 0 0 18px auto;
+}
+
+.entry-mode-switch-label {
+    color: #5872a0;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.entry-mode-segment {
+    display: inline-flex;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--entry-border);
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: 0 4px 14px rgba(38, 89, 149, 0.06);
+}
+
+.entry-mode-option {
+    position: relative;
+    display: inline-flex;
+    cursor: pointer;
+}
+
+.entry-mode-input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.entry-mode-option-text {
+    display: inline-flex;
+    align-items: center;
+    min-height: 38px;
+    padding: 0 18px;
+    border-radius: 999px;
+    color: #425e93;
+    font-size: 15px;
+    font-weight: 700;
+    white-space: nowrap;
+    transition: background-color .2s ease, color .2s ease, box-shadow .2s ease;
+}
+
+.entry-mode-option:hover .entry-mode-option-text {
+    background: #f0f6ff;
+}
+
+.entry-mode-input:checked + .entry-mode-option-text {
+    background: var(--entry-accent);
+    color: #fff;
+    box-shadow: 0 4px 10px rgba(25, 113, 245, 0.25);
+}
+
+.entry-mode-input:focus-visible + .entry-mode-option-text {
+    outline: 3px solid #185dc4;
+    outline-offset: 2px;
+}
+
+.entry-mode-switch .entry-field-error {
+    flex-basis: 100%;
+    min-height: 0;
+    margin-top: 0;
+    text-align: right;
+}
+
+.entry-mode-switch .entry-field-error:empty {
+    display: none;
+}
+
+.entry-mode-panel[hidden] {
+    display: none;
+}
+
+/* ---------- カードヘッダー ---------- */
+.entry-card-heading {
+    min-width: 0;
+}
+
+.entry-card-title-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+}
+
+.entry-mode-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 0 14px;
+    border-radius: 999px;
+    background: #e3f0ff;
+    color: var(--entry-accent);
+    font-size: 15px;
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+.entry-card-header-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+    flex-shrink: 0;
+}
+
+.entry-button-outline {
+    border: 1px solid var(--entry-accent);
+    background: #fff;
+    color: var(--entry-accent);
+}
+
+.entry-button-outline:hover:not(:disabled) {
+    background: #f0f6ff;
+}
+
+.entry-button.entry-button-add {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 46px;
+    padding: 0 24px;
+    font-size: 16px;
+    white-space: nowrap;
+}
+
+.entry-button-icon {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    flex: 0 0 20px;
+    background-color: currentColor;
+}
+
+.entry-button-icon-plus {
+    -webkit-mask: url("../icons/plus.svg") center / contain no-repeat;
+    mask: url("../icons/plus.svg") center / contain no-repeat;
+}
+
+.entry-button-icon-trash {
+    width: 18px;
+    height: 18px;
+    flex-basis: 18px;
+    -webkit-mask: url("../icons/trash.svg") center / contain no-repeat;
+    mask: url("../icons/trash.svg") center / contain no-repeat;
+}
+
+.entry-button-muted {
+    border: 1px solid #e1e6ef;
+    background: #eef1f6;
+    color: #16205f;
+}
+
+.entry-button-muted:hover:not(:disabled) {
+    background: #e2e7f0;
+}
+
+.entry-button.entry-button-muted:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
+/* ---------- 月間一括登録モード ---------- */
+.entry-monthly-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    margin-bottom: 14px;
+}
+
+.entry-monthly-toolbar-label {
+    margin: 0;
+    color: #0f1c55;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.entry-page .entry-monthly-toolbar input[type="month"] {
+    width: 210px;
+    min-height: 44px;
+    padding: 0 14px;
+    font-size: 16px;
+}
+
+.entry-monthly-toolbar .entry-field-error,
+.entry-monthly-rows-error {
+    min-height: 0;
+    margin: 0;
+}
+
+.entry-monthly-toolbar .entry-field-error:empty,
+.entry-monthly-rows-error:empty {
+    display: none;
+}
+
+.entry-monthly-rows-error {
+    margin-bottom: 10px;
+}
+
+.entry-monthly-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    border: 1px solid #e3e8f0;
+    border-radius: 8px;
+    background: #fff;
+    -webkit-overflow-scrolling: touch;
+}
+
+.entry-monthly-rows {
+    min-width: 1340px;
+}
+
+.entry-monthly-row {
+    padding: 14px 16px 12px;
+    border-bottom: 1px solid #eceff4;
+}
+
+.entry-monthly-row:last-child {
+    border-bottom: 0;
+}
+
+.entry-monthly-grid {
+    display: grid;
+    grid-template-columns: 220px 170px 156px 150px minmax(450px, 1fr) 92px;
+    grid-template-areas:
+        "type item date amount method ."
+        "options details details details details remove"
+        "errors errors errors errors errors errors";
+    gap: 10px 14px;
+    align-items: start;
+}
+
+.entry-monthly-field {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.entry-monthly-field > legend {
+    float: left;
+    width: 100%;
+}
+
+.entry-monthly-field > legend + * {
+    clear: both;
+}
+
+.entry-monthly-field-type { grid-area: type; }
+.entry-monthly-field-item { grid-area: item; }
+.entry-monthly-field-date { grid-area: date; }
+.entry-monthly-field-amount { grid-area: amount; }
+.entry-monthly-field-method { grid-area: method; }
+
+.entry-monthly-label {
+    display: block;
+    margin: 0 0 6px;
+    padding: 0;
+    color: #223667;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.4;
+}
+
+.entry-monthly-choices {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 4px 12px;
+    min-height: 40px;
+}
+
+.entry-monthly-row .entry-radio-compact,
+.entry-monthly-row .entry-check-compact {
+    gap: 6px;
+    min-height: 32px;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.entry-monthly-row .entry-radio-compact input {
+    width: 18px;
+    height: 18px;
+    border-width: 1.5px;
+}
+
+.entry-monthly-row .entry-radio-compact input::after {
+    inset: 3px;
+}
+
+.entry-monthly-row .entry-check-compact input {
+    width: 18px;
+    height: 18px;
+    border-width: 1.5px;
+    border-radius: 4px;
+}
+
+.entry-monthly-row .entry-check-compact input:checked::after {
+    left: 5px;
+    top: 1px;
+    width: 5px;
+    height: 10px;
+    border-width: 0 2px 2px 0;
+}
+
+.entry-page .entry-monthly-row select,
+.entry-page .entry-monthly-row input[type="date"],
+.entry-page .entry-monthly-row input[type="text"] {
+    min-height: 40px;
+    padding: 0 12px;
+    border-radius: 6px;
+    font-size: 15px;
+}
+
+.entry-page .entry-monthly-row select {
+    padding-right: 34px;
+    background-position: right 10px center;
+    background-size: 14px;
+    text-overflow: ellipsis;
+}
+
+.entry-page .entry-monthly-row input[type="date"] {
+    padding-right: 8px;
+}
+
+.entry-monthly-row .entry-amount-wrap {
+    grid-template-columns: minmax(0, 1fr) 40px;
+}
+
+.entry-monthly-row .entry-amount-wrap input {
+    border-radius: 6px 0 0 6px;
+    text-align: right;
+}
+
+.entry-monthly-row .entry-amount-suffix {
+    min-height: 40px;
+    border-radius: 0 6px 6px 0;
+    font-size: 15px;
+}
+
+.entry-monthly-field-options {
+    grid-area: options;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-height: 40px;
+}
+
+.entry-monthly-field-details {
+    grid-area: details;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 0;
+    margin: 0;
+}
+
+.entry-monthly-label-inline {
+    flex: 0 0 auto;
+    color: #223667;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.entry-monthly-field-details input {
+    flex: 1 1 auto;
+}
+
+.entry-button.entry-monthly-remove {
+    grid-area: remove;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 0 12px;
+    font-size: 15px;
+}
+
+.entry-monthly-errors {
+    grid-area: errors;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 16px;
+}
+
+.entry-monthly-errors:not(:has(.entry-field-error:not(:empty))) {
+    display: none;
+}
+
+.entry-monthly-errors .entry-field-error {
+    min-height: 0;
+    margin: 0;
+    font-size: 13px;
+}
+
+.entry-monthly-errors .entry-field-error:empty {
+    display: none;
+}
+
+.entry-monthly-row [aria-invalid="true"] {
+    border-color: var(--entry-error);
+}
+
+.entry-monthly-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    margin-top: 18px;
+    padding-top: 18px;
+    border-top: 1px solid #dce8f6;
+}
+
+.entry-monthly-count {
+    color: #425e93;
+    font-size: 16px;
+}
+
+.entry-monthly-count strong {
+    margin: 0 2px;
+    color: #0f1c55;
+    font-size: 20px;
+    font-variant-numeric: tabular-nums;
+}
+
+.entry-monthly-buttons {
+    display: flex;
+    gap: 16px;
+}
+
+.entry-monthly-buttons .entry-button {
+    min-width: 180px;
+    min-height: 50px;
+    padding: 0 24px;
+}
+
+.entry-monthly-buttons .entry-button-primary {
+    min-width: 230px;
 }
 
 .entry-grid {
@@ -283,6 +750,7 @@
 }
 
 .entry-page input[type="date"],
+.entry-page input[type="month"],
 .entry-page input[type="text"],
 .entry-page select,
 .entry-page textarea {
@@ -299,6 +767,7 @@
 
 .entry-page select,
 .entry-page input[type="date"],
+.entry-page input[type="month"],
 .entry-page input[type="text"] {
     min-height: 52px;
     padding: 0 18px;
@@ -634,6 +1103,16 @@
         margin-bottom: 24px;
     }
 
+    .entry-topbar {
+        flex-direction: column;
+    }
+
+    .entry-mode-switch-top {
+        width: 100%;
+        min-width: 0;
+        margin-left: 0;
+    }
+
     .entry-row {
         grid-template-columns: 1fr;
         gap: 6px;
@@ -748,6 +1227,33 @@
     .entry-confirmation-list > div {
         grid-template-columns: 1fr;
         gap: 6px;
+    }
+
+    .entry-mode-segment {
+        width: 100%;
+    }
+
+    .entry-mode-option {
+        flex: 1 1 0;
+    }
+
+    .entry-mode-option-text {
+        justify-content: center;
+        width: 100%;
+        padding: 0 10px;
+        font-size: 14px;
+    }
+
+    .entry-monthly-actions,
+    .entry-monthly-buttons {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .entry-monthly-buttons .entry-button,
+    .entry-monthly-buttons .entry-button-primary {
+        min-width: 0;
+        width: 100%;
     }
 
     .entry-preview-formula {

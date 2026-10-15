@@ -6,6 +6,7 @@ import org.example.features.setting.form.AccountActionForm;
 import org.example.features.setting.form.BusinessUseRatioForm;
 import org.example.features.setting.form.PasswordForm;
 import org.example.features.setting.form.ProfileForm;
+import org.example.features.setting.form.TaxBasicInfoForm;
 
 public interface SettingService {
     SettingView load(Long appUserId);
@@ -13,6 +14,8 @@ public interface SettingService {
     SettingOperationResult updateProfile(Long appUserId, ProfileForm form);
 
     SettingOperationResult changePassword(Long appUserId, PasswordForm form);
+
+    SettingOperationResult updateTaxBasicInfo(Long appUserId, TaxBasicInfoForm form);
 
     SettingOperationResult updateBusinessUseRatio(Long appUserId, BusinessUseRatioForm form);
 

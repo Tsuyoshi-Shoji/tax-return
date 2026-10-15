@@ -17,6 +17,7 @@ import org.example.features.entry.EntryKind;
 import org.example.features.entry.EntryNotFoundException;
 import org.example.features.entry.EntryPageData;
 import org.example.features.entry.form.EntryForm;
+import org.example.features.entry.form.MonthlyExpenseRowForm;
 import org.example.features.entry.service.EntryPrepareResult;
 import org.example.features.entry.service.EntrySaveResult;
 import org.example.features.entry.service.EntryService;
@@ -68,6 +69,16 @@ public class EntryController {
                 "excludeFromReturn",
                 "homeApportionment",
                 "details",
+                "entryMode",
+                "targetMonth",
+                "monthlyRows[*].expenseType",
+                "monthlyRows[*].category",
+                "monthlyRows[*].date",
+                "monthlyRows[*].amount",
+                "monthlyRows[*].paymentMethodId",
+                "monthlyRows[*].excludeFromReturn",
+                "monthlyRows[*].homeApportionment",
+                "monthlyRows[*].details",
                 "csrfToken",
                 "submissionToken",
                 "confirmationToken");
@@ -336,6 +347,23 @@ public class EntryController {
     }
 
     private String hashRawForm(EntryKind kind, Long userId, EntryForm form) {
+        StringBuilder monthlyRowsHash = new StringBuilder();
+        if (form.getMonthlyRows() != null) {
+            for (MonthlyExpenseRowForm row : form.getMonthlyRows()) {
+                if (row == null) {
+                    monthlyRowsHash.append("<null-row>|\n");
+                    continue;
+                }
+                monthlyRowsHash.append(nullToEmpty(row.getExpenseType())).append('|')
+                        .append(nullToEmpty(row.getCategory())).append('|')
+                        .append(nullToEmpty(row.getDate())).append('|')
+                        .append(nullToEmpty(row.getAmount())).append('|')
+                        .append(nullToEmpty(row.getPaymentMethodId())).append('|')
+                        .append(row.isExcludeFromReturn()).append('|')
+                        .append(row.isHomeApportionment()).append('|')
+                        .append(nullToEmpty(row.getDetails())).append("\n");
+            }
+        }
         String payload = String.join("|",
                 kind.getCode(),
                 String.valueOf(userId),
@@ -351,6 +379,9 @@ public class EntryController {
                 String.valueOf(form.isExcludeFromReturn()),
                 String.valueOf(form.isHomeApportionment()),
                 nullToEmpty(form.getDetails()),
+                nullToEmpty(form.getEntryMode()),
+                nullToEmpty(form.getTargetMonth()),
+                monthlyRowsHash.toString(),
                 nullToEmpty(form.getConfirmationToken()));
         try {
             return java.util.Base64.getUrlEncoder().withoutPadding()

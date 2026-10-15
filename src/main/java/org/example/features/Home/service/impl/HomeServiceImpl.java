@@ -108,7 +108,7 @@ public class HomeServiceImpl implements HomeService {
         List<RecentTransactionDto> recent = tx.stream()
                 .map(t -> new RecentTransactionDto(
                         t.getTransactionDate(),
-                        "income".equalsIgnoreCase(t.getTransactionType()) ? "収益" : "支出",
+                        resolveTransactionTypeLabel(t.getTransactionType()),
                         t.getTransactionType(),
                         t.getSummary(),
                         t.getTotalAmount()))
@@ -143,5 +143,24 @@ public class HomeServiceImpl implements HomeService {
 
     private LocalDate minDate(LocalDate a, LocalDate b) {
         return a.isBefore(b) ? a : b;
+    }
+
+    private String resolveTransactionTypeLabel(String transactionType) {
+        if (transactionType == null || transactionType.isBlank()) {
+            return "取引";
+        }
+        if ("INCOME".equalsIgnoreCase(transactionType) || "income".equalsIgnoreCase(transactionType)) {
+            return "収益";
+        }
+        if ("OUTGO".equalsIgnoreCase(transactionType) || "expense".equalsIgnoreCase(transactionType)) {
+            return "支出";
+        }
+        if ("TRANSFER".equalsIgnoreCase(transactionType)) {
+            return "資金移動";
+        }
+        if ("ADJUSTMENT".equalsIgnoreCase(transactionType)) {
+            return "調整";
+        }
+        return "取引";
     }
 }
