@@ -4,9 +4,12 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: read
+
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(vars.EC2_DEPLOY_RUNNER || '"ubuntu-latest"') }}
     env:
       APP_NAME: final-tax-return-1.0-SNAPSHOT
       APP_CONTEXT_PATH: /final-tax-return-1.0-SNAPSHOT
@@ -37,26 +40,26 @@ jobs:
       - name: Resolve deployment target
         id: target
         shell: bash
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
         run: |
-          HOST='${{ secrets.EC2_HOST }}'
+          HOST="$EC2_HOST"
           HOST="${HOST#[}"
           HOST="${HOST%]}"
-
-          if [[ "$HOST" == *:* ]]; then
-            CURL_HOST="[$HOST]"
-          else
-            CURL_HOST="$HOST"
+          if [[ ! "$HOST" =~ ^[a-zA-Z0-9.:-]+$ ]] || [[ "$HOST" == -* ]]; then
+            echo "EC2_HOST must be an IP address or hostname, without a port or URL"
+            exit 1
           fi
 
           echo "host=$HOST" >> "$GITHUB_OUTPUT"
-          echo "base_url=http://$CURL_HOST:${APP_PORT}${APP_CONTEXT_PATH}" >> "$GITHUB_OUTPUT"
-          echo "health_url=http://$CURL_HOST:${APP_PORT}/" >> "$GITHUB_OUTPUT"
+          echo "base_url=https://10.77.0.1${APP_CONTEXT_PATH}" >> "$GITHUB_OUTPUT"
 
-      - name: Deploy via SSH
+      - name: Deploy and verify via SSH
         shell: bash
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_PRIVATE_KEY: ${{ secrets.EC2_PRIVATE_KEY }}
+          EC2_KNOWN_HOSTS: ${{ secrets.EC2_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
 
@@ -67,43 +70,50 @@ jobs:
 
           SSH_HOST="${EC2_HOST#[}"
           SSH_HOST="${SSH_HOST%]}"
-
-          mkdir -p ~/.ssh
-          KEY_FILE="$HOME/.ssh/ec2_deploy_key"
-          KNOWN_HOSTS="$HOME/.ssh/known_hosts"
-
-          printf '%s\n' "$EC2_PRIVATE_KEY" > "$KEY_FILE"
-          chmod 600 "$KEY_FILE"
-          : > "$KNOWN_HOSTS"
+          if [ -z "${EC2_PRIVATE_KEY:-}" ] || [ -z "${EC2_KNOWN_HOSTS:-}" ]; then
+            echo "EC2_PRIVATE_KEY and EC2_KNOWN_HOSTS secrets must be set"
+            exit 1
+          fi
 
           ADDRESS_FAMILY="any"
           if [[ "$SSH_HOST" == *:* ]]; then
             ADDRESS_FAMILY="inet6"
-            ssh-keyscan -6 -H "$SSH_HOST" >> "$KNOWN_HOSTS" 2>/dev/null
-          else
-            ssh-keyscan -H "$SSH_HOST" >> "$KNOWN_HOSTS" 2>/dev/null
+            if ! ip -6 route get "$SSH_HOST" > /dev/null 2>&1; then
+              echo "No IPv6 route to EC2. Configure EC2_DEPLOY_RUNNER for an IPv6-capable runner, or use a reachable IPv4 EC2_HOST."
+              exit 1
+            fi
           fi
 
-          cat > "$HOME/.ssh/config" <<EOF
+          umask 077
+          SSH_DIR=$(mktemp -d "${RUNNER_TEMP}/ec2-ssh.XXXXXX")
+          trap 'rm -rf "$SSH_DIR"' EXIT
+          KEY_FILE="$SSH_DIR/key"
+          KNOWN_HOSTS="$SSH_DIR/known_hosts"
+          printf '%s\n' "$EC2_PRIVATE_KEY" > "$KEY_FILE"
+          printf '%s\n' "$EC2_KNOWN_HOSTS" > "$KNOWN_HOSTS"
+
+          cat > "$SSH_DIR/config" <<EOF
           Host ec2-deploy
             HostName $SSH_HOST
             User ec2-user
-            IdentityFile $KEY_FILE
+            IdentityFile "$KEY_FILE"
             IdentitiesOnly yes
-            UserKnownHostsFile $KNOWN_HOSTS
+            UserKnownHostsFile "$KNOWN_HOSTS"
             StrictHostKeyChecking yes
+            BatchMode yes
+            ConnectTimeout 15
             AddressFamily $ADDRESS_FAMILY
           EOF
-          chmod 600 "$HOME/.ssh/config"
 
-          ssh ec2-deploy 'bash -lc "set -euo pipefail; source /opt/db-credentials.env; sudo /opt/deploy.sh"'
+          ssh -F "$SSH_DIR/config" ec2-deploy 'sudo -n /opt/deploy.sh'
 
-      - name: Verify Deployment
-        run: |
+          ssh -F "$SSH_DIR/config" ec2-deploy bash -s -- "$APP_PORT" "$APP_CONTEXT_PATH" <<'REMOTE'
+          set -euo pipefail
+          HEALTH_URL="http://127.0.0.1:${1}${2}/login"
           echo "Waiting for application startup..."
           sleep 15
           for i in {1..10}; do
-            HTTP_CODE=$(curl -g -s -o /dev/null -w "%{http_code}" "${{ steps.target.outputs.health_url }}" || echo "000")
+            HTTP_CODE=$(curl --noproxy '*' --connect-timeout 5 --max-time 10 -s -o /dev/null -w "%{http_code}" "$HEALTH_URL") || HTTP_CODE="000"
 
             if [ "$HTTP_CODE" = "200" ]; then
               echo "✓ Application is healthy (HTTP $HTTP_CODE)"
@@ -116,6 +126,7 @@ jobs:
 
           echo "❌ Application verification failed"
           exit 1
+          REMOTE
 
       - name: Deployment Summary
         if: always()
