@@ -100,11 +100,8 @@ fi
 # ============================================================
 log_section "Step 4: Stopping Tomcat"
 
-if pgrep -u tomcat -f "org.apache.catalina.startup.Bootstrap" > /dev/null; then
-  log "Stopping Tomcat..."
-  runuser -u tomcat -- "$TOMCAT_HOME/bin/catalina.sh" stop 60 -force 2>&1 | tail -3 >> "$DEPLOY_LOG"
-  sleep 5
-fi
+log "Stopping Tomcat via systemd..."
+systemctl stop tomcat.service 2>&1 | tee -a "$DEPLOY_LOG"
 
 if pgrep -u tomcat -f "org.apache.catalina.startup.Bootstrap" > /dev/null; then
   log_error "Tomcat did not stop cleanly"
@@ -140,14 +137,12 @@ log "✓ WAR deployed"
 # ============================================================
 log_section "Step 7: Starting Tomcat"
 
-rm -f "$TOMCAT_HOME/logs/catalina.out"
-cd "$TOMCAT_HOME"
-runuser -u tomcat -- "$TOMCAT_HOME/bin/catalina.sh" start 2>&1 | tail -3 >> "$DEPLOY_LOG"
+systemctl start tomcat.service 2>&1 | tee -a "$DEPLOY_LOG"
 
 sleep 15
 
-if ! pgrep -f "java.*tomcat" > /dev/null; then
-  log_error "Tomcat process not found after startup"
+if ! systemctl is-active --quiet tomcat.service; then
+  log_error "Tomcat service is not active after startup"
   exit 1
 fi
 

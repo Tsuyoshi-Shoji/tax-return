@@ -56,7 +56,7 @@ tail -f /var/log/setup-ec2.log
 - **実行時間**: 約 2-5 分
 - **前提条件**:
   - Java 21・Maven インストール済み
-  - Tomcat 起動可能な状態
+  - systemd の `tomcat.service` が設定済みで起動可能な状態
   - MySQL 起動中
 
 #### 実行方法
@@ -71,19 +71,39 @@ ssh -i key.pem ec2-user@HOST 'sudo /opt/deploy.sh'
 #### 実行内容
 - リポジトリ pull
 - Maven build（テストスキップ）
-- Tomcat 停止
+- systemd 経由で Tomcat 停止（残存プロセスがあればデプロイ中断）
 - 古い WAR ファイル削除
 - 新しい WAR ファイルデプロイ
-- Tomcat 起動
+- systemd 経由で Tomcat 起動・サービスの稼働確認
 - Flyway のバージョン管理済み DB マイグレーション適用後、Hibernate でスキーマ検証
 - アプリケーションのログイン画面をヘルスチェック（最大 30 回、2 秒間隔）
 
 DB マイグレーションは `src/main/resources/db/migration` にバージョン順で追加します。既存データベースを破壊する変更を追加せず、起動時に Hibernate の自動更新も行いません。
 
+起動・停止は `systemctl` に統一し、`catalina.sh start/stop` を直接併用しないでください。
+`Type=simple` / `catalina.sh run` のサービスはPIDファイルを更新しないため、古いPIDファイルを使った直接停止は失敗することがあります。
+サービス操作のエラーはデプロイログと GitHub Actions の両方に出力されます。
+
+#### 既存ホストへのスクリプト更新
+
+リポジトリ側の変更だけでは、配置済みの `/opt/deploy.sh` は更新されません。
+修正のコミット・push後、ホストのリポジトリを更新し、内容を確認してから配置してください。
+デプロイは未コミット変更があると中断します。
+
+```bash
+bash -n scripts/deploy.sh
+sudo cp -p /opt/deploy.sh "/opt/deploy.sh.$(date +%Y%m%d-%H%M%S).bak"
+sudo install -o root -g root -m 0755 scripts/deploy.sh /opt/deploy.sh
+sudo cmp scripts/deploy.sh /opt/deploy.sh
+```
+
+この配置操作ではサービスを再起動しません。サービス定義やPIDファイルの変更も不要です。
+デプロイ時の停止・起動は既存の `tomcat.service` の設定に従います。
+
 #### ログ確認
 ```bash
 tail -f /var/log/deploy.log
-tail -f /opt/tomcat/logs/catalina.out
+sudo journalctl -u tomcat.service -n 100 --no-pager
 ```
 
 #### トラブルシューティング
@@ -98,6 +118,11 @@ sudo systemctl status tomcat
 
 # アプリケーションのヘルスチェック
 curl -i http://localhost:8080/final-tax-return-1.0-SNAPSHOT/login
+```
+
+#### 回帰テスト（サービスの停止・起動は行わない）
+```bash
+python3 -B -m unittest discover -s scripts/ci -p 'test_deploy.py' -v
 ```
 
 ---
