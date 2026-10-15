@@ -489,7 +489,7 @@
             const typeSelect = row.querySelector(".monthly-expense-type");
             const categorySelect = row.querySelector(".monthly-category");
             if (!typeSelect || !categorySelect) return;
-            const selectedType = (typeSelect.value || "").trim();
+            const selectedType = getCheckedValue(row, ".monthly-expense-type");
             const previousValue = resetSelection ? "" : (categorySelect.value || categorySelect.dataset.selected || "").trim();
             const fragment = document.createDocumentFragment();
             const placeholder = document.createElement("option");
