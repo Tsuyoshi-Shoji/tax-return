@@ -65,6 +65,7 @@
 .tr-pl tfoot th, .tr-pl tfoot td { background: #eef5ff; color: #1971f5; font-weight: 800; border-bottom: 0; }
 
 .tr-two-col { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; align-items: start; }
+.tr-settlement-scroll { max-width: 100%; overflow-x: auto; }
 .tr-settlement { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; margin: 0; padding: 0; border: 0; }
 .tr-field { display: grid; grid-template-columns: 110px 1fr; align-items: center; border: 1px solid #e3edf9; border-radius: 6px; overflow: hidden; }
 .tr-field span { padding: 10px; background: #f5f9ff; font-size: 12px; color: #4b5d85; align-self: stretch; display: flex; align-items: center; }
@@ -133,11 +134,10 @@
 
     /* Keep each section in viewport; enable horizontal scroll inside section content only. */
     .tr-info-grid,
-    .tr-settlement,
+    .tr-settlement-scroll,
+    .tr-bs,
     .tr-checks,
-    .tr-output,
-    #section-profit-loss,
-    #section-balance-sheet {
+    .tr-output {
         overflow-x: auto;
         max-width: 100%;
     }
@@ -156,20 +156,20 @@
         display: flex;
         flex-wrap: nowrap;
         gap: 10px;
+        width: max-content;
+        min-width: 100%;
     }
 
     .tr-settlement .tr-field {
         flex: 0 0 280px;
     }
 
-    #section-profit-loss .tr-table {
-        min-width: 640px;
-    }
-
     .tr-bs {
         display: flex;
         flex-wrap: nowrap;
         gap: 12px;
+        width: max-content;
+        min-width: 100%;
     }
 
     .tr-bs > table {
@@ -184,6 +184,8 @@
         display: flex;
         flex-wrap: nowrap;
         gap: 10px;
+        width: max-content;
+        min-width: 100%;
     }
 
     .tr-check {
