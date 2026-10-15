@@ -80,7 +80,58 @@ public final class EntryBackendReviewHarness {
         verifyPartialMigrationIsReentrant(baseDir.resolve("partial"));
         verifyConcurrentClosureBlocksSave(baseDir.resolve("closure"));
         verifyConcurrentFinalizationBlocksSave(baseDir.resolve("finalize"));
+        verifyExpandedCatalogs(baseDir.resolve("catalogs"));
         System.out.println("Entry backend review harness passed");
+    }
+
+    private void verifyExpandedCatalogs(Path dbDir) throws Exception {
+        String url = createDbUrl(dbDir, "catalogs-db");
+        try (HarnessContext harness = openHarness(url)) {
+            seedCurrentAppData(harness);
+            EntryPageData incomePage = harness.entryService.loadPage(EntryKind.INCOME, USER_ID, null);
+            EntryPageData expensePage = harness.entryService.loadPage(EntryKind.EXPENSE, USER_ID, null);
+
+            assertCatalogItems(incomePage, "sales", List.of(
+                    "SES・準委任契約報酬", "受託システム開発", "IT講師・技術研修", "技術記事・コンテンツ制作",
+                    "自社サービス・SaaS利用料", "ソフトウェア・ライセンス販売", "広告・アフィリエイト収益", "その他売上"));
+            assertCatalogItems(incomePage, "misc", List.of(
+                    "補助金・助成金（事業関連）", "事業関連の保険金・補償金", "取引先からの謝礼金",
+                    "事業関連のキャッシュバック", "事業関連の雑収益", "その他雑収入"));
+            assertCatalogItems(incomePage, "other", List.of(
+                    "事業主借入金（事業主借）", "借入金入金", "預り金の受入",
+                    "立替金の回収", "誤入金・返金調整", "その他の資金移動"));
+            assertCatalogItems(expensePage, "expense", List.of(
+                    "クラウド利用料（AWS・Azure・GCP等）", "サーバー・ホスティング費用", "ドメイン取得・更新料",
+                    "SSL証明書・セキュリティサービス", "IDE・開発ツール利用料", "業務ツール利用料",
+                    "ソフトウェアライセンス購入費", "API利用料・従量課金", "データベース・ストレージ利用料",
+                    "デバイス購入", "周辺機器・ケーブル類", "デスク・チェア・オフィス家具", "文房具・事務用品",
+                    "機器修理・メンテナンス費", "通信料金", "電気料金", "ガス・水道料金", "事務所家賃",
+                    "自宅兼事務所家賃", "レンタルスペース利用料", "郵便・宅配料金", "交通費", "出張宿泊費",
+                    "駐車場・高速道路料金", "ガソリン代", "接待交際費", "贈答品費", "営業・会議費用",
+                    "展示会・イベント参加費", "広告宣伝費", "教材費", "オンライン学習サービス",
+                    "技術研修・セミナー受講費", "資格試験受験料", "資格更新料", "コミュニティ会費",
+                    "税理士・会計士報酬", "弁護士・専門家報酬", "業務委託・外注費", "振込・決済手数料",
+                    "事業用保険料", "租税公課（事業関連）", "借入金利息", "減価償却費",
+                    "法定福利費（従業員分）", "従業員福利厚生費", "青色事業専従者給与",
+                    "採用・求人広告費", "人材紹介手数料", "外部エンジニア委託費", "デザイン・制作外注費"));
+            assertCatalogItems(expensePage, "purchase", List.of(
+                    "商品仕入", "ソフトウェア仕入", "ハードウェア仕入", "販売用デジタルコンテンツ仕入",
+                    "原材料・部品仕入", "その他仕入"));
+            assertCatalogItems(expensePage, "other", List.of(
+                    "生活費", "娯楽費", "所得税・住民税の納付", "国民健康保険・国民年金",
+                    "借入金元本返済", "固定資産購入", "前払費用", "敷金・保証金", "立替金の支払い",
+                    "預り金の支払い", "誤出金・返金処理", "その他資金移動"));
+            require(java.util.stream.Stream.concat(incomePage.getItems().stream(), expensePage.getItems().stream())
+                    .noneMatch(item -> item.getLabel().contains("：")), "勘定処理の補足が選択肢に含まれています");
+        }
+    }
+
+    private void assertCatalogItems(EntryPageData page, String group, List<String> expectedLabels) {
+        List<String> labels = page.getItems().stream()
+                .filter(item -> group.equals(item.getGroup()))
+                .map(item -> item.getLabel())
+                .toList();
+        require(labels.containsAll(expectedLabels), "catalog items missing for " + group);
     }
 
     private void verifyLegacyMigrationAndVersionZeroEdit(Path dbDir) throws Exception {
