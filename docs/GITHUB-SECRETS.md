@@ -2,6 +2,18 @@
 
 GitHub Actions から EC2 へ SSH デプロイする場合に必要な認証情報を Secrets に登録します。
 
+## Runner と接続経路の前提
+
+`ubuntu-latest` から IPv6-only の EC2 への到達性を前提にしないでください。実行 `38569824233` では WAR のビルドは成功しましたが、IPv6 の `ssh-keyscan` が終了コード 1 を返し、標準エラーが破棄されていました。
+
+- IPv4 を使用する場合は、runner から到達可能な IPv4 / ホスト名を `EC2_HOST` に登録します。
+- IPv6-only または VPN 内の管理アドレスを使用する場合は、その接続先へ SSH 接続できる専用 Linux runner を用意します。**Settings → Actions → Runners** から登録し、`ec2-deploy` ラベルを付けます。**Settings → Secrets and variables → Actions → Variables** に `EC2_DEPLOY_RUNNER` を JSON 配列 `["self-hosted","linux","ec2-deploy"]` として登録します。未設定時は `"ubuntu-latest"` を使用します。
+- runner には Java 21、Maven、Git、OpenSSH、curl、iproute2 が必要です。IPv6 の経路、EC2 側の SSH 待受、セキュリティグループ・ホストファイアウォールの接続元制限を確認してください。runner の登録だけでは IPv6 / VPN 接続は提供されません。
+- runner は本番アプリや DB のホストとは分離し、信頼する `main` のデプロイ専用にアクセス制限します。外部 PR のコードを実行させず、可能ならジョブごとに破棄する構成を使用します。
+- TCP 80・443・8080・3306 を公開する必要はありません。デプロイ後の確認は SSH 経由で EC2 の `http://127.0.0.1:8080/final-tax-return-1.0-SNAPSHOT/login` に対して行います。利用者の接続先は [VPN 内 HTTPS](PRIVATE-ACCESS.md) です。
+
+この設定と以下の Secrets 登録は管理者が別途行う必要があります。変更を戻す場合はワークフローを戻し、専用 runner の登録・権限を解除します。復旧のためにアプリの公開ポートを開けないでください。
+
 ## 設定手順
 
 ### 1. EC2 キーペア情報取得
@@ -88,19 +100,25 @@ MIIEpAIBAAKCAQEA2xk7z8+...
 - 改行を含める
 - テキストの前後に余分なスペースを含めない
 
+#### Secret 3: EC2_KNOWN_HOSTS
+
+EC2 の SSH ホスト公開鍵を、`EC2_HOST` と同じ接続先表記の `known_hosts` エントリーとして登録します（IPv6 は角括弧なし）。管理済みの EC2 コンソール等で `/etc/ssh/ssh_host_ed25519_key.pub` とそのフィンガープリントを確認し、信頼済みの値を使用してください。接続時の未検証の `ssh-keyscan` 結果をそのまま信頼しないでください。
+
+```text
+<EC2_HOST> ssh-ed25519 <検証済みのホスト公開鍵>
+```
+
+検証済みエントリーを管理用端末の Git 管理外のファイルに保存して登録します：
+
+```bash
+gh secret set EC2_KNOWN_HOSTS < ~/.ssh/ec2-deploy-known_hosts
+```
+
+ホスト鍵の変更時は管理経路から正当性を再確認して更新します。`StrictHostKeyChecking` を無効化しないでください。
+
 ### 4. Secrets 検証
 
-登録後、GitHub Actions ワークフロー実行時に以下が確認できます：
-
-```yaml
-# .github/workflows/deploy-ec2.yml
-- name: Deploy via SSH
-  uses: appleboy/ssh-action@master
-  with:
-    host: ${{ secrets.EC2_HOST }}
-    username: ec2-user
-    key: ${{ secrets.EC2_PRIVATE_KEY }}
-```
+ワークフローの `Deploy and verify via SSH` は、ホスト鍵検証を有効にして `sudo -n /opt/deploy.sh` を実行します。EC2 側でこの管理済みスクリプトに限定したパスワード不要の sudo 許可が必要です。DB 認証情報は EC2 側のスクリプトで読み込むため、SSH ユーザーによる `/opt/db-credentials.env` の読み込みや GitHub へのコピーは不要です。SSH 鍵と設定はジョブの一時ディレクトリに作成され、終了時に削除されます。
 
 ### 5. キーペアのセキュリティ
 
@@ -204,7 +222,7 @@ gh secret set EC2_PRIVATE_KEY < ~/.ssh/your-key-pair.pem
 
 ### Q: "Host key verification failed"エラー
 
-**原因:** EC2_HOST が正しくない、またはホスト名に誤字
+**原因:** 接続先と `EC2_KNOWN_HOSTS` が一致しない、またはホスト鍵が変更された
 
 **対応:**
 ```bash
@@ -212,8 +230,8 @@ gh secret set EC2_PRIVATE_KEY < ~/.ssh/your-key-pair.pem
 aws ec2 describe-instances --instance-ids i-xxxxxxxxx \
   --query 'Reservations[0].Instances[0].PublicIpAddress'
 
-# GitHub Secrets を更新
-gh secret set EC2_HOST --body "正確なIP"
+# 管理済みの経路でホスト鍵と接続先を再確認して Secrets を更新
+gh secret set EC2_KNOWN_HOSTS < ~/.ssh/ec2-deploy-known_hosts
 ```
 
 ### Q: "Connection timed out"エラー
@@ -225,8 +243,8 @@ gh secret set EC2_HOST --body "正確なIP"
 # EC2 セキュリティグループを確認
 aws ec2 describe-security-groups --group-ids sg-xxxxxxxxx
 
-# SSH (22) インバウンドルール追加（GitHub Actions IP対応が必要）
-# または、0.0.0.0/0 で一時的に許可（本番非推奨）
+# 専用 runner の接続元だけに SSH (22) を許可
+# IPv6-only の場合は上記 EC2_DEPLOY_RUNNER 設定と IPv6 経路も確認
 ```
 
 ### Q: SSH キーペアのフォーマットエラー
