@@ -128,24 +128,28 @@
     .tr-section {
         padding: 16px 14px;
         overflow-x: hidden;
+        max-width: 100%;
     }
 
-    /* Keep section container within viewport; scroll inside content blocks only. */
+    /* Keep each section in viewport; enable horizontal scroll inside section content only. */
     .tr-info-grid,
-    .tr-bs,
     .tr-settlement,
     .tr-checks,
-    .tr-output {
+    .tr-output,
+    #section-profit-loss,
+    #section-balance-sheet {
         overflow-x: auto;
         max-width: 100%;
     }
 
-    .tr-info-grid > .tr-info,
-    .tr-bs > table,
-    .tr-bs > .tr-balance,
-    .tr-check,
-    .tr-output > .tr-btn {
-        min-width: 280px;
+    .tr-info-grid {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 12px;
+    }
+
+    .tr-info-grid > .tr-info {
+        flex: 0 0 320px;
     }
 
     .tr-settlement {
@@ -156,6 +160,42 @@
 
     .tr-settlement .tr-field {
         flex: 0 0 280px;
+    }
+
+    #section-profit-loss .tr-table {
+        min-width: 640px;
+    }
+
+    .tr-bs {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 12px;
+    }
+
+    .tr-bs > table {
+        flex: 0 0 420px;
+    }
+
+    .tr-bs > .tr-balance {
+        flex: 0 0 220px;
+    }
+
+    .tr-checks {
+        display: flex;
+        flex-wrap: nowrap;
+        gap: 10px;
+    }
+
+    .tr-check {
+        flex: 0 0 260px;
+    }
+
+    .tr-output {
+        flex-wrap: nowrap;
+    }
+
+    .tr-output > .tr-btn {
+        flex: 0 0 auto;
     }
 
     .tr-cards {
