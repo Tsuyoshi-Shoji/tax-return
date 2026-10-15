@@ -7,12 +7,12 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>確定申告 | マネタックス</title>
     <link rel="stylesheet" href="${ctx}/css/style.css?v=20261016a">
     <link rel="stylesheet" href="${ctx}/css/home/home.css?v=20261011c">
     <link rel="stylesheet" href="${ctx}/css/profit-loss/profit-loss.css?v=20261011d">
-    <link rel="stylesheet" href="${ctx}/css/tax-return/tax-return.css?v=20261016a">
+    <link rel="stylesheet" href="${ctx}/css/tax-return/tax-return.css?v=20261016b">
     <script src="${ctx}/css/tax-return/tax-return.js?v=20261011c" defer></script>
 </head>
 <body class="home-page profit-loss-page tax-return-page">
@@ -165,20 +165,22 @@
                 <section id="section-profit-loss" class="profit-loss-card tr-section print-section" data-print-groups="return profit-loss" aria-labelledby="heading-profit-loss-statement">
                     <h2 id="heading-profit-loss-statement">損益計算書</h2>
                     <p id="text-profit-loss-description" class="tr-desc"><c:out value="${page.yearLabel}" />の損益計算書の内訳です。</p>
-                    <table id="table-profit-loss-statement" class="tr-table tr-pl">
-                        <thead><tr><th scope="col">科目</th><th scope="col" class="num">金額（円）</th><th scope="col"><span class="visually-hidden">内訳</span></th></tr></thead>
-                        <tbody>
-                            <c:forEach var="r" items="${page.plRows}">
-                                <tr>
-                                    <th scope="row"><c:out value="${r.label}" /></th>
-                                    <td class="num"><fmt:formatNumber value="${r.amount}" pattern="#,##0" /></td>
-                                    <td class="link"><a class="link-profit-loss-detail" href="${ctx}/profit-loss">内訳 ›</a></td>
-                                </tr>
-                            </c:forEach>
-                            <c:if test="${empty page.plRows}"><tr><td colspan="3" class="empty">対象年度の損益データはありません。</td></tr></c:if>
-                        </tbody>
-                        <tfoot><tr><th scope="row">当期純利益</th><td class="num"><fmt:formatNumber value="${page.income}" pattern="#,##0" /></td><td></td></tr></tfoot>
-                    </table>
+                    <div class="tr-table-scroll">
+                        <table id="table-profit-loss-statement" class="tr-table tr-pl">
+                            <thead><tr><th scope="col">科目</th><th scope="col" class="num">金額（円）</th><th scope="col"><span class="visually-hidden">内訳</span></th></tr></thead>
+                            <tbody>
+                                <c:forEach var="r" items="${page.plRows}">
+                                    <tr>
+                                        <th scope="row"><c:out value="${r.label}" /></th>
+                                        <td class="num"><fmt:formatNumber value="${r.amount}" pattern="#,##0" /></td>
+                                        <td class="link"><a class="link-profit-loss-detail" href="${ctx}/profit-loss">内訳 ›</a></td>
+                                    </tr>
+                                </c:forEach>
+                                <c:if test="${empty page.plRows}"><tr><td colspan="3" class="empty">対象年度の損益データはありません。</td></tr></c:if>
+                            </tbody>
+                            <tfoot><tr><th scope="row">当期純利益</th><td class="num"><fmt:formatNumber value="${page.income}" pattern="#,##0" /></td><td></td></tr></tfoot>
+                        </table>
+                    </div>
                 </section>
 
                 <section id="section-settlement" class="profit-loss-card tr-section" aria-labelledby="heading-settlement-management">
@@ -187,17 +189,19 @@
                     <form id="settlement-form" method="post" action="${ctx}/tax-return/settlement?year=${page.selectedYear}" novalidate>
                         <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
                         <c:set var="s" value="${page.settlement}" />
-                        <fieldset class="tr-settlement" <c:if test="${page.closed}">disabled</c:if>>
-                            <label class="tr-field"><span>期首棚卸（円）</span><input name="openingInventory" inputmode="numeric" autocomplete="off" value="<c:out value='${s.openingInventory}' />" /></label>
-                            <label class="tr-field"><span>期末棚卸（円）</span><input name="closingInventory" inputmode="numeric" autocomplete="off" value="<c:out value='${s.closingInventory}' />" /></label>
-                            <label class="tr-field"><span>減価償却費（円）</span><input name="depreciation" inputmode="numeric" autocomplete="off" value="<c:out value='${s.depreciation}' />" /></label>
-                            <label class="tr-field"><span>売掛金（円）</span><input name="accountsReceivable" inputmode="numeric" autocomplete="off" value="<c:out value='${s.accountsReceivable}' />" /></label>
-                            <label class="tr-field"><span>買掛金（円）</span><input name="accountsPayable" inputmode="numeric" autocomplete="off" value="<c:out value='${s.accountsPayable}' />" /></label>
-                            <label class="tr-field"><span>未払金（円）</span><input name="unpaidExpenses" inputmode="numeric" autocomplete="off" value="<c:out value='${s.unpaidExpenses}' />" /></label>
-                            <label class="tr-field"><span>未収入金（円）</span><input name="unreceivedIncome" inputmode="numeric" autocomplete="off" value="<c:out value='${s.unreceivedIncome}' />" /></label>
-                            <label class="tr-field"><span>期首残高（円）</span><input name="openingBalance" inputmode="numeric" autocomplete="off" value="<c:out value='${s.openingBalance}' />" /></label>
-                            <label class="tr-field"><span>期末現預金（円）</span><input name="closingCash" inputmode="numeric" autocomplete="off" value="<c:out value='${s.closingCash}' />" /></label>
-                        </fieldset>
+                        <div class="tr-settlement-scroll">
+                            <fieldset class="tr-settlement" <c:if test="${page.closed}">disabled</c:if>>
+                                <label class="tr-field"><span>期首棚卸（円）</span><input name="openingInventory" inputmode="numeric" autocomplete="off" value="<c:out value='${s.openingInventory}' />" /></label>
+                                <label class="tr-field"><span>期末棚卸（円）</span><input name="closingInventory" inputmode="numeric" autocomplete="off" value="<c:out value='${s.closingInventory}' />" /></label>
+                                <label class="tr-field"><span>減価償却費（円）</span><input name="depreciation" inputmode="numeric" autocomplete="off" value="<c:out value='${s.depreciation}' />" /></label>
+                                <label class="tr-field"><span>売掛金（円）</span><input name="accountsReceivable" inputmode="numeric" autocomplete="off" value="<c:out value='${s.accountsReceivable}' />" /></label>
+                                <label class="tr-field"><span>買掛金（円）</span><input name="accountsPayable" inputmode="numeric" autocomplete="off" value="<c:out value='${s.accountsPayable}' />" /></label>
+                                <label class="tr-field"><span>未払金（円）</span><input name="unpaidExpenses" inputmode="numeric" autocomplete="off" value="<c:out value='${s.unpaidExpenses}' />" /></label>
+                                <label class="tr-field"><span>未収入金（円）</span><input name="unreceivedIncome" inputmode="numeric" autocomplete="off" value="<c:out value='${s.unreceivedIncome}' />" /></label>
+                                <label class="tr-field"><span>期首残高（円）</span><input name="openingBalance" inputmode="numeric" autocomplete="off" value="<c:out value='${s.openingBalance}' />" /></label>
+                                <label class="tr-field"><span>期末現預金（円）</span><input name="closingCash" inputmode="numeric" autocomplete="off" value="<c:out value='${s.closingCash}' />" /></label>
+                            </fieldset>
+                        </div>
                         <div class="tr-actions"><button id="button-save-settlement" type="submit" class="tr-btn tr-btn-primary" <c:if test="${page.closed}">disabled</c:if>>保存する</button></div>
                     </form>
                 </section>
