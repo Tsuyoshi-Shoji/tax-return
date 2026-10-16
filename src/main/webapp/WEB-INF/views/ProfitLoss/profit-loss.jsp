@@ -184,7 +184,14 @@
                                         <c:otherwise><span class="target-pill target-no">対象外</span></c:otherwise>
                                     </c:choose>
                                 </td>
-                                <td><a class="detail-link" href="${pageContext.request.contextPath}/profit-loss/detail?recordType=${row.recordType}&id=${row.id}">詳細</a></td>
+                                <td>
+                                    <c:url var="detailUrl" value="/profit-loss/detail">
+                                        <c:param name="recordType" value="${row.recordType}" />
+                                        <c:param name="id" value="${row.id}" />
+                                        <c:param name="returnQuery" value="${returnQuery}" />
+                                    </c:url>
+                                    <a class="detail-link" href="${detailUrl}">詳細</a>
+                                </td>
                             </tr>
                         </c:forEach>
                         <c:if test="${empty page.incomeRows}">
@@ -234,7 +241,14 @@
                                         <c:otherwise><span class="target-pill target-no">対象外</span></c:otherwise>
                                     </c:choose>
                                 </td>
-                                <td><a class="detail-link" href="${pageContext.request.contextPath}/profit-loss/detail?recordType=${row.recordType}&id=${row.id}">詳細</a></td>
+                                <td>
+                                    <c:url var="detailUrl" value="/profit-loss/detail">
+                                        <c:param name="recordType" value="${row.recordType}" />
+                                        <c:param name="id" value="${row.id}" />
+                                        <c:param name="returnQuery" value="${returnQuery}" />
+                                    </c:url>
+                                    <a class="detail-link" href="${detailUrl}">詳細</a>
+                                </td>
                             </tr>
                         </c:forEach>
                         <c:if test="${empty page.expenseRows}">

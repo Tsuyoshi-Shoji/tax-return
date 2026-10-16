@@ -22,6 +22,7 @@ public class EntryForm {
     private String csrfToken;
     private String submissionToken;
     private String confirmationToken;
+    private String returnQuery;
 
     public Long getEditId() {
         return editId;
@@ -169,5 +170,13 @@ public class EntryForm {
 
     public void setConfirmationToken(String confirmationToken) {
         this.confirmationToken = confirmationToken;
+    }
+
+    public String getReturnQuery() {
+        return returnQuery;
+    }
+
+    public void setReturnQuery(String returnQuery) {
+        this.returnQuery = returnQuery;
     }
 }

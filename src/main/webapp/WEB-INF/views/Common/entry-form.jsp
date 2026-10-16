@@ -91,6 +91,7 @@
             <input type="hidden" name="csrfToken" value="${fn:escapeXml(entryForm.csrfToken)}">
             <input type="hidden" name="submissionToken" value="${fn:escapeXml(entryForm.submissionToken)}">
             <input type="hidden" id="confirmation-token" name="confirmationToken" value="${fn:escapeXml(entryForm.confirmationToken)}">
+            <input type="hidden" name="returnQuery" value="${fn:escapeXml(entryForm.returnQuery)}">
 
             <section id="normal-mode-section" class="entry-mode-panel" <c:if test="${not isIncome and selectedEntryMode eq 'monthly'}">hidden</c:if>>
             <div class="entry-grid">
@@ -446,9 +447,13 @@
     </form>
 </dialog>
 <c:set var="entryActionLabel" value="${empty entryForm.editId ? '登録' : '更新'}" />
+<c:set var="entryListHref" value="${pageContext.request.contextPath}/profit-loss" />
+<c:if test="${not empty entryForm.returnQuery}">
+    <c:set var="entryListHref" value="${entryListHref}?${entryForm.returnQuery}" />
+</c:if>
 <jsp:include page="/WEB-INF/views/Common/app-dialog.jsp">
     <jsp:param name="errorTitle" value="${entryActionLabel}に失敗しました" />
     <jsp:param name="secondaryLabel" value="${empty entryForm.editId ? '続けて登録' : '閉じる'}" />
     <jsp:param name="primaryLabel" value="一覧へ" />
-    <jsp:param name="primaryHref" value="${pageContext.request.contextPath}/profit-loss" />
+    <jsp:param name="primaryHref" value="${entryListHref}" />
 </jsp:include>

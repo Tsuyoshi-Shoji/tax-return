@@ -1,6 +1,7 @@
 <%@ page contentType="text/html;charset=UTF-8" %>
 <%@ taglib prefix="c" uri="jakarta.tags.core" %>
 <%@ taglib prefix="fmt" uri="jakarta.tags.fmt" %>
+<%@ taglib prefix="fn" uri="jakarta.tags.functions" %>
 <fmt:setLocale value="ja_JP" scope="page" />
 <!DOCTYPE html>
 <html lang="ja">
@@ -91,13 +92,18 @@
                 </dl>
 
                 <div class="detail-actions">
-                    <a class="detail-back" href="${pageContext.request.contextPath}/profit-loss">一覧へ戻る</a>
+                    <a class="detail-back" href="${fn:escapeXml(pageContext.request.contextPath)}${fn:escapeXml(returnUrl)}">一覧へ戻る</a>
                     <c:if test="${detail.editable}">
-                        <a id="button-edit" class="btn-primary" href="${pageContext.request.contextPath}/${detail.recordType}?editId=${detail.id}">編集</a>
+                        <c:url var="editUrl" value="/${detail.recordType}">
+                            <c:param name="editId" value="${detail.id}" />
+                            <c:param name="searchQuery" value="${returnQuery}" />
+                        </c:url>
+                        <a id="button-edit" class="btn-primary" href="${editUrl}">編集</a>
                         <form id="delete-form" method="post" action="${pageContext.request.contextPath}/profit-loss/delete" data-confirm-message="このデータを削除します。よろしいですか？">
                             <input type="hidden" name="recordType" value="<c:out value='${detail.recordType}' />" />
                             <input type="hidden" name="id" value="${detail.id}" />
                             <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
+                            <input type="hidden" name="returnQuery" value="<c:out value='${returnQuery}' />" />
                             <button id="button-delete" type="submit" class="btn-danger">削除</button>
                         </form>
                     </c:if>

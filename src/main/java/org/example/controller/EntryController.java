@@ -1,5 +1,6 @@
 package org.example.controller;
 
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.ArrayList;
@@ -25,6 +26,7 @@ import org.example.features.entry.service.ValidatedEntryCommand;
 import org.example.features.entry.session.EntrySessionTokenManager;
 import org.example.features.entry.session.EntrySessionTokenManager.PreparedTokens;
 import org.example.features.entry.session.EntrySessionTokenManager.SubmissionDecision;
+import org.example.features.profitloss.form.ProfitLossSearchState;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
@@ -81,27 +83,30 @@ public class EntryController {
                 "monthlyRows[*].details",
                 "csrfToken",
                 "submissionToken",
-                "confirmationToken");
+                "confirmationToken",
+                "returnQuery");
     }
 
     @GetMapping("/income")
     public String showIncome(
             @RequestParam(value = "editId", required = false) Long editId,
+            @RequestParam(value = "searchQuery", required = false) String searchQuery,
             HttpServletRequest request,
             HttpServletResponse response,
             Model model,
             @ModelAttribute("successMessage") String successMessage) {
-        return renderGetPage(EntryKind.INCOME, editId, request, response, model, successMessage);
+        return renderGetPage(EntryKind.INCOME, editId, searchQuery, request, response, model, successMessage);
     }
 
     @GetMapping("/expense")
     public String showExpense(
             @RequestParam(value = "editId", required = false) Long editId,
+            @RequestParam(value = "searchQuery", required = false) String searchQuery,
             HttpServletRequest request,
             HttpServletResponse response,
             Model model,
             @ModelAttribute("successMessage") String successMessage) {
-        return renderGetPage(EntryKind.EXPENSE, editId, request, response, model, successMessage);
+        return renderGetPage(EntryKind.EXPENSE, editId, searchQuery, request, response, model, successMessage);
     }
 
     @PostMapping("/income")
@@ -129,6 +134,7 @@ public class EntryController {
     private String renderGetPage(
             EntryKind kind,
             Long editId,
+            String searchQuery,
             HttpServletRequest request,
             HttpServletResponse response,
             Model model,
@@ -136,6 +142,9 @@ public class EntryController {
         AuthUserContext context = requireContext(request);
         try {
             EntryPageData pageData = entryService.loadPage(kind, context.getUserId(), editId);
+            if (pageData.getEntryForm() != null) {
+                pageData.getEntryForm().setReturnQuery(ProfitLossSearchState.normalizeQuery(searchQuery));
+            }
             if (successMessage != null && !successMessage.isBlank()) {
                 pageData.setSuccessMessage(successMessage);
             }
@@ -157,6 +166,7 @@ public class EntryController {
         HttpSession session = request.getSession();
         applyNoStore(response);
         rejectSuppressedOrBindingErrors(bindingResult, request);
+        entryForm.setReturnQuery(ProfitLossSearchState.normalizeQuery(entryForm.getReturnQuery()));
         try {
             tokenManager.validateCsrf(session, kind, context.getUserId(), entryForm.getCsrfToken());
             tokenManager.validateSubmissionToken(session, kind, context.getUserId(), entryForm.getSubmissionToken());
@@ -173,6 +183,7 @@ public class EntryController {
             }
             EntryPrepareResult prepared = entryService.prepareSubmission(kind, context.getUserId(), entryForm);
             EntryPageData pageData = prepared.getPageData();
+            pageData.getEntryForm().setReturnQuery(entryForm.getReturnQuery());
             if (prepared.getValidatedEntry() == null) {
                 response.setStatus(pageData.getFailureMessage() == null ? HttpServletResponse.SC_BAD_REQUEST : HttpServletResponse.SC_CONFLICT);
                 return renderPage(kind, pageData, session, response, model, context, true);
@@ -198,6 +209,7 @@ public class EntryController {
                 }
                 try {
                     EntrySaveResult result = entryService.save(command);
+                    String redirectPath = withReturnQuery(result.getRedirectPath(), entryForm.getReturnQuery());
                     tokenManager.markCompleted(
                             session,
                             kind,
@@ -205,11 +217,11 @@ public class EntryController {
                             pageData.getEntryForm().getSubmissionToken(),
                             rawFormHash,
                             command.getPayloadHash(),
-                            result.getRedirectPath(),
+                            redirectPath,
                             result.getSuccessMessage());
                     redirectAttributes.addFlashAttribute("successMessage", result.getSuccessMessage());
                     logResult(context.getUserId(), kind, command.getEditId() == null ? "create" : "update", "success");
-                    return "redirect:" + result.getRedirectPath();
+                    return "redirect:" + redirectPath;
                 } catch (OptimisticLockingFailureException ex) {
                     logResult(context.getUserId(), kind, command.getEditId() == null ? "create" : "update", "stale");
                     pageData.getFieldErrors().putIfAbsent("version", "別の更新が行われたため、再読み込みしてください。");
@@ -234,6 +246,7 @@ public class EntryController {
         } catch (EntryForbiddenException ex) {
             try {
                 EntryPageData pageData = entryService.loadPage(kind, context.getUserId(), entryForm.getEditId());
+                pageData.getEntryForm().setReturnQuery(entryForm.getReturnQuery());
                 pageData.setFailureMessage(ex.getMessage());
                 response.setStatus(HttpServletResponse.SC_FORBIDDEN);
                 return renderPage(kind, pageData, session, response, model, context, false);
@@ -393,5 +406,13 @@ public class EntryController {
 
     private String nullToEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    private String withReturnQuery(String path, String returnQuery) {
+        if (returnQuery == null || returnQuery.isEmpty()) {
+            return path;
+        }
+        return path + (path.contains("?") ? "&" : "?")
+                + "searchQuery=" + URLEncoder.encode(returnQuery, StandardCharsets.UTF_8);
     }
 }
