@@ -1,5 +1,8 @@
 package org.example.controller;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.example.features.auth.AuthSessionAttributes;
@@ -10,6 +13,7 @@ import org.example.features.entry.EntryNotFoundException;
 import org.example.features.profitloss.dto.ProfitLossDetailDto;
 import org.example.features.profitloss.dto.ProfitLossPageData;
 import org.example.features.profitloss.form.ProfitLossSearchForm;
+import org.example.features.profitloss.form.ProfitLossSearchState;
 import org.example.features.profitloss.service.ProfitLossService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
@@ -50,6 +54,7 @@ public class ProfitLossController {
             model.addAttribute("activeMenu", "profit-loss");
             model.addAttribute("currentUserDisplayName", context.getDisplayName());
             model.addAttribute("currentUserEmail", context.getEmail());
+            model.addAttribute("returnQuery", ProfitLossSearchState.toQuery(page.getForm()));
             applyNoStore(response);
             return "ProfitLoss/profit-loss";
         } catch (SecurityException ex) {
@@ -61,6 +66,7 @@ public class ProfitLossController {
     public String detail(
             @RequestParam("recordType") String recordType,
             @RequestParam("id") Long id,
+            @RequestParam(value = "returnQuery", required = false) String returnQuery,
             HttpServletRequest request,
             HttpServletResponse response,
             Model model) {
@@ -69,6 +75,8 @@ public class ProfitLossController {
             ProfitLossDetailDto detail = profitLossService.loadDetail(context.getUserId(), recordType, id);
             model.addAttribute("detail", detail);
             model.addAttribute("csrfToken", csrfTokenManager.issue(request.getSession(), CSRF_SCOPE));
+            model.addAttribute("returnQuery", ProfitLossSearchState.normalizeQuery(returnQuery));
+            model.addAttribute("returnUrl", "/profit-loss" + querySuffix(returnQuery));
             model.addAttribute("activeMenu", "profit-loss");
             model.addAttribute("currentUserDisplayName", context.getDisplayName());
             model.addAttribute("currentUserEmail", context.getEmail());
@@ -84,6 +92,7 @@ public class ProfitLossController {
             @RequestParam("recordType") String recordType,
             @RequestParam("id") Long id,
             @RequestParam(value = "csrfToken", required = false) String csrfToken,
+            @RequestParam(value = "returnQuery", required = false) String returnQuery,
             HttpServletRequest request,
             RedirectAttributes redirectAttributes) {
         AuthUserContext context = currentUser(request);
@@ -93,13 +102,24 @@ public class ProfitLossController {
         try {
             profitLossService.delete(context.getUserId(), recordType, id);
             redirectAttributes.addFlashAttribute("flashMessage", "データを削除しました。");
-            return "redirect:/profit-loss";
+            return "redirect:/profit-loss" + querySuffix(returnQuery);
         } catch (EntryNotFoundException ex) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Not Found");
         } catch (EntryConflictException ex) {
             redirectAttributes.addFlashAttribute("flashError", ex.getMessage());
-            return "redirect:/profit-loss/detail?recordType=" + ("income".equals(recordType) ? "income" : "expense") + "&id=" + id;
+            return "redirect:/profit-loss/detail?recordType=" + ("income".equals(recordType) ? "income" : "expense")
+                    + "&id=" + id + returnQueryParameter(returnQuery);
         }
+    }
+
+    private String querySuffix(String query) {
+        String normalized = ProfitLossSearchState.normalizeQuery(query);
+        return normalized.isEmpty() ? "" : "?" + normalized;
+    }
+
+    private String returnQueryParameter(String query) {
+        String normalized = ProfitLossSearchState.normalizeQuery(query);
+        return normalized.isEmpty() ? "" : "&returnQuery=" + URLEncoder.encode(normalized, StandardCharsets.UTF_8);
     }
 
     private AuthUserContext currentUser(HttpServletRequest request) {
