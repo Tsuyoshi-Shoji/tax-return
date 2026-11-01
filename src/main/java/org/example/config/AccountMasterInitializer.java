@@ -4,6 +4,8 @@ import org.example.entity.BusinessProfile;
 import org.example.features.accounting.service.AccountMappingService;
 import org.example.features.taxreturn.service.ClosingJournalService;
 import org.example.repository.BusinessProfileRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.event.ContextRefreshedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class AccountMasterInitializer {
+    private static final Logger LOGGER = LoggerFactory.getLogger(AccountMasterInitializer.class);
     private final AccountMappingService accountMappingService;
     private final ClosingJournalService closingJournalService;
     private final BusinessProfileRepository businessProfileRepository;
@@ -28,10 +31,20 @@ public class AccountMasterInitializer {
 
     @EventListener(ContextRefreshedEvent.class)
     public void initialize() {
-        accountMappingService.ensureMasterData();
-        accountMappingService.backfillJournalAccountCodes();
+        // マスタ投入・仕訳の再生成は起動に必須ではないため、失敗してもアプリの起動を止めない（原因はログで確認する）。
+        run("ensureMasterData", accountMappingService::ensureMasterData);
+        run("backfillJournalAccountCodes", accountMappingService::backfillJournalAccountCodes);
         for (BusinessProfile profile : businessProfileRepository.findAll()) {
-            closingJournalService.rebuildOpenYears(profile.getId());
+            Long profileId = profile.getId();
+            run("rebuildOpenYears(businessProfileId=" + profileId + ")", () -> closingJournalService.rebuildOpenYears(profileId));
+        }
+    }
+
+    private static void run(String step, Runnable action) {
+        try {
+            action.run();
+        } catch (RuntimeException ex) {
+            LOGGER.error("Startup step failed: {}", step, ex);
         }
     }
 }
