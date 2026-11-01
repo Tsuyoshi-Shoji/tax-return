@@ -13,6 +13,8 @@
 <c:set var="methodLabel" value="${isIncome ? '受取方法' : '支払方法'}" />
 <c:set var="excludeLabel" value="${isIncome ? 'この収益を確定申告対象外にする' : 'この支出を確定申告対象外にする'}" />
 <c:set var="detailsLabel" value="${isIncome ? '収益詳細' : '支出詳細'}" />
+<c:set var="counterpartyLabel" value="${isIncome ? '取引先（支払者）' : '支払先'}" />
+<c:set var="counterpartyAddressLabel" value="${isIncome ? '取引先の所在地' : '支払先の所在地'}" />
 <c:set var="detailsRequiredMessage" value="${isIncome ? '収益詳細を入力してください。' : '支出詳細を入力してください。'}" />
 <c:set var="detailsLengthMessage" value="${isIncome ? '収益詳細は1〜255文字で入力してください。' : '支出詳細は1〜255文字で入力してください。'}" />
 <c:set var="dateRequiredMessage" value="${isIncome ? '収益発生日を選択してください。' : '支出発生日を選択してください。'}" />
@@ -139,6 +141,7 @@
                             <c:forEach var="item" items="${items}">
                                 <option value="${fn:escapeXml(item.id)}"
                                         data-group="${fn:escapeXml(item.group)}"
+                                        <c:if test="${not empty item.taxCategory}">data-tax-category="${fn:escapeXml(item.taxCategory)}"</c:if>
                                         <c:if test="${item.id eq entryForm.category}">data-selected="true"</c:if>><c:out value="${item.label}" /></option>
                             </c:forEach>
                         </select>
@@ -186,6 +189,48 @@
                     </div>
                 </div>
 
+                <c:if test="${isIncome}">
+                    <div class="entry-row" data-field-group="withholdingTax">
+                        <div class="entry-label-wrap">
+                            <label id="label-withholding-tax" for="withholding-tax">源泉徴収税額</label>
+                        </div>
+                        <div class="entry-control-wrap">
+                            <div class="entry-amount-wrap">
+                                <input id="withholding-tax"
+                                       type="text"
+                                       name="withholdingTax"
+                                       value="${empty entryForm.withholdingTax ? '0' : fn:escapeXml(entryForm.withholdingTax)}"
+                                       inputmode="numeric"
+                                       maxlength="32"
+                                       placeholder="例）10210"
+                                       aria-describedby="withholding-tax-note error-withholdingTax"
+                                       <c:if test="${not empty fieldErrors.withholdingTax}">aria-invalid="true"</c:if>>
+                                <span class="entry-amount-suffix" aria-hidden="true">円</span>
+                            </div>
+                            <p id="withholding-tax-note" class="entry-apportionment-note">売上・雑収入で報酬から源泉徴収された場合に入力します（金額は源泉徴収前の総額で入力）。その他区分では0円です。</p>
+                            <p id="error-withholdingTax" class="entry-field-error" data-error-for="withholdingTax"><c:out value="${fieldErrors.withholdingTax}" /></p>
+                        </div>
+                    </div>
+
+                    <div class="entry-row" data-field-group="taxCategory">
+                        <div class="entry-label-wrap">
+                            <label id="label-tax-category" for="tax-category">消費税区分</label>
+                        </div>
+                        <div class="entry-control-wrap">
+                            <select id="tax-category"
+                                    name="taxCategory"
+                                    aria-describedby="error-taxCategory"
+                                    <c:if test="${not empty fieldErrors.taxCategory}">aria-invalid="true"</c:if>>
+                                <option value="">項目に応じて自動設定</option>
+                                <c:forEach var="taxCategoryOption" items="${taxCategories}">
+                                    <option value="${fn:escapeXml(taxCategoryOption.id)}" <c:if test="${taxCategoryOption.id eq entryForm.taxCategory}">selected</c:if>><c:out value="${taxCategoryOption.label}" /></option>
+                                </c:forEach>
+                            </select>
+                            <p id="error-taxCategory" class="entry-field-error" data-error-for="taxCategory"><c:out value="${fieldErrors.taxCategory}" /></p>
+                        </div>
+                    </div>
+                </c:if>
+
                 <div class="entry-row" data-field-group="${fn:escapeXml(methodFieldName)}">
                     <div class="entry-label-wrap">
                         <label id="label-method" for="method-1"><c:out value="${methodLabel}" /> <span class="entry-required" aria-hidden="true">*</span></label>
@@ -206,6 +251,48 @@
                             </c:forEach>
                         </div>
                         <p id="error-${fn:escapeXml(methodFieldName)}" class="entry-field-error" data-error-for="${fn:escapeXml(methodFieldName)}"><c:out value="${isIncome ? fieldErrors.receiveMethodId : fieldErrors.paymentMethodId}" /></p>
+                    </div>
+                </div>
+
+                <div class="entry-row" data-field-group="counterpartyName">
+                    <div class="entry-label-wrap">
+                        <label id="label-counterparty-name" for="counterparty-name"><c:out value="${counterpartyLabel}" /></label>
+                    </div>
+                    <div class="entry-control-wrap">
+                        <input id="counterparty-name"
+                               type="text"
+                               name="counterpartyName"
+                               value="${fn:escapeXml(entryForm.counterpartyName)}"
+                               list="counterparty-options"
+                               maxlength="100"
+                               autocomplete="off"
+                               placeholder="例）株式会社サンプル"
+                               aria-describedby="error-counterpartyName"
+                               <c:if test="${not empty fieldErrors.counterpartyName}">aria-invalid="true"</c:if>>
+                        <datalist id="counterparty-options">
+                            <c:forEach var="counterpartyOptionName" items="${counterpartyNames}">
+                                <option value="${fn:escapeXml(counterpartyOptionName)}"></option>
+                            </c:forEach>
+                        </datalist>
+                        <p id="error-counterpartyName" class="entry-field-error" data-error-for="counterpartyName"><c:out value="${fieldErrors.counterpartyName}" /></p>
+                    </div>
+                </div>
+
+                <div class="entry-row" data-field-group="counterpartyAddress">
+                    <div class="entry-label-wrap">
+                        <label id="label-counterparty-address" for="counterparty-address"><c:out value="${counterpartyAddressLabel}" /></label>
+                    </div>
+                    <div class="entry-control-wrap">
+                        <input id="counterparty-address"
+                               type="text"
+                               name="counterpartyAddress"
+                               value="${fn:escapeXml(entryForm.counterpartyAddress)}"
+                               maxlength="255"
+                               autocomplete="off"
+                               placeholder="未入力の場合は登録済みの所在地を維持します"
+                               aria-describedby="error-counterpartyAddress"
+                               <c:if test="${not empty fieldErrors.counterpartyAddress}">aria-invalid="true"</c:if>>
+                        <p id="error-counterpartyAddress" class="entry-field-error" data-error-for="counterpartyAddress"><c:out value="${fieldErrors.counterpartyAddress}" /></p>
                     </div>
                 </div>
 
@@ -433,6 +520,12 @@
             <div><dt><c:out value="${dateLabel}" /></dt><dd id="confirm-date">—</dd></div>
             <div><dt>金額</dt><dd id="confirm-amount">—</dd></div>
             <div><dt><c:out value="${methodLabel}" /></dt><dd id="confirm-method">—</dd></div>
+            <c:if test="${isIncome}">
+                <div><dt>源泉徴収税額</dt><dd id="confirm-withholding">—</dd></div>
+                <div><dt>消費税区分</dt><dd id="confirm-tax-category">—</dd></div>
+            </c:if>
+            <div><dt><c:out value="${counterpartyLabel}" /></dt><dd id="confirm-counterparty">—</dd></div>
+            <div><dt><c:out value="${counterpartyAddressLabel}" /></dt><dd id="confirm-counterparty-address">—</dd></div>
             <div><dt>確定申告対象外</dt><dd id="confirm-exclude">—</dd></div>
             <c:if test="${not isIncome}">
                 <div><dt>家事按分</dt><dd id="confirm-apportionment">—</dd></div>

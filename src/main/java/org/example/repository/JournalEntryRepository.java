@@ -13,6 +13,8 @@ public interface JournalEntryRepository extends JpaRepository<JournalEntry, Long
 
     Optional<JournalEntry> findBySourceTypeAndSourceId(String sourceType, Long sourceId);
 
+    List<JournalEntry> findByFiscalYearIdAndSourceType(Long fiscalYearId, String sourceType);
+
     @Query("""
             select e
             from JournalEntry e

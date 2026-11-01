@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.ZoneId;
@@ -13,6 +14,7 @@ import java.time.format.ResolverStyle;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -22,6 +24,7 @@ import java.util.regex.Pattern;
 
 import org.example.entity.AccountingTransaction;
 import org.example.entity.BusinessProfile;
+import org.example.entity.Counterparty;
 import org.example.entity.ExpenseCategory;
 import org.example.entity.ExpenseEntry;
 import org.example.entity.ExpenseItem;
@@ -35,6 +38,8 @@ import org.example.entity.PaymentMethod;
 import org.example.entity.ReceiveMethod;
 import org.example.entity.TaxDeductionRecord;
 import org.example.entity.UserSetting;
+import org.example.features.accounting.AccountMapping;
+import org.example.features.accounting.service.AccountMappingService;
 import org.example.features.entry.EntryConflictException;
 import org.example.features.entry.EntryKind;
 import org.example.features.entry.EntryNotFoundException;
@@ -46,8 +51,10 @@ import org.example.features.entry.service.EntryPrepareResult;
 import org.example.features.entry.service.EntrySaveResult;
 import org.example.features.entry.service.EntryService;
 import org.example.features.entry.service.ValidatedEntryCommand;
+import org.example.features.taxreturn.service.ClosingJournalService;
 import org.example.repository.AccountingTransactionRepository;
 import org.example.repository.BusinessProfileRepository;
+import org.example.repository.CounterpartyRepository;
 import org.example.repository.ExpenseCategoryRepository;
 import org.example.repository.ExpenseEntryRepository;
 import org.example.repository.ExpenseItemRepository;
@@ -75,6 +82,16 @@ public class EntryServiceImpl implements EntryService {
     private static final BigDecimal ZERO = new BigDecimal("0");
     private static final Pattern AMOUNT_PATTERN = Pattern.compile("^[0-9]{1,13}$");
     private static final Pattern FORBIDDEN_DETAILS = Pattern.compile("[<>\"'`\\\\]");
+    private static final Pattern CONTROL_CHARACTERS = Pattern.compile("[\\p{Cntrl}\\u2028\\u2029]");
+    private static final int MAX_COUNTERPARTY_NAME_LENGTH = 100;
+    private static final int MAX_COUNTERPARTY_ADDRESS_LENGTH = 255;
+    private static final String CATEGORY_SALES = "sales";
+    private static final String CATEGORY_MISC = "misc";
+    private static final String INCOME_MISC_INTEREST = "interest";
+    private static final String TAX_CATEGORY_TAXABLE_10 = "TAXABLE_10";
+    private static final String TAX_CATEGORY_NON_TAXABLE = "NON_TAXABLE";
+    private static final String TAX_CATEGORY_OUT_OF_SCOPE = "OUT_OF_SCOPE";
+    private static final Map<String, String> TAX_CATEGORY_LABELS = taxCategoryLabels();
     private static final String STATUS_OPEN = "open";
     private static final String STATUS_DRAFT = "draft";
     private static final String TX_TYPE_INCOME = "INCOME";
@@ -223,6 +240,9 @@ public class EntryServiceImpl implements EntryService {
     private final PaymentMethodRepository paymentMethodRepository;
     private final JournalEntryRepository journalEntryRepository;
     private final TaxDeductionRecordRepository taxDeductionRecordRepository;
+    private final AccountMappingService accountMappingService;
+    private final CounterpartyRepository counterpartyRepository;
+    private final ClosingJournalService closingJournalService;
 
     public EntryServiceImpl(
             BusinessProfileRepository businessProfileRepository,
@@ -238,7 +258,10 @@ public class EntryServiceImpl implements EntryService {
             ReceiveMethodRepository receiveMethodRepository,
             PaymentMethodRepository paymentMethodRepository,
             JournalEntryRepository journalEntryRepository,
-            TaxDeductionRecordRepository taxDeductionRecordRepository) {
+            TaxDeductionRecordRepository taxDeductionRecordRepository,
+            AccountMappingService accountMappingService,
+            CounterpartyRepository counterpartyRepository,
+            ClosingJournalService closingJournalService) {
         this.businessProfileRepository = businessProfileRepository;
         this.fiscalYearRepository = fiscalYearRepository;
         this.incomeEntryRepository = incomeEntryRepository;
@@ -253,6 +276,19 @@ public class EntryServiceImpl implements EntryService {
         this.paymentMethodRepository = paymentMethodRepository;
         this.journalEntryRepository = journalEntryRepository;
         this.taxDeductionRecordRepository = taxDeductionRecordRepository;
+        this.accountMappingService = accountMappingService;
+        this.counterpartyRepository = counterpartyRepository;
+        this.closingJournalService = closingJournalService;
+    }
+
+    private static Map<String, String> taxCategoryLabels() {
+        Map<String, String> labels = new LinkedHashMap<>();
+        labels.put(TAX_CATEGORY_TAXABLE_10, "課税10%");
+        labels.put("TAXABLE_8", "課税8%（軽減）");
+        labels.put(TAX_CATEGORY_NON_TAXABLE, "非課税");
+        labels.put(TAX_CATEGORY_OUT_OF_SCOPE, "不課税");
+        labels.put("EXPORT_EXEMPT", "輸出免税");
+        return java.util.Collections.unmodifiableMap(labels);
     }
 
     @Override
@@ -260,7 +296,7 @@ public class EntryServiceImpl implements EntryService {
     public EntryPageData loadPage(EntryKind kind, Long appUserId, Long editId) {
         BusinessProfile profile = ensureCatalogs(appUserId);
         MasterData masterData = loadMasterData(kind, profile.getId());
-        EntryPageData pageData = createBasePage(kind, masterData, loadCurrentApportionmentRate(appUserId).orElse(null));
+        EntryPageData pageData = createBasePage(kind, masterData, loadCurrentApportionmentRate(appUserId).orElse(null), profile);
         if (editId == null) {
             pageData.setEntryForm(createDefaultForm(kind, masterData));
             return pageData;
@@ -286,7 +322,7 @@ public class EntryServiceImpl implements EntryService {
         MasterData masterData = loadMasterData(kind, profile.getId());
         Optional<BigDecimal> currentRate = loadCurrentApportionmentRate(appUserId);
         EntryForm sanitizedForm = sanitize(entryForm);
-        EntryPageData pageData = createBasePage(kind, masterData, currentRate.orElse(null));
+        EntryPageData pageData = createBasePage(kind, masterData, currentRate.orElse(null), profile);
         pageData.setEntryForm(sanitizedForm);
         Map<String, String> fieldErrors = pageData.getFieldErrors();
 
@@ -303,6 +339,16 @@ public class EntryServiceImpl implements EntryService {
         BigDecimal amount = resolveAmount(sanitizedForm.getAmount(), fieldErrors);
         Object methodSelection = resolveMethod(kind, masterData, kind.readMethodId(sanitizedForm), fieldErrors);
         String details = resolveDetails(sanitizedForm.getDetails(), fieldErrors, kind);
+        String counterpartyName = resolveCounterpartyName(kind, sanitizedForm.getCounterpartyName(), fieldErrors);
+        String counterpartyAddress = resolveCounterpartyAddress(
+                kind, sanitizedForm.getCounterpartyAddress(), counterpartyName, fieldErrors);
+        IncomeItem selectedIncomeItem = kind.isIncome() && itemSelection instanceof IncomeItem matchedIncomeItem ? matchedIncomeItem : null;
+        BigDecimal withholdingTax = kind.isIncome()
+                ? resolveWithholdingTax(sanitizedForm.getWithholdingTax(), amount, selectedIncomeItem, fieldErrors)
+                : ZERO.setScale(2);
+        String taxCategory = kind.isIncome()
+                ? resolveTaxCategory(sanitizedForm.getTaxCategory(), selectedIncomeItem, fieldErrors)
+                : null;
         boolean effectiveExcludeFromReturn = sanitizedForm.isExcludeFromReturn();
 
         if (kind.isIncome() && itemSelection instanceof IncomeItem incomeItem) {
@@ -383,11 +429,17 @@ public class EntryServiceImpl implements EntryService {
 
         if (!fieldErrors.isEmpty() || pageData.getFailureMessage() != null || fiscalYear == null
                 || amount == null || transactionDate == null || details == null
+                || counterpartyName == null || counterpartyAddress == null || withholdingTax == null
+                || (kind.isIncome() && taxCategory == null)
                 || itemSelection == null || methodSelection == null || categorySelection == null) {
             return new EntryPrepareResult(pageData, null);
         }
+        if (kind.isIncome()) {
+            sanitizedForm.setWithholdingTax(formatAmount(withholdingTax));
+            sanitizedForm.setTaxCategory(taxCategory);
+        }
 
-        String payloadHash = hashPayload(
+        String basePayloadHash = hashPayload(
                 kind,
                 appUserId,
                 sanitizedForm.getEditId(),
@@ -403,6 +455,12 @@ public class EntryServiceImpl implements EntryService {
                 apportionmentRate,
                 deductibleAmount,
                 details);
+        String payloadHash = hashMonthlyPayload(String.join("|",
+                basePayloadHash,
+                counterpartyName,
+                counterpartyAddress,
+                formatAmount(withholdingTax),
+                String.valueOf(taxCategory)));
         boolean confirmationRequired = amount.compareTo(HIGH_AMOUNT_THRESHOLD) >= 0;
         ValidatedEntryCommand command = new ValidatedEntryCommand(
                 kind,
@@ -422,33 +480,41 @@ public class EntryServiceImpl implements EntryService {
                 deductibleAmount,
                 details,
                 payloadHash,
-                confirmationRequired);
+                confirmationRequired).withCounterpartyAndTax(
+                        counterpartyName,
+                        counterpartyAddress,
+                        withholdingTax,
+                        taxCategory);
         return new EntryPrepareResult(pageData, command);
     }
 
     @Override
     @Transactional
     public EntrySaveResult save(ValidatedEntryCommand command) {
+        Set<Long> touchedFiscalYearIds = new LinkedHashSet<>();
+        EntrySaveResult result;
         if (command.isMonthlyMode()) {
-            return saveMonthlyExpense(command);
+            result = saveMonthlyExpense(command, touchedFiscalYearIds);
+        } else if (command.getKind().isIncome()) {
+            result = saveIncome(command, touchedFiscalYearIds);
+        } else {
+            result = saveExpense(command, touchedFiscalYearIds);
         }
-        if (command.getKind().isIncome()) {
-            return saveIncome(command);
-        }
-        return saveExpense(command);
+        touchedFiscalYearIds.forEach(closingJournalService::rebuild);
+        return result;
     }
 
-    private EntrySaveResult saveMonthlyExpense(ValidatedEntryCommand command) {
+    private EntrySaveResult saveMonthlyExpense(ValidatedEntryCommand command, Set<Long> touchedFiscalYearIds) {
         if (!command.getKind().isExpense()) {
             throw new EntryConflictException("月間登録モードは支出のみ利用できます。");
         }
         for (ValidatedEntryCommand rowCommand : command.getMonthlyEntries()) {
-            saveExpense(rowCommand);
+            saveExpense(rowCommand, touchedFiscalYearIds);
         }
         return new EntrySaveResult(command.getKind().getPath(), "支出を" + command.getMonthlyEntries().size() + "件登録しました。");
     }
 
-    private EntrySaveResult saveIncome(ValidatedEntryCommand command) {
+    private EntrySaveResult saveIncome(ValidatedEntryCommand command, Set<Long> touchedFiscalYearIds) {
         IncomeEntry entry;
         FiscalYear fiscalYear;
         if (command.getEditId() == null) {
@@ -491,15 +557,19 @@ public class EntryServiceImpl implements EntryService {
         entry.setAmount(command.getAmount());
         entry.setExcludeFromReturn(command.isExcludeFromReturn());
         entry.setDetails(command.getDetails());
+        entry.setCounterparty(resolveCounterparty(fiscalYear, command));
+        entry.setWithholdingTax(safeAmount(command.getWithholdingTax()));
+        entry.setTaxCategory(command.getTaxCategory());
         entry.setAccountingTransaction(transaction);
         incomeEntryRepository.save(entry);
         syncIncomeJournalEntry(entry, transaction);
         syncTaxDeductionRecordForIncome(transaction, entry);
+        touchedFiscalYearIds.add(fiscalYear.getId());
         return new EntrySaveResult(command.getKind().getPath(),
                 command.getEditId() == null ? "収益を登録しました。" : "収益を更新しました。");
     }
 
-    private EntrySaveResult saveExpense(ValidatedEntryCommand command) {
+    private EntrySaveResult saveExpense(ValidatedEntryCommand command, Set<Long> touchedFiscalYearIds) {
         ExpenseEntry entry;
         FiscalYear fiscalYear;
         if (command.getEditId() == null) {
@@ -545,10 +615,12 @@ public class EntryServiceImpl implements EntryService {
         entry.setHomeApportionmentRate(command.getHomeApportionmentRate());
         entry.setDeductibleAmount(command.getDeductibleAmount());
         entry.setDetails(command.getDetails());
+        entry.setCounterparty(resolveCounterparty(fiscalYear, command));
         entry.setAccountingTransaction(transaction);
         expenseEntryRepository.save(entry);
         syncExpenseJournalEntry(entry, transaction);
         syncTaxDeductionRecordForExpense(transaction, entry);
+        touchedFiscalYearIds.add(fiscalYear.getId());
         return new EntrySaveResult(command.getKind().getPath(),
                 command.getEditId() == null ? "支出を登録しました。" : "支出を更新しました。");
     }
@@ -616,12 +688,22 @@ public class EntryServiceImpl implements EntryService {
         }
     }
 
-    private EntryPageData createBasePage(EntryKind kind, MasterData masterData, BigDecimal apportionmentRate) {
+    private EntryPageData createBasePage(EntryKind kind, MasterData masterData, BigDecimal apportionmentRate,
+            BusinessProfile profile) {
         EntryPageData pageData = new EntryPageData();
         pageData.setEntryKind(kind.getCode());
         pageData.setCategories(masterData.categoryOptions);
         pageData.setItems(masterData.itemOptions);
         pageData.setMethods(masterData.methodOptions);
+        pageData.setCounterpartyNames(counterpartyRepository
+                .findByBusinessProfileIdOrderByCounterpartyNameAsc(profile.getId()).stream()
+                .map(Counterparty::getCounterpartyName)
+                .toList());
+        if (kind.isIncome()) {
+            List<EntryOption> taxCategories = new ArrayList<>();
+            TAX_CATEGORY_LABELS.forEach((code, label) -> taxCategories.add(new EntryOption(code, label, null)));
+            pageData.setTaxCategories(taxCategories);
+        }
         pageData.setApportionmentRate(apportionmentRate);
         pageData.setToday(LocalDate.now(TOKYO).format(ISO_DATE));
         pageData.setActiveMenu(kind.getActiveMenu());
@@ -638,6 +720,10 @@ public class EntryServiceImpl implements EntryService {
         form.setAmount("");
         kind.writeMethodId(form, masterData.defaultMethodId);
         form.setDetails("");
+        form.setCounterpartyName("");
+        form.setCounterpartyAddress("");
+        form.setWithholdingTax(kind.isIncome() ? "0" : "");
+        form.setTaxCategory("");
         form.setEntryMode("normal");
         form.setTargetMonth("");
         form.setMonthlyRows(new ArrayList<>());
@@ -665,6 +751,9 @@ public class EntryServiceImpl implements EntryService {
         form.setExcludeFromReturn(entry.isExcludeFromReturn());
         form.setHomeApportionment(false);
         form.setDetails(entry.getDetails() == null ? "" : entry.getDetails());
+        applyCounterpartyToForm(form, entry.getCounterparty());
+        form.setWithholdingTax(entry.getWithholdingTax() == null ? "0" : formatAmount(entry.getWithholdingTax()));
+        form.setTaxCategory(effectiveTaxCategory(entry));
         form.setEntryMode("normal");
         form.setTargetMonth("");
         form.setMonthlyRows(new ArrayList<>());
@@ -689,6 +778,7 @@ public class EntryServiceImpl implements EntryService {
         form.setExcludeFromReturn(entry.isExcludeFromReturn());
         form.setHomeApportionment(entry.isHomeApportionmentApplied());
         form.setDetails(entry.getDetails() == null ? "" : entry.getDetails());
+        applyCounterpartyToForm(form, entry.getCounterparty());
         form.setEntryMode("normal");
         form.setTargetMonth("");
         form.setMonthlyRows(new ArrayList<>());
@@ -719,6 +809,10 @@ public class EntryServiceImpl implements EntryService {
         sanitized.setExcludeFromReturn(original.isExcludeFromReturn());
         sanitized.setHomeApportionment(original.isHomeApportionment());
         sanitized.setDetails(original.getDetails() == null ? "" : original.getDetails().trim());
+        sanitized.setCounterpartyName(trimToEmpty(original.getCounterpartyName()));
+        sanitized.setCounterpartyAddress(trimToEmpty(original.getCounterpartyAddress()));
+        sanitized.setWithholdingTax(trimToEmpty(original.getWithholdingTax()));
+        sanitized.setTaxCategory(trimToEmpty(original.getTaxCategory()));
         sanitized.setEntryMode(trimToEmpty(original.getEntryMode()));
         sanitized.setTargetMonth(trimToEmpty(original.getTargetMonth()));
         List<MonthlyExpenseRowForm> monthlyRows = new ArrayList<>();
@@ -757,6 +851,13 @@ public class EntryServiceImpl implements EntryService {
         checkMaxLength(form.getDetails(), 1024, "details",
                 kind.isIncome() ? "収益詳細は1〜255文字で入力してください。" : "支出詳細は1〜255文字で入力してください。", errors);
         checkMaxLength(form.getEntryMode(), 20, "entryMode", "登録モードが不正です。", errors);
+        String counterpartyLabel = counterpartyLabel(kind);
+        checkMaxLength(form.getCounterpartyName(), 1024, "counterpartyName",
+                counterpartyLabel + "名は" + MAX_COUNTERPARTY_NAME_LENGTH + "文字以内で入力してください。", errors);
+        checkMaxLength(form.getCounterpartyAddress(), 1024, "counterpartyAddress",
+                counterpartyLabel + "の所在地は" + MAX_COUNTERPARTY_ADDRESS_LENGTH + "文字以内で入力してください。", errors);
+        checkMaxLength(form.getWithholdingTax(), 32, "withholdingTax", "源泉徴収税額は数値のみで入力してください。", errors);
+        checkMaxLength(form.getTaxCategory(), 30, "taxCategory", "消費税区分を選択してください。", errors);
         checkMaxLength(form.getTargetMonth(), 7, "targetMonth", "登録対象月の形式が不正です。", errors);
         checkMaxLength(form.getCsrfToken(), 200, "csrfToken", "フォームの送信情報が無効です。画面を開き直してください。", errors);
         checkMaxLength(form.getSubmissionToken(), 200, "submissionToken", "フォームの送信情報が無効です。画面を開き直してください。", errors);
@@ -1147,6 +1248,157 @@ public class EntryServiceImpl implements EntryService {
         return value;
     }
 
+    private String counterpartyLabel(EntryKind kind) {
+        return kind.isIncome() ? "取引先" : "支払先";
+    }
+
+    /** 空欄は ""、エラー時は null を返す。 */
+    private String resolveCounterpartyName(EntryKind kind, String rawName, Map<String, String> errors) {
+        String value = trimToEmpty(rawName);
+        if (value.isEmpty()) {
+            return "";
+        }
+        String label = counterpartyLabel(kind);
+        if (value.codePointCount(0, value.length()) > MAX_COUNTERPARTY_NAME_LENGTH) {
+            errors.putIfAbsent("counterpartyName", label + "名は" + MAX_COUNTERPARTY_NAME_LENGTH + "文字以内で入力してください。");
+            return null;
+        }
+        if (FORBIDDEN_DETAILS.matcher(value).find() || CONTROL_CHARACTERS.matcher(value).find()) {
+            errors.putIfAbsent("counterpartyName", label + "名に使用できない文字が含まれています。");
+            return null;
+        }
+        return value;
+    }
+
+    /** 空欄は ""、エラー時は null を返す。取引先名がエラーの場合は所在地の検証結果だけを返す。 */
+    private String resolveCounterpartyAddress(
+            EntryKind kind,
+            String rawAddress,
+            String counterpartyName,
+            Map<String, String> errors) {
+        String value = trimToEmpty(rawAddress);
+        if (value.isEmpty()) {
+            return "";
+        }
+        String label = counterpartyLabel(kind);
+        if (value.codePointCount(0, value.length()) > MAX_COUNTERPARTY_ADDRESS_LENGTH) {
+            errors.putIfAbsent("counterpartyAddress",
+                    label + "の所在地は" + MAX_COUNTERPARTY_ADDRESS_LENGTH + "文字以内で入力してください。");
+            return null;
+        }
+        if (FORBIDDEN_DETAILS.matcher(value).find() || CONTROL_CHARACTERS.matcher(value).find()) {
+            errors.putIfAbsent("counterpartyAddress", label + "の所在地に使用できない文字が含まれています。");
+            return null;
+        }
+        if (counterpartyName != null && counterpartyName.isEmpty()) {
+            errors.putIfAbsent("counterpartyAddress", label + "の所在地を入力する場合は" + label + "名も入力してください。");
+            return null;
+        }
+        return value;
+    }
+
+    /** 全角数字・桁区切りカンマを正規化し、0 以上かつ金額未満の整数円として検証する。エラー時は null。 */
+    private BigDecimal resolveWithholdingTax(
+            String rawWithholding,
+            BigDecimal amount,
+            IncomeItem incomeItem,
+            Map<String, String> errors) {
+        String value = Normalizer.normalize(trimToEmpty(rawWithholding), Normalizer.Form.NFKC)
+                .replace(",", "")
+                .trim();
+        if (value.isEmpty()) {
+            return ZERO.setScale(2);
+        }
+        if (!AMOUNT_PATTERN.matcher(value).matches()) {
+            errors.putIfAbsent("withholdingTax", "源泉徴収税額は0以上の整数（円）で入力してください。");
+            return null;
+        }
+        BigDecimal parsed = new BigDecimal(value).setScale(2);
+        if (parsed.signum() == 0) {
+            return parsed;
+        }
+        if (incomeItem != null && requiresExcludeFromBusinessPl(incomeItem)) {
+            errors.putIfAbsent("withholdingTax", "源泉徴収税額は売上・雑収入の場合のみ入力できます。");
+            return null;
+        }
+        if (amount != null && parsed.compareTo(amount) >= 0) {
+            errors.putIfAbsent("withholdingTax", "源泉徴収税額は金額未満で入力してください。");
+            return null;
+        }
+        return parsed;
+    }
+
+    /** 許可リストで検証する。「その他」区分は不課税に固定し、未選択は項目の既定値とする。エラー時は null。 */
+    private String resolveTaxCategory(String rawTaxCategory, IncomeItem incomeItem, Map<String, String> errors) {
+        String value = trimToEmpty(rawTaxCategory);
+        if (!value.isEmpty() && !TAX_CATEGORY_LABELS.containsKey(value)) {
+            errors.putIfAbsent("taxCategory", "消費税区分を選択してください。");
+            return null;
+        }
+        if (incomeItem == null) {
+            return null;
+        }
+        if (requiresExcludeFromBusinessPl(incomeItem)) {
+            return TAX_CATEGORY_OUT_OF_SCOPE;
+        }
+        return value.isEmpty() ? defaultTaxCategory(incomeItem) : value;
+    }
+
+    private String defaultTaxCategory(IncomeItem incomeItem) {
+        if (incomeItem == null || incomeItem.getIncomeCategory() == null) {
+            return TAX_CATEGORY_TAXABLE_10;
+        }
+        String categoryCode = incomeItem.getIncomeCategory().getCategoryCode();
+        if (CATEGORY_OTHER.equals(categoryCode)) {
+            return TAX_CATEGORY_OUT_OF_SCOPE;
+        }
+        if (CATEGORY_MISC.equals(categoryCode) && INCOME_MISC_INTEREST.equals(incomeItem.getItemCode())) {
+            return TAX_CATEGORY_NON_TAXABLE;
+        }
+        return TAX_CATEGORY_TAXABLE_10;
+    }
+
+    private String effectiveTaxCategory(IncomeEntry entry) {
+        if (entry.getIncomeItem() != null && requiresExcludeFromBusinessPl(entry.getIncomeItem())) {
+            return TAX_CATEGORY_OUT_OF_SCOPE;
+        }
+        String stored = trimToEmpty(entry.getTaxCategory());
+        return TAX_CATEGORY_LABELS.containsKey(stored) ? stored : TAX_CATEGORY_TAXABLE_10;
+    }
+
+    private void applyCounterpartyToForm(EntryForm form, Counterparty counterparty) {
+        form.setCounterpartyName(counterparty == null ? "" : trimToEmpty(counterparty.getCounterpartyName()));
+        form.setCounterpartyAddress(counterparty == null ? "" : trimToEmpty(counterparty.getAddress()));
+    }
+
+    /**
+     * 取引先名で事業者内の取引先を検索し、なければ作成する。事業者はロック済みの所有年度から取得し、
+     * リクエスト由来の ID は使用しない。所在地が入力された場合のみ所在地を更新する。
+     */
+    private Counterparty resolveCounterparty(FiscalYear fiscalYear, ValidatedEntryCommand command) {
+        String name = trimToEmpty(command.getCounterpartyName());
+        if (name.isEmpty()) {
+            return null;
+        }
+        BusinessProfile profile = fiscalYear.getBusinessProfile();
+        if (profile == null || profile.getId() == null) {
+            throw new EntryConflictException("事業者情報を取得できませんでした。再読み込みしてください。");
+        }
+        String address = trimToEmpty(command.getCounterpartyAddress());
+        Counterparty counterparty = counterpartyRepository
+                .findByBusinessProfileIdAndCounterpartyName(profile.getId(), name)
+                .orElseGet(() -> {
+                    Counterparty created = new Counterparty();
+                    created.setBusinessProfile(profile);
+                    created.setCounterpartyName(name);
+                    return created;
+                });
+        if (!address.isEmpty() && !address.equals(counterparty.getAddress())) {
+            counterparty.setAddress(address);
+        }
+        return counterpartyRepository.save(counterparty);
+    }
+
     private BigDecimal calculateDeductibleAmount(
             BigDecimal amount,
             boolean excludeFromReturn,
@@ -1302,7 +1554,8 @@ public class EntryServiceImpl implements EntryService {
                 data.itemOptions.add(new EntryOption(
                         String.valueOf(item.getId()),
                         item.getItemName(),
-                        item.getIncomeCategory().getCategoryCode()));
+                        item.getIncomeCategory().getCategoryCode(),
+                        defaultTaxCategory(item)));
             }
             for (ReceiveMethod method : methods) {
                 data.receiveMethodsById.put(method.getId(), method);
@@ -1513,15 +1766,26 @@ public class EntryServiceImpl implements EntryService {
         journalEntry.setStatus(STATUS_DRAFT);
 
         BigDecimal amount = safeAmount(entry.getAmount());
+        AccountMapping mapping = accountMappingService.snapshot();
         String debitAccount = resolveIncomeDebitAccount(entry.getReceiveMethod());
-        String creditAccount = resolveIncomeCreditAccount(entry);
+        String creditAccount = mapping.forIncomeItem(entry.getIncomeItem(), entry.getTransactionDate())
+                .map(AccountMapping.AccountRef::name)
+                .orElseGet(() -> resolveIncomeCreditAccount(entry));
         if (entry.isExcludeFromReturn() && !CATEGORY_OTHER.equals(resolveIncomeCategoryCode(entry))) {
             creditAccount = "事業主借";
         }
 
         List<JournalLine> lines = new ArrayList<>();
-        lines.add(buildJournalLine(1, "D", debitAccount, amount, entry.getDetails()));
-        lines.add(buildJournalLine(2, "C", creditAccount, amount, entry.getDetails()));
+        int lineNo = 1;
+        BigDecimal withholding = safeAmount(entry.getWithholdingTax());
+        if (withholding.signum() > 0 && withholding.compareTo(amount) < 0) {
+            // 源泉徴収: 売上は総額で計上し、差引入金額と源泉徴収税額（事業主貸）を借方に分ける。
+            lines.add(buildJournalLine(mapping, lineNo++, "D", debitAccount, amount.subtract(withholding), entry.getDetails()));
+            lines.add(buildJournalLine(mapping, lineNo++, "D", "事業主貸", withholding, "源泉徴収税額"));
+        } else {
+            lines.add(buildJournalLine(mapping, lineNo++, "D", debitAccount, amount, entry.getDetails()));
+        }
+        lines.add(buildJournalLine(mapping, lineNo, "C", creditAccount, amount, entry.getDetails()));
         journalEntry.setLines(lines);
         journalEntryRepository.save(journalEntry);
     }
@@ -1544,28 +1808,43 @@ public class EntryServiceImpl implements EntryService {
             ownerDrawAmount = ZERO.setScale(2);
         }
 
-        String debitAccount = resolveExpenseDebitAccount(entry);
+        AccountMapping mapping = accountMappingService.snapshot();
+        Optional<AccountMapping.AccountRef> mappedAccount =
+                mapping.forExpenseItem(entry.getExpenseItem(), entry.getTransactionDate());
+        String debitAccount = mappedAccount.map(AccountMapping.AccountRef::name)
+                .orElseGet(() -> resolveExpenseDebitAccount(entry));
         String creditAccount = resolveExpenseCreditAccount(entry.getPaymentMethod());
+        // 「その他」区分（資金移動・B/S科目）はマスタの科目、通常の経費を申告対象外にした場合は事業主貸とする。
+        String excludedDebitAccount = isOtherExpenseCategory(entry) && mappedAccount.isPresent()
+                ? mappedAccount.get().name()
+                : "事業主貸";
 
         List<JournalLine> lines = new ArrayList<>();
         int lineNo = 1;
         if (entry.isExcludeFromReturn()) {
-            lines.add(buildJournalLine(lineNo++, "D", "事業主貸", amount, entry.getDetails()));
+            lines.add(buildJournalLine(mapping, lineNo++, "D", excludedDebitAccount, amount, entry.getDetails()));
         } else if (entry.isHomeApportionmentApplied() && ownerDrawAmount.signum() > 0) {
-            lines.add(buildJournalLine(lineNo++, "D", debitAccount, deductibleAmount, entry.getDetails()));
-            lines.add(buildJournalLine(lineNo++, "D", "事業主貸", ownerDrawAmount, "家事按分の私用部分"));
+            lines.add(buildJournalLine(mapping, lineNo++, "D", debitAccount, deductibleAmount, entry.getDetails()));
+            lines.add(buildJournalLine(mapping, lineNo++, "D", "事業主貸", ownerDrawAmount, "家事按分の私用部分"));
         } else {
-            lines.add(buildJournalLine(lineNo++, "D", debitAccount, amount, entry.getDetails()));
+            lines.add(buildJournalLine(mapping, lineNo++, "D", debitAccount, amount, entry.getDetails()));
         }
-        lines.add(buildJournalLine(lineNo, "C", creditAccount, amount, entry.getDetails()));
+        lines.add(buildJournalLine(mapping, lineNo, "C", creditAccount, amount, entry.getDetails()));
         journalEntry.setLines(lines);
         journalEntryRepository.save(journalEntry);
     }
 
-    private JournalLine buildJournalLine(int lineNo, String debitCredit, String accountName, BigDecimal amount, String memo) {
+    private boolean isOtherExpenseCategory(ExpenseEntry entry) {
+        return entry.getExpenseItem() != null && entry.getExpenseItem().getExpenseCategory() != null
+                && CATEGORY_OTHER.equals(entry.getExpenseItem().getExpenseCategory().getCategoryCode());
+    }
+
+    private JournalLine buildJournalLine(AccountMapping mapping, int lineNo, String debitCredit, String accountName,
+            BigDecimal amount, String memo) {
         JournalLine line = new JournalLine();
         line.setLineNo(lineNo);
         line.setDebitCredit(debitCredit);
+        line.setAccountCode(mapping.byName(accountName).map(AccountMapping.AccountRef::code).orElse(null));
         line.setAccountName(accountName);
         line.setAmount(safeAmount(amount));
         line.setMemo(trimToEmpty(memo));

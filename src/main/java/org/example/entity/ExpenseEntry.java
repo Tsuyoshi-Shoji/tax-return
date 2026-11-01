@@ -61,6 +61,18 @@ public class ExpenseEntry {
     @Column(name = "details")
     private String details;
 
+    @ManyToOne
+    @JoinColumn(name = "counterparty_id")
+    private Counterparty counterparty;
+
+    public Counterparty getCounterparty() {
+        return counterparty;
+    }
+
+    public void setCounterparty(Counterparty counterparty) {
+        this.counterparty = counterparty;
+    }
+
     @Column(name = "is_deleted", nullable = false)
     private boolean deleted;
 

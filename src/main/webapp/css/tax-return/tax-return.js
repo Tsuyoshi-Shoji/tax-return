@@ -89,6 +89,42 @@
         });
     }
 
+    document.querySelectorAll('form[data-confirm]').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            if (form.getAttribute('data-confirmed') === 'true') {
+                return;
+            }
+            event.preventDefault();
+            window.AppDialog.confirm({ message: form.getAttribute('data-confirm'), confirmLabel: '削除する' })
+                .then(function (accepted) {
+                    if (accepted) {
+                        form.setAttribute('data-confirmed', 'true');
+                        form.submit();
+                    }
+                });
+        });
+    });
+
+    var exportLink = document.querySelector('[data-export="etax-csv"]');
+    if (exportLink) {
+        exportLink.addEventListener('click', function (event) {
+            if (errorCount > 0) {
+                event.preventDefault();
+                alertDialog.showModal();
+                return;
+            }
+            if (warningCount > 0) {
+                event.preventDefault();
+                window.AppDialog.confirm({
+                    message: '警告があります。このまま出力しますか？（エラーチェックで内容を確認できます）',
+                    confirmLabel: '出力する'
+                }).then(function (accepted) {
+                    if (accepted) { window.location.href = exportLink.href; }
+                });
+            }
+        });
+    }
+
     var tabs = Array.prototype.slice.call(document.querySelectorAll('.tr-tab'));
     tabs.forEach(function (tab) {
         tab.addEventListener('click', function (event) {

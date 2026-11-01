@@ -10,5 +10,7 @@ public interface TaxDeductionRecordRepository extends JpaRepository<TaxDeduction
     Optional<TaxDeductionRecord> findBySourceTransactionId(Long sourceTransactionId);
 
     List<TaxDeductionRecord> findByFiscalYearIdOrderByIdAsc(Long fiscalYearId);
+
+    Optional<TaxDeductionRecord> findByIdAndFiscalYearId(Long id, Long fiscalYearId);
 }
 

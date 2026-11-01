@@ -36,6 +36,28 @@ public class AppUser {
     @Column(name = "address", length = 255)
     private String address;
 
+    @Column(name = "name_kana", length = 100)
+    private String nameKana;
+
+    @Column(name = "birth_date")
+    private java.time.LocalDate birthDate;
+
+    public String getNameKana() {
+        return nameKana;
+    }
+
+    public void setNameKana(String nameKana) {
+        this.nameKana = nameKana;
+    }
+
+    public java.time.LocalDate getBirthDate() {
+        return birthDate;
+    }
+
+    public void setBirthDate(java.time.LocalDate birthDate) {
+        this.birthDate = birthDate;
+    }
+
     @Column(name = "status", nullable = false, length = 20)
     private String status;
 

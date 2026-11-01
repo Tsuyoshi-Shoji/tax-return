@@ -32,6 +32,9 @@ public class JournalLine {
     @Column(name = "debit_credit", nullable = false, length = 1)
     private String debitCredit;
 
+    @Column(name = "account_code", length = 50)
+    private String accountCode;
+
     @Column(name = "account_name", nullable = false, length = 100)
     private String accountName;
 
@@ -85,6 +88,14 @@ public class JournalLine {
 
     public void setDebitCredit(String debitCredit) {
         this.debitCredit = debitCredit;
+    }
+
+    public String getAccountCode() {
+        return accountCode;
+    }
+
+    public void setAccountCode(String accountCode) {
+        this.accountCode = accountCode;
     }
 
     public String getAccountName() {

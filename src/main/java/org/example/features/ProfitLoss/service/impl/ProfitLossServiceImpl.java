@@ -28,6 +28,7 @@ import org.example.features.profitloss.dto.ProfitLossListRow;
 import org.example.features.profitloss.dto.ProfitLossPageData;
 import org.example.features.profitloss.form.ProfitLossSearchForm;
 import org.example.features.profitloss.service.ProfitLossService;
+import org.example.features.taxreturn.service.ClosingJournalService;
 import org.example.repository.BusinessProfileRepository;
 import org.example.repository.ExpenseEntryRepository;
 import org.example.repository.ExpenseItemRepository;
@@ -51,6 +52,7 @@ public class ProfitLossServiceImpl implements ProfitLossService {
     private final IncomeItemRepository incomeItemRepository;
     private final ExpenseItemRepository expenseItemRepository;
     private final JournalEntryRepository journalEntryRepository;
+    private final ClosingJournalService closingJournalService;
 
     public ProfitLossServiceImpl(
             BusinessProfileRepository businessProfileRepository,
@@ -59,7 +61,8 @@ public class ProfitLossServiceImpl implements ProfitLossService {
             ExpenseEntryRepository expenseEntryRepository,
             IncomeItemRepository incomeItemRepository,
             ExpenseItemRepository expenseItemRepository,
-            JournalEntryRepository journalEntryRepository) {
+            JournalEntryRepository journalEntryRepository,
+            ClosingJournalService closingJournalService) {
         this.businessProfileRepository = businessProfileRepository;
         this.fiscalYearRepository = fiscalYearRepository;
         this.incomeEntryRepository = incomeEntryRepository;
@@ -67,6 +70,7 @@ public class ProfitLossServiceImpl implements ProfitLossService {
         this.incomeItemRepository = incomeItemRepository;
         this.expenseItemRepository = expenseItemRepository;
         this.journalEntryRepository = journalEntryRepository;
+        this.closingJournalService = closingJournalService;
     }
 
     @Override
@@ -228,6 +232,7 @@ public class ProfitLossServiceImpl implements ProfitLossService {
             deleteJournalEntry(e.getAccountingTransaction());
             e.markDeleted();
             incomeEntryRepository.save(e);
+            closingJournalService.rebuild(fiscalYearId);
             return;
         }
         if ("expense".equals(recordType)) {
@@ -241,6 +246,7 @@ public class ProfitLossServiceImpl implements ProfitLossService {
             deleteJournalEntry(e.getAccountingTransaction());
             e.markDeleted();
             expenseEntryRepository.save(e);
+            closingJournalService.rebuild(fiscalYearId);
             return;
         }
         throw new EntryNotFoundException("Unknown record type");

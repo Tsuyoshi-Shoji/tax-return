@@ -15,6 +15,12 @@
 - `income_entry.md`
 - `expense_entry.md`
 - `ledger_account.md`
+- `statement_line.md`
+- `account_statement_mapping.md`
+- `ui_item_account_mapping.md`
+- `fixed_asset.md`
+- `tax_return_input.md`
+- `tax_dependent.md`
 - `counterparty.md`
 - `classification_rule.md`
 - `accounting_transaction.md`

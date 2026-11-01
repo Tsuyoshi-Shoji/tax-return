@@ -32,6 +32,10 @@ public class ValidatedEntryCommand {
     private final boolean confirmationRequired;
     private final String targetMonth;
     private final List<ValidatedEntryCommand> monthlyEntries;
+    private final String counterpartyName;
+    private final String counterpartyAddress;
+    private final BigDecimal withholdingTax;
+    private final String taxCategory;
 
     public ValidatedEntryCommand(
             EntryKind kind,
@@ -72,7 +76,11 @@ public class ValidatedEntryCommand {
                 payloadHash,
                 confirmationRequired,
                 "",
-                List.of());
+                List.of(),
+                "",
+                "",
+                BigDecimal.ZERO,
+                null);
     }
 
     private ValidatedEntryCommand(
@@ -95,7 +103,11 @@ public class ValidatedEntryCommand {
             String payloadHash,
             boolean confirmationRequired,
             String targetMonth,
-            List<ValidatedEntryCommand> monthlyEntries) {
+            List<ValidatedEntryCommand> monthlyEntries,
+            String counterpartyName,
+            String counterpartyAddress,
+            BigDecimal withholdingTax,
+            String taxCategory) {
         this.kind = kind;
         this.appUserId = appUserId;
         this.editId = editId;
@@ -116,6 +128,43 @@ public class ValidatedEntryCommand {
         this.confirmationRequired = confirmationRequired;
         this.targetMonth = targetMonth == null ? "" : targetMonth;
         this.monthlyEntries = monthlyEntries == null ? List.of() : List.copyOf(monthlyEntries);
+        this.counterpartyName = counterpartyName == null ? "" : counterpartyName;
+        this.counterpartyAddress = counterpartyAddress == null ? "" : counterpartyAddress;
+        this.withholdingTax = withholdingTax == null ? BigDecimal.ZERO : withholdingTax;
+        this.taxCategory = taxCategory;
+    }
+
+    /** 取引先・源泉徴収税額・消費税区分（いずれも検証済みの値）を付与した複製を返す。 */
+    public ValidatedEntryCommand withCounterpartyAndTax(
+            String counterpartyName,
+            String counterpartyAddress,
+            BigDecimal withholdingTax,
+            String taxCategory) {
+        return new ValidatedEntryCommand(
+                kind,
+                appUserId,
+                editId,
+                version,
+                fiscalYear,
+                incomeItem,
+                expenseItem,
+                receiveMethod,
+                paymentMethod,
+                transactionDate,
+                amount,
+                excludeFromReturn,
+                homeApportionment,
+                homeApportionmentRate,
+                deductibleAmount,
+                details,
+                payloadHash,
+                confirmationRequired,
+                targetMonth,
+                monthlyEntries,
+                counterpartyName,
+                counterpartyAddress,
+                withholdingTax,
+                taxCategory);
     }
 
     public static ValidatedEntryCommand monthlyExpenseBatch(
@@ -144,7 +193,11 @@ public class ValidatedEntryCommand {
                 payloadHash,
                 confirmationRequired,
                 targetMonth,
-                monthlyEntries);
+                monthlyEntries,
+                "",
+                "",
+                BigDecimal.ZERO,
+                null);
     }
 
     public EntryKind getKind() {
@@ -225,6 +278,22 @@ public class ValidatedEntryCommand {
 
     public List<ValidatedEntryCommand> getMonthlyEntries() {
         return monthlyEntries;
+    }
+
+    public String getCounterpartyName() {
+        return counterpartyName;
+    }
+
+    public String getCounterpartyAddress() {
+        return counterpartyAddress;
+    }
+
+    public BigDecimal getWithholdingTax() {
+        return withholdingTax;
+    }
+
+    public String getTaxCategory() {
+        return taxCategory;
     }
 
     public boolean isMonthlyMode() {

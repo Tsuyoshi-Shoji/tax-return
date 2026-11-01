@@ -6,9 +6,14 @@ import java.text.DecimalFormat;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
 
 import org.example.entity.AppUser;
@@ -19,6 +24,21 @@ import org.example.entity.IncomeEntry;
 import org.example.entity.JournalEntry;
 import org.example.entity.SettlementAdjustment;
 import org.example.entity.TransactionSettlement;
+import org.example.entity.FixedAsset;
+import org.example.features.taxreturn.asset.DepreciationCalculator;
+import org.example.features.taxreturn.balance.BalanceSheetService;
+import org.example.features.taxreturn.dto.TaxReturnExtras;
+import org.example.features.taxreturn.service.ClosingJournalService;
+import org.example.repository.FixedAssetRepository;
+import org.example.repository.TaxDeductionRecordRepository;
+import org.example.repository.TaxDependentRepository;
+import org.example.repository.TaxReturnInputRepository;
+import org.example.features.accounting.AccountMapping;
+import org.example.features.accounting.AccountMapping.AccountRef;
+import org.example.features.accounting.AccountMapping.StatementLayout;
+import org.example.features.accounting.AccountMasterSeed;
+import org.example.features.accounting.service.AccountMappingService;
+import org.example.entity.StatementLine;
 import org.example.features.entry.EntryNotFoundException;
 import org.example.features.report.dto.ReportMonthRow;
 import org.example.features.report.dto.ReportYearOption;
@@ -31,6 +51,7 @@ import org.example.features.taxreturn.dto.TaxReturnPageData.JournalLine;
 import org.example.features.taxreturn.dto.TaxReturnPageData.LedgerAccount;
 import org.example.features.taxreturn.dto.TaxReturnPageData.LedgerLine;
 import org.example.features.taxreturn.dto.TaxReturnPageData.PlRow;
+import org.example.features.taxreturn.dto.TaxReturnPageData.StatementRow;
 import org.example.features.taxreturn.form.SettlementForm;
 import org.example.features.taxreturn.service.TaxReturnService;
 import org.example.repository.AccountingTransactionRepository;
@@ -59,6 +80,13 @@ public class TaxReturnServiceImpl implements TaxReturnService {
     private static final String SETTLEMENT_STATUS_UNSETTLED = "UNSETTLED";
     private static final String SETTLEMENT_STATUS_PARTIALLY_SETTLED = "PARTIALLY_SETTLED";
     private static final String SOURCE_TYPE_SETTLEMENT = "SETTLEMENT_ADJUSTMENT";
+    private static final String SECTION_REVENUE = "REVENUE";
+    private static final String SECTION_EXPENSE = "EXPENSE";
+    private static final String SECTION_ADJUSTMENT = "ADJUSTMENT";
+    private static final String SETTLEMENT_SOURCE_LABEL = "決算整理";
+    private static final Set<String> TOTAL_LINES = Set.of(
+            AccountMasterSeed.LINE_GROSS_PROFIT, AccountMasterSeed.LINE_EXPENSE_TOTAL,
+            AccountMasterSeed.LINE_INCOME_BEFORE_BLUE, AccountMasterSeed.LINE_INCOME);
 
     private final BusinessProfileRepository businessProfileRepository;
     private final FiscalYearRepository fiscalYearRepository;
@@ -68,6 +96,13 @@ public class TaxReturnServiceImpl implements TaxReturnService {
     private final SettlementAdjustmentRepository settlementRepository;
     private final JournalEntryRepository journalEntryRepository;
     private final TransactionSettlementRepository transactionSettlementRepository;
+    private final AccountMappingService accountMappingService;
+    private final BalanceSheetService balanceSheetService;
+    private final ClosingJournalService closingJournalService;
+    private final FixedAssetRepository fixedAssetRepository;
+    private final TaxReturnInputRepository taxReturnInputRepository;
+    private final TaxDependentRepository taxDependentRepository;
+    private final TaxDeductionRecordRepository taxDeductionRecordRepository;
 
     public TaxReturnServiceImpl(
             BusinessProfileRepository businessProfileRepository,
@@ -77,7 +112,20 @@ public class TaxReturnServiceImpl implements TaxReturnService {
             AccountingTransactionRepository transactionRepository,
             SettlementAdjustmentRepository settlementRepository,
             JournalEntryRepository journalEntryRepository,
-            TransactionSettlementRepository transactionSettlementRepository) {
+            TransactionSettlementRepository transactionSettlementRepository,
+            AccountMappingService accountMappingService,
+            BalanceSheetService balanceSheetService,
+            ClosingJournalService closingJournalService,
+            FixedAssetRepository fixedAssetRepository,
+            TaxReturnInputRepository taxReturnInputRepository,
+            TaxDependentRepository taxDependentRepository,
+            TaxDeductionRecordRepository taxDeductionRecordRepository) {
+        this.balanceSheetService = balanceSheetService;
+        this.closingJournalService = closingJournalService;
+        this.fixedAssetRepository = fixedAssetRepository;
+        this.taxReturnInputRepository = taxReturnInputRepository;
+        this.taxDependentRepository = taxDependentRepository;
+        this.taxDeductionRecordRepository = taxDeductionRecordRepository;
         this.businessProfileRepository = businessProfileRepository;
         this.fiscalYearRepository = fiscalYearRepository;
         this.incomeEntryRepository = incomeEntryRepository;
@@ -86,6 +134,7 @@ public class TaxReturnServiceImpl implements TaxReturnService {
         this.settlementRepository = settlementRepository;
         this.journalEntryRepository = journalEntryRepository;
         this.transactionSettlementRepository = transactionSettlementRepository;
+        this.accountMappingService = accountMappingService;
     }
 
     @Override
@@ -94,20 +143,24 @@ public class TaxReturnServiceImpl implements TaxReturnService {
         BusinessProfile profile = loadProfile(appUserId);
         List<FiscalYear> fiscalYears = fiscalYearRepository.findByBusinessProfileIdOrderByTaxYearDesc(profile.getId());
         FiscalYear selected = resolve(fiscalYears, year);
+        AccountMapping mapping = accountMappingService.snapshot();
         SettlementAdjustment saved = settlementRepository.findByFiscalYearId(selected.getId()).orElse(null);
-        Calc current = calculate(selected, appUserId, saved);
+        Calc current = calculate(selected, appUserId, saved, mapping);
 
         FiscalYear prior = fiscalYears.stream()
                 .filter(f -> f.getTaxYear() == selected.getTaxYear() - 1)
                 .findFirst().orElse(null);
         Calc priorCalc = prior == null ? null
-                : calculate(prior, appUserId, settlementRepository.findByFiscalYearId(prior.getId()).orElse(null));
+                : calculate(prior, appUserId, settlementRepository.findByFiscalYearId(prior.getId()).orElse(null), mapping);
 
         int deduction = saved == null ? 65 : saved.getBlueDeduction();
         BigDecimal deductionAmount = BigDecimal.valueOf(deduction * 10000L);
         BigDecimal afterDeduction = current.income.subtract(deductionAmount).max(BigDecimal.ZERO);
+        Statement statement = buildStatement(
+                mapping.layout(AccountMasterSeed.FORM_BLUE_GENERAL_PL, selected.getTaxYear()), current, saved, deductionAmount);
 
-        BalanceSheet bs = balanceSheet(saved, current.income, current.ownerDraw);
+        BalanceSheetService.Result bsResult = balanceSheetService.compute(selected, mapping);
+        BalanceSheet bs = balanceSheet(bsResult);
         List<ReportYearOption> options = fiscalYears.stream()
                 .map(f -> new ReportYearOption(f.getTaxYear(), yearLabel(f.getTaxYear())))
                 .toList();
@@ -127,19 +180,32 @@ public class TaxReturnServiceImpl implements TaxReturnService {
         List<CheckItem> checks = new ArrayList<>();
         BasicInfo basic = basicInfo(profile, deduction);
         buildChecks(basic, current, saved, bs, draftCount, unsettledCount, deduction, months, errors, warnings, checks);
+        buildMappingChecks(current, statement, errors, warnings, checks);
+        TaxReturnExtras extras = extrasBuilder().build(new TaxReturnExtrasBuilder.Context(
+                profile, selected, fiscalYears, saved, mapping, bsResult, statement.rows,
+                current.incomeEntries, current.expenseEntries, current.income,
+                CLOSED.equals(selected.getStatus()), appUserId), errors, warnings, checks);
 
         SettlementForm form = overrideForm != null ? overrideForm : toForm(saved);
-        return new TaxReturnPageData(
+        TaxReturnPageData page = new TaxReturnPageData(
                 options, selected.getTaxYear(), yearLabel(selected.getTaxYear()), CLOSED.equals(selected.getStatus()),
                 basic, deduction,
                 current.sales, current.expenses, current.income, afterDeduction,
                 diff(current.sales, priorCalc == null ? null : priorCalc.sales, true),
                 diff(current.expenses, priorCalc == null ? null : priorCalc.expenses, false),
                 diff(current.income, priorCalc == null ? null : priorCalc.income, true),
-                months, current.plRows, form,
+                months, current.plRows, statement.rows, form,
                 bs.assets, bs.liabilities, bs.assetsOpening, bs.assetsClosing, bs.liabilitiesOpening, bs.liabilitiesClosing,
                 journalPreview(current.journal), current.journal, ledger(current.journal),
                 checks, errors, warnings);
+        page.setExtras(extras);
+        page.setBalanceCarriedForward(bsResult.isCarriedForward());
+        return page;
+    }
+
+    private TaxReturnExtrasBuilder extrasBuilder() {
+        return new TaxReturnExtrasBuilder(fixedAssetRepository, taxReturnInputRepository, taxDependentRepository,
+                taxDeductionRecordRepository, incomeEntryRepository, expenseEntryRepository);
     }
 
     @Override
@@ -152,7 +218,6 @@ public class TaxReturnServiceImpl implements TaxReturnService {
         List<String> errors = new ArrayList<>();
         BigDecimal openingInventory = parse("期首棚卸", form.getOpeningInventory(), errors);
         BigDecimal closingInventory = parse("期末棚卸", form.getClosingInventory(), errors);
-        BigDecimal depreciation = parse("減価償却費", form.getDepreciation(), errors);
         BigDecimal receivable = parse("売掛金", form.getAccountsReceivable(), errors);
         BigDecimal payable = parse("買掛金", form.getAccountsPayable(), errors);
         BigDecimal unpaid = parse("未払金", form.getUnpaidExpenses(), errors);
@@ -166,18 +231,31 @@ public class TaxReturnServiceImpl implements TaxReturnService {
                 .orElseGet(() -> newSettlement(fiscalYear));
         entity.setOpeningInventory(openingInventory);
         entity.setClosingInventory(closingInventory);
-        entity.setDepreciation(depreciation);
+        entity.setDepreciation(registerDepreciation(fiscalYear));
         entity.setAccountsReceivable(receivable);
         entity.setAccountsPayable(payable);
         entity.setUnpaidExpenses(unpaid);
         entity.setUnreceivedIncome(unreceived);
         entity.setOpeningBalance(openingBalance);
         entity.setClosingCash(closingCash);
+        entity.setBalancesConfirmed(true);
         entity.setSettlementStatus(resolveSettlementStatus(receivable, payable, unpaid, unreceived));
         SettlementAdjustment savedAdjustment = settlementRepository.save(entity);
         applySettlementAllocationByAdjustment(fiscalYear.getId(), savedAdjustment);
-        upsertSettlementJournalEntry(fiscalYear, savedAdjustment);
+        closingJournalService.rebuild(fiscalYear.getId());
         return List.of();
+    }
+
+    /** 固定資産台帳による当年分の減価償却費（必要経費算入額）。決算整理の参照用に保存する。 */
+    private BigDecimal registerDepreciation(FiscalYear fiscalYear) {
+        BigDecimal total = BigDecimal.ZERO;
+        for (FixedAsset asset : fixedAssetRepository
+                .findByBusinessProfileIdOrderByAcquisitionDateAscIdAsc(fiscalYear.getBusinessProfile().getId())) {
+            if (!asset.getAcquisitionDate().isAfter(fiscalYear.getPeriodEnd())) {
+                total = total.add(DepreciationCalculator.forYear(asset, fiscalYear.getTaxYear()).businessPortion());
+            }
+        }
+        return total;
     }
 
     @Override
@@ -277,7 +355,7 @@ public class TaxReturnServiceImpl implements TaxReturnService {
         return form;
     }
 
-    private Calc calculate(FiscalYear fiscalYear, Long appUserId, SettlementAdjustment settlement) {
+    private Calc calculate(FiscalYear fiscalYear, Long appUserId, SettlementAdjustment settlement, AccountMapping mapping) {
         Calc calc = new Calc();
         List<IncomeEntry> incomes = incomeEntryRepository.findAllOwnedByFiscalYear(fiscalYear.getId(), appUserId)
                 .stream().filter(e -> !e.isExcludeFromReturn() && e.getAmount() != null && e.getTransactionDate() != null)
@@ -288,26 +366,25 @@ public class TaxReturnServiceImpl implements TaxReturnService {
         java.util.Arrays.fill(calc.incomeByMonth, BigDecimal.ZERO);
         java.util.Arrays.fill(calc.expenseByMonth, BigDecimal.ZERO);
 
-        Map<String, BigDecimal> incomeItems = new LinkedHashMap<>();
-        Map<String, BigDecimal> expenseItems = new LinkedHashMap<>();
         List<Object[]> sortable = new ArrayList<>();
         for (IncomeEntry e : incomes) {
             int idx = e.getTransactionDate().getMonthValue() - 1;
             calc.incomeByMonth[idx] = calc.incomeByMonth[idx].add(e.getAmount());
             calc.sales = calc.sales.add(e.getAmount());
             String item = e.getIncomeItem() == null ? UNCATEGORIZED : e.getIncomeItem().getItemName();
-            incomeItems.merge(item, e.getAmount(), BigDecimal::add);
+            AccountTotal account = incomeAccount(e, item, mapping, calc);
+            account.amount = account.amount.add(e.getAmount());
             String debit = e.getReceiveMethod() == null ? "普通預金" : e.getReceiveMethod().getMethodName();
-            String credit = e.getIncomeItem() == null ? "売上高" : e.getIncomeItem().getItemName();
             sortable.add(new Object[] {e.getTransactionDate(), e.getId(), 0,
-                    journalLine(e.getTransactionDate().toString(), e.getDetails(), item, debit, e.getAmount(), credit, e.getAmount())});
+                    journalLine(e.getTransactionDate().toString(), e.getDetails(), item, debit, e.getAmount(), account.name, e.getAmount())});
         }
         for (ExpenseEntry e : expenses) {
             BigDecimal amount = e.getDeductibleAmount() != null ? e.getDeductibleAmount() : e.getAmount();
             int idx = e.getTransactionDate().getMonthValue() - 1;
             calc.expenseByMonth[idx] = calc.expenseByMonth[idx].add(amount);
             String item = e.getExpenseItem() == null ? UNCATEGORIZED : e.getExpenseItem().getItemName();
-            expenseItems.merge(item, amount, BigDecimal::add);
+            AccountTotal account = expenseAccount(e, item, mapping, calc);
+            account.amount = account.amount.add(amount);
             String credit = e.getPaymentMethod() == null ? "現金" : e.getPaymentMethod().getMethodName();
             BigDecimal ownerDraw = e.isHomeApportionmentApplied()
                     ? e.getAmount().subtract(amount).max(BigDecimal.ZERO)
@@ -315,7 +392,7 @@ public class TaxReturnServiceImpl implements TaxReturnService {
             // 家事按分は複合仕訳: 借方 経費(按分額)＋事業主貸(残額) / 貸方 支払方法(支出総額)
             BigDecimal creditAmount = amount.add(ownerDraw);
             sortable.add(new Object[] {e.getTransactionDate(), e.getId(), 1,
-                    journalLine(e.getTransactionDate().toString(), e.getDetails(), item, item, amount, credit, creditAmount)});
+                    journalLine(e.getTransactionDate().toString(), e.getDetails(), item, account.name, amount, credit, creditAmount)});
             if (ownerDraw.signum() > 0) {
                 calc.ownerDraw = calc.ownerDraw.add(ownerDraw);
                 JournalLine head = journalLine(e.getTransactionDate().toString(), e.getDetails(), item, OWNER_DRAW_LABEL, ownerDraw, null, null);
@@ -323,24 +400,42 @@ public class TaxReturnServiceImpl implements TaxReturnService {
                         new JournalLine(head.getDate(), head.getSummary(), OWNER_DRAW_LABEL, ownerDraw, null, null, true)});
             }
         }
-        if (settlement != null) {
-            BigDecimal depreciation = settlement.getDepreciation();
-            BigDecimal inventory = settlement.getOpeningInventory().subtract(settlement.getClosingInventory());
-            if (depreciation.signum() != 0) {
-                expenseItems.merge(DEPRECIATION_LABEL, depreciation, BigDecimal::add);
+        List<FixedAsset> assets = fixedAssetRepository
+                .findByBusinessProfileIdOrderByAcquisitionDateAscIdAsc(fiscalYear.getBusinessProfile().getId());
+        BigDecimal depreciation = BigDecimal.ZERO;
+        for (FixedAsset asset : assets) {
+            if (!asset.getAcquisitionDate().isAfter(fiscalYear.getPeriodEnd())) {
+                depreciation = depreciation.add(DepreciationCalculator.forYear(asset, fiscalYear.getTaxYear()).businessPortion());
             }
-            if (inventory.signum() != 0) {
-                expenseItems.merge(INVENTORY_LABEL, inventory, BigDecimal::add);
-            }
-            calc.expenseByMonth[11] = calc.expenseByMonth[11].add(depreciation).add(inventory);
         }
-        for (BigDecimal v : expenseItems.values()) {
-            calc.expenses = calc.expenses.add(v);
+        calc.depreciation = depreciation;
+        calc.incomeEntries = incomes;
+        calc.expenseEntries = expenses;
+        BigDecimal inventory = settlement == null ? BigDecimal.ZERO
+                : safeAmount(settlement.getOpeningInventory()).subtract(safeAmount(settlement.getClosingInventory()));
+        if (depreciation.signum() != 0) {
+            AccountRef ref = mapping.byCode(AccountMasterSeed.ACC_DEPRECIATION).orElse(null);
+            AccountTotal account = ref != null
+                    ? calc.account(SECTION_EXPENSE, ref.code(), ref.name(), ref.displayOrder())
+                    : calc.account(SECTION_EXPENSE, null, DEPRECIATION_LABEL, Integer.MAX_VALUE);
+            account.amount = account.amount.add(depreciation);
+        }
+        if (inventory.signum() != 0) {
+            AccountTotal account = calc.account(SECTION_ADJUSTMENT, null, INVENTORY_LABEL, Integer.MAX_VALUE);
+            account.amount = account.amount.add(inventory);
+        }
+        calc.expenseByMonth[11] = calc.expenseByMonth[11].add(depreciation).add(inventory);
+        List<AccountTotal> ordered = new ArrayList<>(calc.accounts.values());
+        ordered.sort(Comparator.comparingInt((AccountTotal a) -> sectionOrder(a.section))
+                .thenComparingInt(a -> a.order)
+                .thenComparing(a -> a.name));
+        for (AccountTotal a : ordered) {
+            if (!SECTION_REVENUE.equals(a.section)) {
+                calc.expenses = calc.expenses.add(a.amount);
+            }
+            calc.plRows.add(new PlRow(a.name, a.amount, a.section));
         }
         calc.income = calc.sales.subtract(calc.expenses);
-
-        incomeItems.forEach((k, v) -> calc.plRows.add(new PlRow(k, v)));
-        expenseItems.forEach((k, v) -> calc.plRows.add(new PlRow(k, v)));
 
         List<JournalLine> persisted = buildJournalFromPersistedEntries(fiscalYear.getId());
         if (!persisted.isEmpty()) {
@@ -353,6 +448,229 @@ public class TaxReturnServiceImpl implements TaxReturnService {
             sortable.forEach(o -> calc.journal.add((JournalLine) o[3]));
         }
         return calc;
+    }
+
+    private AccountTotal incomeAccount(IncomeEntry e, String item, AccountMapping mapping, Calc calc) {
+        Optional<AccountRef> ref = mapping.forIncomeItem(e.getIncomeItem(), e.getTransactionDate());
+        if (ref.isPresent()) {
+            noteReview(ref.get(), item, calc);
+            if (!ref.get().isProfitAndLoss()) {
+                calc.nonPlItems.add(item);
+            }
+            return calc.account(SECTION_REVENUE, ref.get().code(), ref.get().name(), ref.get().displayOrder());
+        }
+        calc.unmappedItems.add(item);
+        String categoryCode = e.getIncomeItem() == null || e.getIncomeItem().getIncomeCategory() == null
+                ? "" : e.getIncomeItem().getIncomeCategory().getCategoryCode();
+        String fallbackCode = "misc".equals(categoryCode) ? AccountMasterSeed.ACC_MISC_INCOME : AccountMasterSeed.ACC_SALES;
+        return mapping.byCode(fallbackCode)
+                .map(r -> calc.account(SECTION_REVENUE, r.code(), r.name(), r.displayOrder()))
+                .orElseGet(() -> calc.account(SECTION_REVENUE, null, "売上高", Integer.MAX_VALUE));
+    }
+
+    private AccountTotal expenseAccount(ExpenseEntry e, String item, AccountMapping mapping, Calc calc) {
+        Optional<AccountRef> ref = mapping.forExpenseItem(e.getExpenseItem(), e.getTransactionDate());
+        if (ref.isPresent()) {
+            noteReview(ref.get(), item, calc);
+            if (!ref.get().isProfitAndLoss()) {
+                calc.nonPlItems.add(item);
+            }
+            return calc.account(SECTION_EXPENSE, ref.get().code(), ref.get().name(), ref.get().displayOrder());
+        }
+        calc.unmappedItems.add(item);
+        return calc.account(SECTION_EXPENSE, null, item, Integer.MAX_VALUE);
+    }
+
+    private static void noteReview(AccountRef ref, String item, Calc calc) {
+        if (ref.requiresReview()) {
+            calc.reviewItems.putIfAbsent(item, ref.reviewNote() == null ? "" : ref.reviewNote());
+        }
+    }
+
+    private static int sectionOrder(String section) {
+        if (SECTION_REVENUE.equals(section)) {
+            return 0;
+        }
+        return SECTION_EXPENSE.equals(section) ? 1 : 2;
+    }
+
+    /**
+     * 勘定科目別の集計を青色申告決算書（一般用）損益計算書の欄へ集約する。
+     * 任意記載欄に対応付けた科目は表示順に空欄へ割り当て、欄が不足する分は雑費へ含める。
+     */
+    private Statement buildStatement(StatementLayout layout, Calc calc, SettlementAdjustment settlement,
+            BigDecimal deductionAmount) {
+        Statement st = new Statement();
+        if (layout.isEmpty()) {
+            return st;
+        }
+        Set<String> lineCodes = new HashSet<>();
+        layout.lines().forEach(l -> lineCodes.add(l.getLineCode()));
+        Map<String, BigDecimal> amounts = new HashMap<>();
+        Map<String, List<String>> sources = new HashMap<>();
+        List<AccountTotal> freeAccounts = new ArrayList<>();
+        for (AccountTotal a : calc.accounts.values()) {
+            if (SECTION_ADJUSTMENT.equals(a.section) || a.amount.signum() == 0) {
+                continue;
+            }
+            String line = a.code == null ? null : layout.lineByAccountCode().get(a.code);
+            if (AccountMasterSeed.LINE_FREE.equals(line)) {
+                freeAccounts.add(a);
+                continue;
+            }
+            if (line == null || !lineCodes.contains(line)) {
+                line = SECTION_REVENUE.equals(a.section) ? AccountMasterSeed.LINE_SALES : AccountMasterSeed.LINE_MISC_EXPENSE;
+                if (a.code != null) {
+                    st.unassignedAccounts.add(a.name);
+                }
+            }
+            addStatementAmount(amounts, sources, line, a.amount, a.name);
+        }
+        freeAccounts.sort(Comparator.comparingInt((AccountTotal a) -> a.order).thenComparing(a -> a.name));
+        List<StatementLine> freeLines = layout.lines().stream()
+                .filter(l -> AccountMasterSeed.LINE_TYPE_FREE.equals(l.getLineType()))
+                .toList();
+        Map<String, String> freeLabels = new HashMap<>();
+        for (int i = 0; i < freeAccounts.size(); i++) {
+            AccountTotal a = freeAccounts.get(i);
+            if (i < freeLines.size()) {
+                String line = freeLines.get(i).getLineCode();
+                freeLabels.put(line, a.name);
+                addStatementAmount(amounts, sources, line, a.amount, a.name);
+            } else {
+                addStatementAmount(amounts, sources, AccountMasterSeed.LINE_MISC_EXPENSE, a.amount, a.name);
+                st.overflowAccounts.add(a.name);
+            }
+        }
+        if (settlement != null) {
+            addStatementAmount(amounts, sources, AccountMasterSeed.LINE_OPENING_INVENTORY,
+                    safeAmount(settlement.getOpeningInventory()), SETTLEMENT_SOURCE_LABEL);
+            addStatementAmount(amounts, sources, AccountMasterSeed.LINE_CLOSING_INVENTORY,
+                    safeAmount(settlement.getClosingInventory()), SETTLEMENT_SOURCE_LABEL);
+        }
+
+        List<StatementLine> lines = layout.lines();
+        amounts.put(AccountMasterSeed.LINE_COGS_SUBTOTAL,
+                value(amounts, AccountMasterSeed.LINE_OPENING_INVENTORY).add(value(amounts, AccountMasterSeed.LINE_PURCHASES)));
+        amounts.put(AccountMasterSeed.LINE_COGS,
+                value(amounts, AccountMasterSeed.LINE_COGS_SUBTOTAL).subtract(value(amounts, AccountMasterSeed.LINE_CLOSING_INVENTORY)));
+        amounts.put(AccountMasterSeed.LINE_GROSS_PROFIT,
+                value(amounts, AccountMasterSeed.LINE_SALES).subtract(value(amounts, AccountMasterSeed.LINE_COGS)));
+        amounts.put(AccountMasterSeed.LINE_EXPENSE_TOTAL,
+                sumBetween(lines, amounts, AccountMasterSeed.LINE_GROSS_PROFIT, AccountMasterSeed.LINE_EXPENSE_TOTAL));
+        amounts.put(AccountMasterSeed.LINE_NET_BEFORE_RESERVES,
+                value(amounts, AccountMasterSeed.LINE_GROSS_PROFIT).subtract(value(amounts, AccountMasterSeed.LINE_EXPENSE_TOTAL)));
+        amounts.put(AccountMasterSeed.LINE_REVERSAL_TOTAL,
+                sumBetween(lines, amounts, AccountMasterSeed.LINE_NET_BEFORE_RESERVES, AccountMasterSeed.LINE_REVERSAL_TOTAL));
+        amounts.put(AccountMasterSeed.LINE_PROVISION_TOTAL,
+                sumBetween(lines, amounts, AccountMasterSeed.LINE_REVERSAL_TOTAL, AccountMasterSeed.LINE_PROVISION_TOTAL));
+        BigDecimal beforeBlue = value(amounts, AccountMasterSeed.LINE_NET_BEFORE_RESERVES)
+                .add(value(amounts, AccountMasterSeed.LINE_REVERSAL_TOTAL))
+                .subtract(value(amounts, AccountMasterSeed.LINE_PROVISION_TOTAL));
+        BigDecimal blue = deductionAmount.min(beforeBlue.max(BigDecimal.ZERO));
+        amounts.put(AccountMasterSeed.LINE_INCOME_BEFORE_BLUE, beforeBlue);
+        amounts.put(AccountMasterSeed.LINE_BLUE_DEDUCTION, blue);
+        amounts.put(AccountMasterSeed.LINE_INCOME, beforeBlue.subtract(blue));
+        st.incomeBeforeBlue = beforeBlue;
+
+        for (StatementLine line : lines) {
+            String code = line.getLineCode();
+            String label = freeLabels.getOrDefault(code, line.getLineLabel());
+            String accounts = String.join("、", sources.getOrDefault(code, List.of()));
+            st.rows.add(new StatementRow(line.getLineNumber(), circledNumber(line.getLineNumber()), code, label,
+                    value(amounts, code), line.getLineType(), accounts, TOTAL_LINES.contains(code)));
+        }
+        return st;
+    }
+
+    private static void addStatementAmount(Map<String, BigDecimal> amounts, Map<String, List<String>> sources,
+            String line, BigDecimal amount, String source) {
+        amounts.merge(line, amount, BigDecimal::add);
+        if (amount.signum() != 0) {
+            List<String> list = sources.computeIfAbsent(line, k -> new ArrayList<>());
+            if (!list.contains(source)) {
+                list.add(source);
+            }
+        }
+    }
+
+    private static BigDecimal value(Map<String, BigDecimal> amounts, String line) {
+        return amounts.getOrDefault(line, BigDecimal.ZERO);
+    }
+
+    /** from欄とto欄の間（両端を除く）にある計算欄以外の欄を合計する。 */
+    private static BigDecimal sumBetween(List<StatementLine> lines, Map<String, BigDecimal> amounts, String from, String to) {
+        BigDecimal total = BigDecimal.ZERO;
+        boolean inside = false;
+        for (StatementLine line : lines) {
+            if (line.getLineCode().equals(to)) {
+                break;
+            }
+            if (inside && !AccountMasterSeed.LINE_TYPE_CALC.equals(line.getLineType())) {
+                total = total.add(value(amounts, line.getLineCode()));
+            }
+            if (line.getLineCode().equals(from)) {
+                inside = true;
+            }
+        }
+        return total;
+    }
+
+    static String circledNumber(int n) {
+        if (n >= 1 && n <= 20) {
+            return String.valueOf((char) (0x2460 + n - 1));
+        }
+        if (n >= 21 && n <= 35) {
+            return String.valueOf((char) (0x3251 + n - 21));
+        }
+        if (n >= 36 && n <= 50) {
+            return String.valueOf((char) (0x32B1 + n - 36));
+        }
+        return "(" + n + ")";
+    }
+
+    private void buildMappingChecks(Calc calc, Statement statement, List<String> errors, List<String> warnings,
+            List<CheckItem> checks) {
+        String reason = null;
+        if (statement.rows.isEmpty()) {
+            warnings.add("対象年度の青色申告決算書の様式欄が登録されていません。");
+            reason = "様式欄が未登録です";
+        } else if (statement.incomeBeforeBlue.compareTo(calc.income) != 0) {
+            errors.add("決算書の青色申告特別控除前の所得金額と損益計算書の所得が一致していません。");
+            reason = "決算書と損益計算書の所得が一致しません";
+        }
+        if (!calc.unmappedItems.isEmpty()) {
+            warnings.add("勘定科目が未設定の品目があります（" + summarize(calc.unmappedItems) + "）。売上高または雑費として集計しています。");
+            reason = reason == null ? "勘定科目が未設定の品目があります" : reason;
+        }
+        if (!calc.nonPlItems.isEmpty()) {
+            warnings.add("事業損益に含めない科目の取引が申告対象になっています（" + summarize(calc.nonPlItems) + "）。申告対象外の設定を確認してください。");
+            reason = reason == null ? "損益に含めない科目の取引があります" : reason;
+        }
+        if (!statement.unassignedAccounts.isEmpty()) {
+            warnings.add("決算書の欄が未設定の科目があります（" + summarize(statement.unassignedAccounts) + "）。売上金額または雑費に含めています。");
+            reason = reason == null ? "決算書の欄が未設定の科目があります" : reason;
+        }
+        if (!statement.overflowAccounts.isEmpty()) {
+            warnings.add("任意記載欄を超える経費科目（" + summarize(statement.overflowAccounts) + "）を雑費に含めています。");
+            reason = reason == null ? "任意記載欄を超える科目があります" : reason;
+        }
+        if (!calc.reviewItems.isEmpty()) {
+            List<String> notes = new ArrayList<>();
+            calc.reviewItems.forEach((item, note) -> notes.add(note.isEmpty() ? item : item + "：" + note));
+            warnings.add("勘定科目の確認が必要な取引があります（" + summarize(notes) + "）。");
+        }
+        String message = reason != null ? reason
+                : calc.reviewItems.isEmpty() ? "入力完了" : "要確認の品目が" + calc.reviewItems.size() + "件あります";
+        checks.add(new CheckItem("check-account-mapping", "科目対応", reason == null, message));
+    }
+
+    private static String summarize(java.util.Collection<String> values) {
+        List<String> list = new ArrayList<>(values);
+        if (list.size() <= 3) {
+            return String.join("、", list);
+        }
+        return String.join("、", list.subList(0, 3)) + " ほか" + (list.size() - 3) + "件";
     }
 
     private JournalLine journalLine(String date, String details, String fallback,
@@ -457,60 +775,8 @@ public class TaxReturnServiceImpl implements TaxReturnService {
         }
     }
 
-    private void upsertSettlementJournalEntry(FiscalYear fiscalYear, SettlementAdjustment adjustment) {
-        if (fiscalYear == null || adjustment == null) {
-            return;
-        }
-        JournalEntry entry = journalEntryRepository.findBySourceTypeAndSourceId(SOURCE_TYPE_SETTLEMENT, adjustment.getId())
-                .orElseGet(JournalEntry::new);
-        entry.setFiscalYear(fiscalYear);
-        entry.setAccountingTransaction(null);
-        entry.setSourceType(SOURCE_TYPE_SETTLEMENT);
-        entry.setSourceId(adjustment.getId());
-        entry.setEntryDate(fiscalYear.getPeriodEnd());
-        entry.setSummary("決算整理仕訳");
-        entry.setStatus(DRAFT);
-
-        List<org.example.entity.JournalLine> lines = new ArrayList<>();
-        int lineNo = 1;
-
-        BigDecimal depreciation = safeAmount(adjustment.getDepreciation());
-        if (depreciation.signum() > 0) {
-            lines.add(buildPersistedLine(lineNo++, "D", DEPRECIATION_LABEL, depreciation, "決算整理"));
-            lines.add(buildPersistedLine(lineNo++, "C", "減価償却累計額", depreciation, "決算整理"));
-        }
-
-        BigDecimal inventoryDelta = safeAmount(adjustment.getOpeningInventory()).subtract(safeAmount(adjustment.getClosingInventory()));
-        if (inventoryDelta.signum() > 0) {
-            lines.add(buildPersistedLine(lineNo++, "D", "仕入高", inventoryDelta, "棚卸調整"));
-            lines.add(buildPersistedLine(lineNo++, "C", "棚卸資産", inventoryDelta, "棚卸調整"));
-        } else if (inventoryDelta.signum() < 0) {
-            BigDecimal abs = inventoryDelta.abs();
-            lines.add(buildPersistedLine(lineNo++, "D", "棚卸資産", abs, "棚卸調整"));
-            lines.add(buildPersistedLine(lineNo++, "C", "仕入高", abs, "棚卸調整"));
-        }
-
-        entry.setLines(lines);
-        journalEntryRepository.save(entry);
-    }
-
-    private org.example.entity.JournalLine buildPersistedLine(
-            int lineNo,
-            String debitCredit,
-            String accountName,
-            BigDecimal amount,
-            String memo) {
-        org.example.entity.JournalLine line = new org.example.entity.JournalLine();
-        line.setLineNo(lineNo);
-        line.setDebitCredit(debitCredit);
-        line.setAccountName(accountName);
-        line.setAmount(safeAmount(amount));
-        line.setMemo(memo);
-        return line;
-    }
-
     private List<JournalLine> buildJournalFromPersistedEntries(Long fiscalYearId) {
-        List<JournalEntry> entries = journalEntryRepository.findAllWithLinesByFiscalYearId(fiscalYearId);
+        List<JournalEntry> entries = new ArrayList<>(new LinkedHashSet<>(journalEntryRepository.findAllWithLinesByFiscalYearId(fiscalYearId)));
         List<JournalLine> converted = new ArrayList<>();
         for (JournalEntry entry : entries) {
             List<org.example.entity.JournalLine> debitLines = entry.getLines().stream()
@@ -604,36 +870,27 @@ public class TaxReturnServiceImpl implements TaxReturnService {
         return result;
     }
 
-    private BalanceSheet balanceSheet(SettlementAdjustment s, BigDecimal income, BigDecimal ownerDraw) {
-        BigDecimal zero = BigDecimal.ZERO;
-        BigDecimal openingBalance = s == null ? zero : s.getOpeningBalance();
-        BigDecimal openingInventory = s == null ? zero : s.getOpeningInventory();
-        BigDecimal closingInventory = s == null ? zero : s.getClosingInventory();
-        BigDecimal cash = s == null ? zero : s.getClosingCash();
-        BigDecimal receivable = s == null ? zero : s.getAccountsReceivable();
-        BigDecimal unreceived = s == null ? zero : s.getUnreceivedIncome();
-        BigDecimal payable = s == null ? zero : s.getAccountsPayable();
-        BigDecimal unpaid = s == null ? zero : s.getUnpaidExpenses();
-        BigDecimal capital = openingBalance.add(openingInventory);
-
+    private BalanceSheet balanceSheet(BalanceSheetService.Result r) {
+        Set<String> alwaysShown = Set.of(AccountMasterSeed.ACC_CASH, AccountMasterSeed.ACC_BANK_DEPOSIT,
+                AccountMasterSeed.ACC_OWNER_DRAW, AccountMasterSeed.ACC_OWNER_CONTRIBUTION);
         BalanceSheet bs = new BalanceSheet();
-        bs.assets.add(new BsRow("現預金", openingBalance, cash));
-        bs.assets.add(new BsRow("売掛金", zero, receivable));
-        bs.assets.add(new BsRow("未収入金", zero, unreceived));
-        bs.assets.add(new BsRow("棚卸資産", openingInventory, closingInventory));
-        bs.assets.add(new BsRow(OWNER_DRAW_LABEL, zero, ownerDraw));
-        bs.liabilities.add(new BsRow("買掛金", zero, payable));
-        bs.liabilities.add(new BsRow("未払金", zero, unpaid));
-        bs.liabilities.add(new BsRow("元入金", capital, capital));
-        bs.liabilities.add(new BsRow("青色申告特別控除前所得", zero, income));
-        for (BsRow r : bs.assets) {
-            bs.assetsOpening = bs.assetsOpening.add(r.getOpening());
-            bs.assetsClosing = bs.assetsClosing.add(r.getClosing());
+        for (BalanceSheetService.Balance b : r.assetSide()) {
+            if (alwaysShown.contains(b.getCode()) || b.getOpening().signum() != 0 || b.getClosing().signum() != 0) {
+                bs.assets.add(new BsRow(b.getName(), b.getOpening(), b.getClosing()));
+            }
         }
-        for (BsRow r : bs.liabilities) {
-            bs.liabilitiesOpening = bs.liabilitiesOpening.add(r.getOpening());
-            bs.liabilitiesClosing = bs.liabilitiesClosing.add(r.getClosing());
+        for (BalanceSheetService.Balance b : r.liabilitySide()) {
+            if (alwaysShown.contains(b.getCode()) || b.getOpening().signum() != 0 || b.getClosing().signum() != 0) {
+                bs.liabilities.add(new BsRow(b.getName(), b.getOpening(), b.getClosing()));
+            }
         }
+        bs.liabilities.add(new BsRow("元入金", r.getCapital(), r.getCapital()));
+        bs.liabilities.add(new BsRow("青色申告特別控除前の所得金額", BigDecimal.ZERO, r.getProfitBeforeBlue()));
+        bs.assetsOpening = r.getAssetsOpening();
+        bs.assetsClosing = r.getAssetsClosing();
+        bs.liabilitiesOpening = r.getLiabilitiesOpening();
+        bs.liabilitiesClosing = r.getLiabilitiesClosing();
+        bs.source = r;
         return bs;
     }
 
@@ -681,8 +938,6 @@ public class TaxReturnServiceImpl implements TaxReturnService {
                 !hasData ? "損益データがありません" : saved == null ? "決算整理が未保存です" : "入力完了"));
         checks.add(new CheckItem("check-monthly-sales", "月別売上", monthlyOk,
                 monthlyOk ? "入力完了" : "月別合計が年間合計と一致していません"));
-        checks.add(new CheckItem("check-depreciation", "減価償却", saved != null,
-                saved != null ? "入力完了" : "減価償却費が未保存です"));
         checks.add(new CheckItem("check-balance-sheet", "貸借対照表", balanced,
                 balanced ? "入力完了" : "貸借が一致していません"));
         checks.add(new CheckItem("check-journal", "仕訳", draftCount == 0,
@@ -720,6 +975,40 @@ public class TaxReturnServiceImpl implements TaxReturnService {
         final BigDecimal[] expenseByMonth = new BigDecimal[12];
         final List<PlRow> plRows = new ArrayList<>();
         final List<JournalLine> journal = new ArrayList<>();
+        final Map<String, AccountTotal> accounts = new LinkedHashMap<>();
+        final Map<String, String> reviewItems = new LinkedHashMap<>();
+        final Set<String> unmappedItems = new LinkedHashSet<>();
+        final Set<String> nonPlItems = new LinkedHashSet<>();
+        BigDecimal depreciation = BigDecimal.ZERO;
+        List<IncomeEntry> incomeEntries = List.of();
+        List<ExpenseEntry> expenseEntries = List.of();
+
+        AccountTotal account(String section, String code, String name, int order) {
+            String key = section + ":" + (code != null ? code : "#" + name);
+            return accounts.computeIfAbsent(key, k -> new AccountTotal(section, code, name, order));
+        }
+    }
+
+    private static class AccountTotal {
+        final String section;
+        final String code;
+        final String name;
+        final int order;
+        BigDecimal amount = BigDecimal.ZERO;
+
+        AccountTotal(String section, String code, String name, int order) {
+            this.section = section;
+            this.code = code;
+            this.name = name;
+            this.order = order;
+        }
+    }
+
+    private static class Statement {
+        final List<StatementRow> rows = new ArrayList<>();
+        final Set<String> unassignedAccounts = new LinkedHashSet<>();
+        final List<String> overflowAccounts = new ArrayList<>();
+        BigDecimal incomeBeforeBlue = BigDecimal.ZERO;
     }
 
     private static class BalanceSheet {
@@ -729,5 +1018,6 @@ public class TaxReturnServiceImpl implements TaxReturnService {
         BigDecimal assetsClosing = BigDecimal.ZERO;
         BigDecimal liabilitiesOpening = BigDecimal.ZERO;
         BigDecimal liabilitiesClosing = BigDecimal.ZERO;
+        BalanceSheetService.Result source;
     }
 }

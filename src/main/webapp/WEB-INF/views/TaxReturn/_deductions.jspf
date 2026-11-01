@@ -1,0 +1,154 @@
+<%@ page pageEncoding="UTF-8" %>
+<c:set var="x" value="${page.extras}" />
+<c:set var="ri" value="${x.returnInput}" />
+<section id="section-deductions" class="profit-loss-card tr-section" aria-labelledby="heading-deductions">
+    <h2 id="heading-deductions">申告情報・所得控除</h2>
+    <p class="tr-desc">事業所得以外の所得、本人・配偶者・扶養親族の状況、所得控除を登録します。控除候補は証憑（領収書・控除証明書）を確認して「確認済み」にしたものだけを税額計算に反映します。</p>
+
+    <h3 class="tr-subheading">申告情報（<c:out value="${page.yearLabel}" />）</h3>
+    <form id="return-input-form" method="post" action="${ctx}/tax-return/return-input?year=${page.selectedYear}" novalidate>
+        <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
+        <fieldset class="tr-settlement" <c:if test="${page.closed}">disabled</c:if>>
+            <label class="tr-field"><span>給与の収入金額</span><input name="salaryRevenue" inputmode="numeric" autocomplete="off" value="<c:out value='${ri.salaryRevenue}' />" /></label>
+            <label class="tr-field"><span>給与の源泉徴収税額</span><input name="salaryWithholding" inputmode="numeric" autocomplete="off" value="<c:out value='${ri.salaryWithholding}' />" /></label>
+            <label class="tr-field"><span>給与の支払者</span><input name="salaryPayerName" maxlength="100" autocomplete="off" value="<c:out value='${ri.salaryPayerName}' />" /></label>
+            <label class="tr-field"><span>支払者の所在地</span><input name="salaryPayerAddress" maxlength="255" autocomplete="off" value="<c:out value='${ri.salaryPayerAddress}' />" /></label>
+            <label class="tr-field"><span>雑所得の収入金額</span><input name="miscRevenue" inputmode="numeric" autocomplete="off" value="<c:out value='${ri.miscRevenue}' />" /></label>
+            <label class="tr-field"><span>雑所得の必要経費</span><input name="miscExpense" inputmode="numeric" autocomplete="off" value="<c:out value='${ri.miscExpense}' />" /></label>
+            <label class="tr-field"><span>雑所得の源泉徴収税額</span><input name="miscWithholding" inputmode="numeric" autocomplete="off" value="<c:out value='${ri.miscWithholding}' />" /></label>
+            <label class="tr-field"><span>雑所得の支払者</span><input name="miscPayerName" maxlength="100" autocomplete="off" value="<c:out value='${ri.miscPayerName}' />" /></label>
+            <label class="tr-field"><span>予定納税額</span><input name="prepaidTax" inputmode="numeric" autocomplete="off" value="<c:out value='${ri.prepaidTax}' />" /></label>
+            <label class="tr-field"><span>本人の障害者区分</span><select name="selfDisability">
+                <option value="NONE" <c:if test="${ri.selfDisability == 'NONE' or empty ri.selfDisability}">selected</c:if>>該当なし</option>
+                <option value="GENERAL" <c:if test="${ri.selfDisability == 'GENERAL'}">selected</c:if>>障害者</option>
+                <option value="SPECIAL" <c:if test="${ri.selfDisability == 'SPECIAL'}">selected</c:if>>特別障害者</option>
+            </select></label>
+            <label class="tr-field"><span>寡婦・ひとり親</span><select name="widowStatus">
+                <option value="NONE" <c:if test="${ri.widowStatus == 'NONE' or empty ri.widowStatus}">selected</c:if>>該当なし</option>
+                <option value="WIDOW" <c:if test="${ri.widowStatus == 'WIDOW'}">selected</c:if>>寡婦</option>
+                <option value="SINGLE_PARENT" <c:if test="${ri.widowStatus == 'SINGLE_PARENT'}">selected</c:if>>ひとり親</option>
+            </select></label>
+            <label class="tr-field tr-field-check"><span>勤労学生</span><input type="checkbox" name="workingStudent" value="true" <c:if test="${ri.workingStudent}">checked</c:if> /></label>
+            <label class="tr-field tr-field-check"><span>配偶者がいる</span><input type="checkbox" name="hasSpouse" value="true" <c:if test="${ri.hasSpouse}">checked</c:if> /></label>
+            <label class="tr-field"><span>配偶者の氏名</span><input name="spouseName" maxlength="100" autocomplete="off" value="<c:out value='${ri.spouseName}' />" /></label>
+            <label class="tr-field"><span>配偶者の生年月日</span><input type="date" name="spouseBirthDate" value="<c:out value='${ri.spouseBirthDate}' />" /></label>
+            <label class="tr-field"><span>配偶者の合計所得金額</span><input name="spouseIncome" inputmode="numeric" autocomplete="off" value="<c:out value='${ri.spouseIncome}' />" /></label>
+            <label class="tr-field"><span>配偶者の障害者区分</span><select name="spouseDisability">
+                <option value="NONE" <c:if test="${ri.spouseDisability == 'NONE' or empty ri.spouseDisability}">selected</c:if>>該当なし</option>
+                <option value="GENERAL" <c:if test="${ri.spouseDisability == 'GENERAL'}">selected</c:if>>障害者</option>
+                <option value="SPECIAL" <c:if test="${ri.spouseDisability == 'SPECIAL'}">selected</c:if>>特別障害者</option>
+            </select></label>
+            <label class="tr-field tr-field-check"><span>配偶者と同居</span><input type="checkbox" name="spouseCohabiting" value="true" <c:if test="${ri.spouseCohabiting}">checked</c:if> /></label>
+            <label class="tr-field"><span>基準期間の課税売上高</span><input name="basePeriodTaxableSales" inputmode="numeric" autocomplete="off" placeholder="消費税用（任意）" value="<c:out value='${ri.basePeriodTaxableSales}' />" /></label>
+        </fieldset>
+        <p class="tr-desc">金額は円単位の整数で入力してください。配偶者・扶養親族の判定は12月31日現在の年齢・所得で行います。</p>
+        <div class="tr-actions"><button type="submit" class="tr-btn tr-btn-primary" <c:if test="${page.closed}">disabled</c:if>>保存する</button></div>
+    </form>
+
+    <h3 class="tr-subheading">扶養親族</h3>
+    <div class="tr-table-scroll">
+        <table id="table-dependents" class="tr-table tr-statement">
+            <thead><tr><th scope="col">氏名</th><th scope="col">続柄</th><th scope="col">生年月日</th><th scope="col" class="num">12/31時点の年齢</th><th scope="col" class="num">合計所得金額</th><th scope="col">同居</th><th scope="col">区分</th><th scope="col"><span class="visually-hidden">操作</span></th></tr></thead>
+            <tbody>
+                <c:forEach var="d" items="${x.dependents}" varStatus="st">
+                    <c:set var="dr" value="${not empty x.tax ? x.tax.dependentRows[st.index] : null}" />
+                    <tr>
+                        <th scope="row"><c:out value="${d.dependentName}" /></th>
+                        <td><c:out value="${d.relationship}" /></td>
+                        <td><c:out value="${d.birthDate}" /></td>
+                        <td class="num"><c:out value="${dr.age}" default="-" /></td>
+                        <td class="num"><fmt:formatNumber value="${d.income}" pattern="#,##0" /></td>
+                        <td>${d.cohabiting ? '同居' : '別居'}</td>
+                        <td><c:out value="${dr.category}" default="-" /></td>
+                        <td><c:if test="${not page.closed}">
+                            <form method="post" action="${ctx}/tax-return/dependents/delete?year=${page.selectedYear}" class="tr-inline-form" data-confirm="この扶養親族を削除しますか？">
+                                <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
+                                <input type="hidden" name="id" value="${d.id}" />
+                                <button type="submit" class="tr-btn tr-btn-soft tr-btn-small">削除</button>
+                            </form>
+                        </c:if></td>
+                    </tr>
+                </c:forEach>
+                <c:if test="${empty x.dependents}"><tr><td colspan="8" class="empty">登録されている扶養親族はありません。</td></tr></c:if>
+            </tbody>
+        </table>
+    </div>
+    <c:if test="${not page.closed}">
+        <details class="tr-details">
+            <summary>扶養親族を登録する</summary>
+            <form method="post" action="${ctx}/tax-return/dependents?year=${page.selectedYear}" novalidate>
+                <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
+                <div class="tr-settlement">
+                    <label class="tr-field"><span>氏名</span><input name="dependentName" maxlength="100" autocomplete="off" required /></label>
+                    <label class="tr-field"><span>続柄</span><input name="relationship" maxlength="30" autocomplete="off" placeholder="例：長男、母" required /></label>
+                    <label class="tr-field"><span>生年月日</span><input type="date" name="birthDate" required /></label>
+                    <label class="tr-field"><span>合計所得金額</span><input name="income" inputmode="numeric" autocomplete="off" value="0" /></label>
+                    <label class="tr-field"><span>障害者区分</span><select name="disability"><option value="NONE">該当なし</option><option value="GENERAL">障害者</option><option value="SPECIAL">特別障害者</option></select></label>
+                    <label class="tr-field tr-field-check"><span>同居</span><input type="checkbox" name="cohabiting" value="true" checked /></label>
+                </div>
+                <div class="tr-actions"><button type="submit" class="tr-btn tr-btn-primary">登録する</button></div>
+            </form>
+        </details>
+    </c:if>
+
+    <h3 class="tr-subheading">所得控除の台帳</h3>
+    <div class="tr-table-scroll">
+        <table id="table-deductions" class="tr-table tr-statement">
+            <thead><tr><th scope="col">種類</th><th scope="col">支払日</th><th scope="col" class="num">支払金額</th><th scope="col" class="num">補塡額</th><th scope="col">支払先・メモ</th><th scope="col">状態</th><th scope="col"><span class="visually-hidden">操作</span></th></tr></thead>
+            <tbody>
+                <c:forEach var="d" items="${x.deductions}">
+                    <tr>
+                        <th scope="row"><c:out value="${d.typeLabel}" /><c:if test="${d.fromTransaction}"><small class="tr-note">（支出登録から作成）</small></c:if></th>
+                        <td><c:out value="${d.paidDate}" default="-" /></td>
+                        <td class="num"><fmt:formatNumber value="${d.paidAmount}" pattern="#,##0" /></td>
+                        <td class="num"><c:if test="${d.reimbursedAmount != null}"><fmt:formatNumber value="${d.reimbursedAmount}" pattern="#,##0" /></c:if></td>
+                        <td><c:out value="${d.payer}" /> <c:out value="${d.notes}" /></td>
+                        <td><span class="tr-status ${d.applied ? 'is-closed' : 'is-draft'}"><c:out value="${d.statusLabel}" /></span></td>
+                        <td class="tr-row-actions"><c:if test="${not page.closed}">
+                            <c:if test="${d.status != 'VERIFIED'}">
+                                <form method="post" action="${ctx}/tax-return/deductions/status?year=${page.selectedYear}" class="tr-inline-form">
+                                    <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
+                                    <input type="hidden" name="id" value="${d.id}" /><input type="hidden" name="status" value="VERIFIED" />
+                                    <button type="submit" class="tr-btn tr-btn-soft tr-btn-small">確認済みにする</button>
+                                </form>
+                            </c:if>
+                            <c:if test="${d.status != 'INELIGIBLE'}">
+                                <form method="post" action="${ctx}/tax-return/deductions/status?year=${page.selectedYear}" class="tr-inline-form">
+                                    <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
+                                    <input type="hidden" name="id" value="${d.id}" /><input type="hidden" name="status" value="INELIGIBLE" />
+                                    <button type="submit" class="tr-btn tr-btn-soft tr-btn-small">対象外</button>
+                                </form>
+                            </c:if>
+                            <c:if test="${not d.fromTransaction}">
+                                <form method="post" action="${ctx}/tax-return/deductions/delete?year=${page.selectedYear}" class="tr-inline-form" data-confirm="この控除を削除しますか？">
+                                    <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
+                                    <input type="hidden" name="id" value="${d.id}" />
+                                    <button type="submit" class="tr-btn tr-btn-soft tr-btn-small">削除</button>
+                                </form>
+                            </c:if>
+                        </c:if></td>
+                    </tr>
+                </c:forEach>
+                <c:if test="${empty x.deductions}"><tr><td colspan="7" class="empty">登録されている所得控除はありません。</td></tr></c:if>
+            </tbody>
+        </table>
+    </div>
+    <c:if test="${not page.closed}">
+        <details class="tr-details">
+            <summary>所得控除を登録する</summary>
+            <form method="post" action="${ctx}/tax-return/deductions?year=${page.selectedYear}" novalidate>
+                <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
+                <div class="tr-settlement">
+                    <label class="tr-field"><span>控除の種類</span><select name="deductionType"><c:forEach var="o" items="${x.deductionTypeOptions}"><option value="${o.value}"><c:out value="${o.label}" /></option></c:forEach></select></label>
+                    <label class="tr-field"><span>支払日</span><input type="date" name="paidDate" /></label>
+                    <label class="tr-field"><span>支払金額（円）</span><input name="paidAmount" inputmode="numeric" autocomplete="off" required /></label>
+                    <label class="tr-field"><span>補塡される金額</span><input name="reimbursedAmount" inputmode="numeric" autocomplete="off" placeholder="医療費のみ（保険金等）" /></label>
+                    <label class="tr-field"><span>支払先</span><input name="payer" maxlength="100" autocomplete="off" /></label>
+                    <label class="tr-field"><span>メモ</span><input name="notes" maxlength="255" autocomplete="off" /></label>
+                </div>
+                <p class="tr-desc">生命保険料は平成24年以後の新契約の計算式で計算します。個人の口座から支払った国民健康保険料・国民年金保険料もここで登録できます。</p>
+                <div class="tr-actions"><button type="submit" class="tr-btn tr-btn-primary">登録する</button></div>
+            </form>
+        </details>
+    </c:if>
+</section>

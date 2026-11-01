@@ -52,6 +52,29 @@
 | パスワード表示切替ボタン | `toggle-confirm-password` | ボタン | - | パスワードの表示/マスク切替 |
 | パスワード変更ボタン | `button-update-password` | 送信ボタン | ○ | パスワードを変更（POST /settings/password） |
 
+### 確定申告の基本情報セクション
+
+`POST /settings/tax-basic-info` で一括保存する。確定申告書（第一表・第二表）および消費税計算の基礎情報。いずれも個人情報のため、ログへ値を出力しない。
+
+| 項目名 | 項目 ID / name | 種別 | 必須 | 説明 |
+|------|----------------|------|------|------|
+| セクション見出し | `heading-tax-basic-info` | 見出し | ○ | 「確定申告の基本情報」 |
+| 屋号 | `input-business-name` / `businessName` | テキスト入力 | - | 200文字以内 |
+| 業種 | `input-industry` / `industry` | テキスト入力 | - | 100文字以内 |
+| 電話番号 | `input-phone` / `phone` | テキスト入力 | - | 30文字以内、数字と +()- |
+| 住所 | `input-address` / `address` | テキスト入力 | - | 255文字以内 |
+| フリガナ | `input-name-kana` / `nameKana` | テキスト入力 | - | 100文字以内、全角カタカナとスペースのみ（連続空白は全角スペース1つに正規化） |
+| 生年月日 | `input-birth-date` / `birthDate` | 日付入力 | - | 1900-01-01より後かつ当日（日本時間）より前 |
+| 提出先税務署 | `input-tax-office` / `taxOffice` | テキスト入力 | - | 100文字以内（例: 渋谷税務署） |
+| 世帯主の氏名 | `input-household-head-name` / `householdHeadName` | テキスト入力 | - | 100文字以内 |
+| 世帯主との続柄 | `input-household-head-relation` / `householdHeadRelation` | テキスト入力 | - | 30文字以内（例: 本人） |
+| 消費税の区分 | `select-consumption-tax-status` / `consumptionTaxStatus` | 選択 | ○ | `EXEMPT`（免税事業者）/ `SIMPLIFIED`（課税事業者（簡易課税）） |
+| 簡易課税の事業区分 | `select-simplified-business-type` / `simplifiedBusinessType` | 選択 | 条件付き | 1〜6（第1種90%〜第6種40%）。`SIMPLIFIED` 時必須、`EXEMPT` 時は無効化し保存値をクリア |
+| 消費税の注記 | `text-consumption-tax-note` | 表示 | ○ | 本則課税・2割特例は非対応。簡易課税は「消費税簡易課税制度選択届出書」の提出済みが前提 |
+| 基本情報保存ボタン | `button-save-tax-basic-info` | 送信ボタン | ○ | 基本情報を保存（POST /settings/tax-basic-info） |
+
+入力値は前後の空白（全角含む）を除去し、空欄は NULL として保存する。サーバー側で上記すべてを検証し、エラー時は同セクション上部に一覧表示する。
+
 ### 家事按分設定セクション
 
 | 項目名 | 項目 ID / name | 種別 | 必須 | 説明 |
@@ -87,6 +110,8 @@
 |----------|---------|---------|
 | プロフィールフォーム送信 | submit | バリデーション実行 → 通過時 `POST /settings/profile` |
 | パスワード変更フォーム送信 | submit | バリデーション実行 → 通過時 `POST /settings/password` |
+| 消費税の区分変更 | `consumptionTaxStatus` change | `SIMPLIFIED` 以外では事業区分選択を無効化し値をクリア |
+| 基本情報フォーム送信 | submit | バリデーション実行 → 通過時 `POST /settings/tax-basic-info` |
 | 家事按分率入力 | `defaultBusinessUseRatio` input | 経費対象金額プレビューをリアルタイム更新（10,000円 × 按分率 / 100、切り捨て）。按分率エラーをクリア |
 | 家事按分フォーム送信 | submit | バリデーション実行 → 通過時 `POST /settings/business-use-ratio` |
 | 無効化フォーム送信 | submit | 確認テキストバリデーション → `window.confirm` ダイアログ → OK 時 `POST /settings/disable` |
@@ -110,6 +135,17 @@
 | 現在のパスワード | 未入力 | 現在のパスワードを入力してください。 |
 | 新しいパスワード | 8〜72文字の範囲外 | 新しいパスワードは8〜72文字で入力してください。 |
 | 確認用パスワード | 新しいパスワードと不一致 | 新しいパスワードと確認用パスワードが一致しません。 |
+
+### 確定申告の基本情報フォーム
+
+| 項目 | チェック内容 | エラーメッセージ |
+|------|------------|----------------|
+| フリガナ | 100文字超または全角カタカナ・スペース以外 | フリガナは100文字以内で、全角カタカナとスペースのみ使用できます。 |
+| 生年月日 | 1900-01-01以前または当日以降 | 生年月日は1900年1月2日から昨日までの日付を入力してください。 |
+| 提出先税務署 / 世帯主の氏名 | 100文字超 | 〇〇は100文字以内で入力してください。 |
+| 世帯主との続柄 | 30文字超 | 世帯主との続柄は30文字以内で入力してください。 |
+| 消費税の区分 | `EXEMPT` / `SIMPLIFIED` 以外（サーバー） | 消費税の区分を選択してください。 |
+| 簡易課税の事業区分 | `SIMPLIFIED` 時に1〜6以外 | 簡易課税の事業区分（第1種〜第6種）を選択してください。 |
 
 ### 家事按分フォーム
 
@@ -135,6 +171,7 @@
 | Form（プロフィール） | `ProfileForm` | `org.example.features.Setting.form` |
 | Form（パスワード） | `PasswordForm` | `org.example.features.Setting.form` |
 | Form（家事按分率） | `BusinessUseRatioForm` | `org.example.features.Setting.form` |
+| Form（確定申告の基本情報） | `TaxBasicInfoForm` | `org.example.features.Setting.form` |
 | Form（アカウント操作） | `AccountActionForm` | `org.example.features.Setting.form` |
 | DTO（設定表示） | `SettingView` | `org.example.features.Setting.dto` |
 | DTO（操作結果） | `SettingOperationResult` | `org.example.features.Setting.dto` |

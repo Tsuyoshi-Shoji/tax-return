@@ -1,0 +1,203 @@
+<%@ page pageEncoding="UTF-8" %>
+<c:set var="x" value="${page.extras}" />
+<c:set var="t" value="${x.tax}" />
+<section id="section-tax" class="profit-loss-card tr-section" aria-labelledby="heading-tax">
+    <h2 id="heading-tax">税額計算（確定申告書 第一表・第二表）</h2>
+    <p class="tr-desc">事業所得（青色申告決算書の所得金額）・その他の所得・確認済みの所得控除から所得税及び復興特別所得税を計算します。<c:out value="${x.ruleNote}" /></p>
+    <c:choose>
+        <c:when test="${empty t}">
+            <p class="tr-desc"><c:out value="${x.taxUnsupportedReason}" /></p>
+        </c:when>
+        <c:otherwise>
+            <div class="tr-cards">
+                <div class="tr-card"><span class="tr-card-icon is-purple" aria-hidden="true">Σ</span><div><div class="tr-card-label">合計所得金額</div><div class="tr-card-value"><span id="display-total-income"><fmt:formatNumber value="${t.totalIncome}" pattern="#,##0" /></span><small>円</small></div></div></div>
+                <div class="tr-card"><span class="tr-card-icon is-teal" aria-hidden="true">−</span><div><div class="tr-card-label">所得控除の合計</div><div class="tr-card-value"><span id="display-deduction-total"><fmt:formatNumber value="${t.deductionTotal}" pattern="#,##0" /></span><small>円</small></div></div></div>
+                <div class="tr-card"><span class="tr-card-icon is-green" aria-hidden="true">¥</span><div><div class="tr-card-label">課税される所得金額</div><div class="tr-card-value"><span id="display-taxable-income"><fmt:formatNumber value="${t.taxableIncome}" pattern="#,##0" /></span><small>円</small></div></div></div>
+                <div class="tr-card"><span class="tr-card-icon ${t.refund > 0 ? 'is-green' : 'is-red'}" aria-hidden="true">${t.refund > 0 ? '↩' : '↗'}</span><div><div class="tr-card-label">${t.refund > 0 ? '還付される税金' : '納める税金（第3期分）'}</div><div class="tr-card-value"><span id="display-tax-due"><fmt:formatNumber value="${t.refund > 0 ? t.refund : t.taxDue}" pattern="#,##0" /></span><small>円</small></div></div></div>
+            </div>
+            <div class="tr-statement-grid">
+                <div class="tr-table-scroll">
+                    <table id="table-income-summary" class="tr-table tr-statement">
+                        <thead><tr><th scope="col">収入金額等・所得金額等</th><th scope="col" class="num">収入金額（円）</th><th scope="col" class="num">所得金額（円）</th></tr></thead>
+                        <tbody>
+                            <tr><th scope="row">事業（営業等）</th><td class="num"><fmt:formatNumber value="${t.businessRevenue}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${t.businessIncome}" pattern="#,##0" /></td></tr>
+                            <tr><th scope="row">給与</th><td class="num"><fmt:formatNumber value="${t.salaryRevenue}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${t.salaryIncome}" pattern="#,##0" /></td></tr>
+                            <tr><th scope="row">雑（業務・その他）</th><td class="num"><fmt:formatNumber value="${t.miscRevenue}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${t.miscIncome}" pattern="#,##0" /></td></tr>
+                            <tr class="is-total"><th scope="row">合計</th><td></td><td class="num"><fmt:formatNumber value="${t.totalIncome}" pattern="#,##0" /></td></tr>
+                        </tbody>
+                    </table>
+                    <table id="table-deduction-summary" class="tr-table tr-statement">
+                        <thead><tr><th scope="col">所得から差し引かれる金額</th><th scope="col" class="num">金額（円）</th></tr></thead>
+                        <tbody>
+                            <tr><th scope="row">社会保険料控除</th><td class="num"><fmt:formatNumber value="${t.socialInsurance}" pattern="#,##0" /></td></tr>
+                            <tr><th scope="row">小規模企業共済等掛金控除</th><td class="num"><fmt:formatNumber value="${t.smallBusinessMutual}" pattern="#,##0" /></td></tr>
+                            <tr><th scope="row">生命保険料控除</th><td class="num"><fmt:formatNumber value="${t.lifeInsurance}" pattern="#,##0" /></td></tr>
+                            <tr><th scope="row">地震保険料控除</th><td class="num"><fmt:formatNumber value="${t.earthquake}" pattern="#,##0" /></td></tr>
+                            <tr><th scope="row">寡婦、ひとり親控除</th><td class="num"><fmt:formatNumber value="${t.widowOrSingleParent}" pattern="#,##0" /></td></tr>
+                            <tr><th scope="row">勤労学生、障害者控除</th><td class="num"><fmt:formatNumber value="${t.workingStudentOrDisability}" pattern="#,##0" /></td></tr>
+                            <tr><th scope="row">配偶者（特別）控除</th><td class="num"><fmt:formatNumber value="${t.spouse + t.spouseSpecial}" pattern="#,##0" /></td></tr>
+                            <tr><th scope="row">扶養控除</th><td class="num"><fmt:formatNumber value="${t.dependents}" pattern="#,##0" /></td></tr>
+                            <c:if test="${t.specificRelative > 0}"><tr><th scope="row">特定親族特別控除</th><td class="num"><fmt:formatNumber value="${t.specificRelative}" pattern="#,##0" /></td></tr></c:if>
+                            <tr><th scope="row">基礎控除</th><td class="num"><fmt:formatNumber value="${t.basic}" pattern="#,##0" /></td></tr>
+                            <tr><th scope="row">医療費控除</th><td class="num"><fmt:formatNumber value="${t.medical}" pattern="#,##0" /></td></tr>
+                            <tr><th scope="row">寄附金控除</th><td class="num"><fmt:formatNumber value="${t.donation}" pattern="#,##0" /></td></tr>
+                            <tr class="is-total"><th scope="row">合計</th><td class="num"><fmt:formatNumber value="${t.deductionTotal}" pattern="#,##0" /></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="tr-table-scroll">
+                    <table id="table-tax-calculation" class="tr-table tr-statement">
+                        <thead><tr><th scope="col">税金の計算</th><th scope="col" class="num">金額（円）</th></tr></thead>
+                        <tbody>
+                            <tr><th scope="row">課税される所得金額（1,000円未満切捨て）</th><td class="num"><fmt:formatNumber value="${t.taxableIncome}" pattern="#,##0" /></td></tr>
+                            <tr><th scope="row">上の所得に対する税額</th><td class="num"><fmt:formatNumber value="${t.incomeTax}" pattern="#,##0" /></td></tr>
+                            <c:if test="${t.flatRateReductionAvailable > 0}"><tr><th scope="row">令和6年分特別税額控除（定額減税）</th><td class="num"><fmt:formatNumber value="${t.flatRateReduction}" pattern="#,##0" /></td></tr></c:if>
+                            <tr><th scope="row">再差引所得税額（基準所得税額）</th><td class="num"><fmt:formatNumber value="${t.baseIncomeTax}" pattern="#,##0" /></td></tr>
+                            <tr><th scope="row">復興特別所得税額（2.1%）</th><td class="num"><fmt:formatNumber value="${t.reconstructionTax}" pattern="#,##0" /></td></tr>
+                            <tr class="is-calc"><th scope="row">所得税及び復興特別所得税の額</th><td class="num"><fmt:formatNumber value="${t.totalTax}" pattern="#,##0" /></td></tr>
+                            <tr><th scope="row">源泉徴収税額</th><td class="num"><fmt:formatNumber value="${t.withholding}" pattern="#,##0" /></td></tr>
+                            <tr><th scope="row">申告納税額</th><td class="num ${t.declaredTax < 0 ? 'is-negative' : ''}"><fmt:formatNumber value="${t.declaredTax}" pattern="#,##0" /></td></tr>
+                            <tr><th scope="row">予定納税額（第1期分・第2期分）</th><td class="num"><fmt:formatNumber value="${t.prepaidTax}" pattern="#,##0" /></td></tr>
+                            <tr class="is-total"><th scope="row">第3期分の税額 納める税金（100円未満切捨て）</th><td class="num"><fmt:formatNumber value="${t.taxDue}" pattern="#,##0" /></td></tr>
+                            <tr class="is-total"><th scope="row">第3期分の税額 還付される税金</th><td class="num"><fmt:formatNumber value="${t.refund}" pattern="#,##0" /></td></tr>
+                        </tbody>
+                    </table>
+                    <p class="tr-desc">純損失の繰越控除、分離課税（株式・不動産譲渡等）、不動産・配当・一時所得、住宅ローン控除等の税額控除、住民税・事業税に関する事項には対応していません。該当する場合は確定申告書等作成コーナーで追加入力してください。</p>
+                </div>
+            </div>
+        </c:otherwise>
+    </c:choose>
+</section>
+
+<c:if test="${not empty t}">
+<section id="section-final-return-print" class="profit-loss-card tr-section print-section print-only tr-form-sheet" data-print-groups="final-return" aria-label="確定申告書 第一表・第二表">
+    <div class="tr-sheet-page">
+        <h2 class="tr-sheet-title"><c:out value="${page.yearLabel}" />分の所得税及び復興特別所得税の確定申告書（第一表）</h2>
+        <table class="tr-sheet-table">
+            <tbody>
+                <tr><th>提出先</th><td><c:out value="${x.filer.taxOffice}" default="未設定" /></td><th>住所（納税地）</th><td colspan="3"><c:out value="${x.filer.address}" default="未設定" /></td></tr>
+                <tr><th>フリガナ</th><td><c:out value="${x.filer.nameKana}" /></td><th>氏名</th><td><c:out value="${x.filer.name}" /></td><th>生年月日</th><td><c:out value="${x.filer.birthDate}" /></td></tr>
+                <tr><th>職業</th><td><c:out value="${x.filer.industry}" /></td><th>屋号・雅号</th><td><c:out value="${x.filer.businessName}" /></td><th>世帯主の氏名／続柄</th><td><c:out value="${x.filer.householdHeadName}" /> <c:out value="${x.filer.householdHeadRelation}" /></td></tr>
+                <tr><th>電話番号</th><td><c:out value="${x.filer.phone}" /></td><th>種類</th><td colspan="3">青色申告</td></tr>
+            </tbody>
+        </table>
+        <div class="tr-sheet-grid">
+            <table class="tr-sheet-table">
+                <caption>収入金額等</caption>
+                <tbody>
+                    <tr><th>事業 営業等</th><td class="num"><fmt:formatNumber value="${t.businessRevenue}" pattern="#,##0" /></td></tr>
+                    <tr><th>給与</th><td class="num"><fmt:formatNumber value="${t.salaryRevenue}" pattern="#,##0" /></td></tr>
+                    <tr><th>雑（業務・その他）</th><td class="num"><fmt:formatNumber value="${t.miscRevenue}" pattern="#,##0" /></td></tr>
+                </tbody>
+            </table>
+            <table class="tr-sheet-table">
+                <caption>所得金額等</caption>
+                <tbody>
+                    <tr><th>事業 営業等</th><td class="num"><fmt:formatNumber value="${t.businessIncome}" pattern="#,##0" /></td></tr>
+                    <tr><th>給与</th><td class="num"><fmt:formatNumber value="${t.salaryIncome}" pattern="#,##0" /></td></tr>
+                    <tr><th>雑</th><td class="num"><fmt:formatNumber value="${t.miscIncome}" pattern="#,##0" /></td></tr>
+                    <tr class="is-total"><th>合計</th><td class="num"><fmt:formatNumber value="${t.totalIncome}" pattern="#,##0" /></td></tr>
+                </tbody>
+            </table>
+            <table class="tr-sheet-table">
+                <caption>所得から差し引かれる金額</caption>
+                <tbody>
+                    <tr><th>社会保険料控除</th><td class="num"><fmt:formatNumber value="${t.socialInsurance}" pattern="#,##0" /></td></tr>
+                    <tr><th>小規模企業共済等掛金控除</th><td class="num"><fmt:formatNumber value="${t.smallBusinessMutual}" pattern="#,##0" /></td></tr>
+                    <tr><th>生命保険料控除</th><td class="num"><fmt:formatNumber value="${t.lifeInsurance}" pattern="#,##0" /></td></tr>
+                    <tr><th>地震保険料控除</th><td class="num"><fmt:formatNumber value="${t.earthquake}" pattern="#,##0" /></td></tr>
+                    <tr><th>寡婦、ひとり親控除</th><td class="num"><fmt:formatNumber value="${t.widowOrSingleParent}" pattern="#,##0" /></td></tr>
+                    <tr><th>勤労学生、障害者控除</th><td class="num"><fmt:formatNumber value="${t.workingStudentOrDisability}" pattern="#,##0" /></td></tr>
+                    <tr><th>配偶者（特別）控除</th><td class="num"><fmt:formatNumber value="${t.spouse + t.spouseSpecial}" pattern="#,##0" /></td></tr>
+                    <tr><th>扶養控除<c:if test="${t.specificRelative > 0}">・特定親族特別控除</c:if></th><td class="num"><fmt:formatNumber value="${t.dependents + t.specificRelative}" pattern="#,##0" /></td></tr>
+                    <tr><th>基礎控除</th><td class="num"><fmt:formatNumber value="${t.basic}" pattern="#,##0" /></td></tr>
+                    <tr><th>医療費控除</th><td class="num"><fmt:formatNumber value="${t.medical}" pattern="#,##0" /></td></tr>
+                    <tr><th>寄附金控除</th><td class="num"><fmt:formatNumber value="${t.donation}" pattern="#,##0" /></td></tr>
+                    <tr class="is-total"><th>合計</th><td class="num"><fmt:formatNumber value="${t.deductionTotal}" pattern="#,##0" /></td></tr>
+                </tbody>
+            </table>
+            <table class="tr-sheet-table">
+                <caption>税金の計算</caption>
+                <tbody>
+                    <tr><th>課税される所得金額</th><td class="num"><fmt:formatNumber value="${t.taxableIncome}" pattern="#,##0" /></td></tr>
+                    <tr><th>上の所得に対する税額</th><td class="num"><fmt:formatNumber value="${t.incomeTax}" pattern="#,##0" /></td></tr>
+                    <c:if test="${t.flatRateReductionAvailable > 0}"><tr><th>令和6年分特別税額控除</th><td class="num"><fmt:formatNumber value="${t.flatRateReduction}" pattern="#,##0" /></td></tr></c:if>
+                    <tr><th>再差引所得税額（基準所得税額）</th><td class="num"><fmt:formatNumber value="${t.baseIncomeTax}" pattern="#,##0" /></td></tr>
+                    <tr><th>復興特別所得税額</th><td class="num"><fmt:formatNumber value="${t.reconstructionTax}" pattern="#,##0" /></td></tr>
+                    <tr><th>所得税及び復興特別所得税の額</th><td class="num"><fmt:formatNumber value="${t.totalTax}" pattern="#,##0" /></td></tr>
+                    <tr><th>所得税及び復興特別所得税の源泉徴収税額</th><td class="num"><fmt:formatNumber value="${t.withholding}" pattern="#,##0" /></td></tr>
+                    <tr><th>所得税及び復興特別所得税の申告納税額</th><td class="num"><fmt:formatNumber value="${t.declaredTax}" pattern="#,##0" /></td></tr>
+                    <tr><th>所得税及び復興特別所得税の予定納税額</th><td class="num"><fmt:formatNumber value="${t.prepaidTax}" pattern="#,##0" /></td></tr>
+                    <tr class="is-total"><th>第3期分の税額 納める税金</th><td class="num"><fmt:formatNumber value="${t.taxDue}" pattern="#,##0" /></td></tr>
+                    <tr class="is-total"><th>第3期分の税額 還付される税金</th><td class="num"><fmt:formatNumber value="${t.refund}" pattern="#,##0" /></td></tr>
+                </tbody>
+            </table>
+            <table class="tr-sheet-table">
+                <caption>その他</caption>
+                <tbody>
+                    <tr><th>専従者給与（控除）額の合計額</th><td class="num"><fmt:formatNumber value="${x.dedicatedSalary}" pattern="#,##0" /></td></tr>
+                    <tr><th>青色申告特別控除額</th><td class="num"><fmt:formatNumber value="${x.blueDeductionApplied}" pattern="#,##0" /></td></tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="tr-sheet-note">本書は国税庁様式の記載項目に沿って本アプリが作成した転記用の帳票です（公式の提出用紙ではありません）。個人番号は記載しません。提出前に最新の様式・手引きと照合してください。</p>
+    </div>
+    <div class="tr-sheet-page">
+        <h2 class="tr-sheet-title"><c:out value="${page.yearLabel}" />分の所得税及び復興特別所得税の確定申告書（第二表）</h2>
+        <table class="tr-sheet-table">
+            <tbody><tr><th>住所</th><td><c:out value="${x.filer.address}" /></td><th>屋号</th><td><c:out value="${x.filer.businessName}" /></td><th>氏名</th><td><c:out value="${x.filer.name}" /></td></tr></tbody>
+        </table>
+        <table class="tr-sheet-table">
+            <caption>所得の内訳（所得税及び復興特別所得税の源泉徴収税額）</caption>
+            <thead><tr><th>所得の種類</th><th>種目</th><th>給与などの支払者の名称・所在地等</th><th class="num">収入金額</th><th class="num">源泉徴収税額</th></tr></thead>
+            <tbody>
+                <c:forEach var="r" items="${x.incomeBreakdown}">
+                    <tr><td><c:out value="${r.kind}" /></td><td><c:out value="${r.item}" /></td><td><c:out value="${r.payerName}" /> <c:out value="${r.payerAddress}" /></td><td class="num"><fmt:formatNumber value="${r.revenue}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${r.withholding}" pattern="#,##0" /></td></tr>
+                </c:forEach>
+                <c:if test="${empty x.incomeBreakdown}"><tr><td colspan="5" class="empty">源泉徴収のある所得はありません。</td></tr></c:if>
+                <tr class="is-total"><th colspan="4">源泉徴収税額の合計額</th><td class="num"><fmt:formatNumber value="${t.withholding}" pattern="#,##0" /></td></tr>
+            </tbody>
+        </table>
+        <div class="tr-sheet-grid">
+            <table class="tr-sheet-table">
+                <caption>社会保険料控除・小規模企業共済等掛金控除</caption>
+                <tbody>
+                    <c:forEach var="r" items="${x.socialInsuranceRows}"><tr><th><c:out value="${r.label}" /></th><td class="num"><fmt:formatNumber value="${r.amount}" pattern="#,##0" /></td></tr></c:forEach>
+                    <tr><th>小規模企業共済等掛金</th><td class="num"><fmt:formatNumber value="${t.smallBusinessMutual}" pattern="#,##0" /></td></tr>
+                </tbody>
+            </table>
+            <table class="tr-sheet-table">
+                <caption>生命保険料控除・地震保険料控除</caption>
+                <tbody>
+                    <tr><th>新生命保険料</th><td class="num"><fmt:formatNumber value="${t.lifeGeneralPaid}" pattern="#,##0" /></td></tr>
+                    <tr><th>介護医療保険料</th><td class="num"><fmt:formatNumber value="${t.lifeMedicalPaid}" pattern="#,##0" /></td></tr>
+                    <tr><th>新個人年金保険料</th><td class="num"><fmt:formatNumber value="${t.lifePensionPaid}" pattern="#,##0" /></td></tr>
+                    <tr><th>地震保険料</th><td class="num"><fmt:formatNumber value="${t.earthquakePaid}" pattern="#,##0" /></td></tr>
+                </tbody>
+            </table>
+            <table class="tr-sheet-table">
+                <caption>本人に関する事項</caption>
+                <tbody>
+                    <tr><th>寡婦・ひとり親</th><td>${t.widow > 0 ? '寡婦' : (t.singleParent > 0 ? 'ひとり親' : '−')}</td></tr>
+                    <tr><th>勤労学生</th><td>${t.workingStudent > 0 ? '該当' : '−'}</td></tr>
+                    <tr><th>医療費（支払額／補塡額）</th><td class="num"><fmt:formatNumber value="${t.medicalPaid}" pattern="#,##0" /> ／ <fmt:formatNumber value="${t.medicalReimbursed}" pattern="#,##0" /></td></tr>
+                    <tr><th>寄附金（支払額）</th><td class="num"><fmt:formatNumber value="${t.donationPaid}" pattern="#,##0" /></td></tr>
+                </tbody>
+            </table>
+        </div>
+        <table class="tr-sheet-table">
+            <caption>配偶者や親族に関する事項</caption>
+            <thead><tr><th>氏名</th><th>続柄</th><th>生年月日</th><th>区分</th><th>同居</th></tr></thead>
+            <tbody>
+                <c:if test="${x.returnInput.hasSpouse}"><tr><td><c:out value="${x.returnInput.spouseName}" /></td><td>配偶者</td><td><c:out value="${x.returnInput.spouseBirthDate}" /></td><td>${t.spouse > 0 ? '配偶者控除' : (t.spouseSpecial > 0 ? '配偶者特別控除' : '控除対象外')}</td><td>${x.returnInput.spouseCohabiting ? '同居' : '別居'}</td></tr></c:if>
+                <c:forEach var="d" items="${t.dependentRows}"><tr><td><c:out value="${d.dependent.dependentName}" /></td><td><c:out value="${d.dependent.relationship}" /></td><td><c:out value="${d.dependent.birthDate}" /></td><td><c:out value="${d.category}" /></td><td>${d.dependent.cohabiting ? '同居' : '別居'}</td></tr></c:forEach>
+            </tbody>
+        </table>
+        <table class="tr-sheet-table">
+            <caption>事業専従者に関する事項</caption>
+            <tbody><tr><th>専従者給与（控除）額の合計額</th><td class="num"><fmt:formatNumber value="${x.dedicatedSalary}" pattern="#,##0" /></td></tr></tbody>
+        </table>
+        <p class="tr-sheet-note">住民税・事業税に関する事項は記載していません。必要に応じて記入してください。</p>
+    </div>
+</section>
+</c:if>

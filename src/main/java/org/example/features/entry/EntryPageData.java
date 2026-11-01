@@ -14,6 +14,8 @@ public class EntryPageData {
     private List<EntryOption> categories = new ArrayList<>();
     private List<EntryOption> items = new ArrayList<>();
     private List<EntryOption> methods = new ArrayList<>();
+    private List<String> counterpartyNames = new ArrayList<>();
+    private List<EntryOption> taxCategories = new ArrayList<>();
     private BigDecimal apportionmentRate;
     private String today;
     private Map<String, String> fieldErrors = new LinkedHashMap<>();
@@ -63,6 +65,22 @@ public class EntryPageData {
 
     public void setMethods(List<EntryOption> methods) {
         this.methods = methods;
+    }
+
+    public List<String> getCounterpartyNames() {
+        return counterpartyNames;
+    }
+
+    public void setCounterpartyNames(List<String> counterpartyNames) {
+        this.counterpartyNames = counterpartyNames;
+    }
+
+    public List<EntryOption> getTaxCategories() {
+        return taxCategories;
+    }
+
+    public void setTaxCategories(List<EntryOption> taxCategories) {
+        this.taxCategories = taxCategories;
     }
 
     public BigDecimal getApportionmentRate() {

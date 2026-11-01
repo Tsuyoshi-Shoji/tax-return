@@ -1,0 +1,30 @@
+<%@ page pageEncoding="UTF-8" %>
+<c:set var="x" value="${page.extras}" />
+<c:set var="ct" value="${x.consumption}" />
+<section id="section-consumption" class="profit-loss-card tr-section print-section" data-print-groups="consumption" aria-labelledby="heading-consumption">
+    <h2 id="heading-consumption">消費税（簡易課税）</h2>
+    <p class="tr-desc">収益登録の消費税区分（税込経理）から、簡易課税制度による消費税及び地方消費税の納付税額を計算します。消費税の区分・事業区分は各種設定で登録します。</p>
+    <dl class="tr-info">
+        <div><dt>消費税の区分</dt><dd id="display-consumption-status">${x.consumptionTaxable ? '課税事業者（簡易課税）' : '免税事業者'}</dd></div>
+        <div><dt>基準期間の課税売上高</dt><dd><c:choose><c:when test="${x.basePeriodSales != null}"><fmt:formatNumber value="${x.basePeriodSales}" pattern="#,##0" />円（<c:out value="${x.basePeriodSource}" />）</c:when><c:otherwise>不明</c:otherwise></c:choose></dd></div>
+    </dl>
+    <ul class="tr-note-list"><c:forEach var="n" items="${x.consumptionNotes}"><li><c:out value="${n}" /></li></c:forEach></ul>
+    <c:if test="${not empty ct}">
+        <div class="tr-table-scroll">
+            <table id="table-consumption" class="tr-table tr-statement">
+                <thead><tr><th scope="col">項目</th><th scope="col" class="num">標準税率 7.8%</th><th scope="col" class="num">軽減税率 6.24%</th><th scope="col" class="num">合計（円）</th></tr></thead>
+                <tbody>
+                    <tr><th scope="row">課税売上高（税込）</th><td class="num"><fmt:formatNumber value="${ct.sales10}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${ct.sales8}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${ct.sales10 + ct.sales8}" pattern="#,##0" /></td></tr>
+                    <tr><th scope="row">課税標準額（1,000円未満切捨て）</th><td class="num"><fmt:formatNumber value="${ct.base10}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${ct.base8}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${ct.taxableBase}" pattern="#,##0" /></td></tr>
+                    <tr><th scope="row">消費税額</th><td class="num"><fmt:formatNumber value="${ct.tax10}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${ct.tax8}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${ct.consumptionTax}" pattern="#,##0" /></td></tr>
+                    <tr><th scope="row">控除対象仕入税額（第${ct.businessType}種・みなし仕入率${ct.deemedRate}%）</th><td></td><td></td><td class="num"><fmt:formatNumber value="${ct.deemedPurchaseTax}" pattern="#,##0" /></td></tr>
+                    <tr class="is-calc"><th scope="row">差引税額（100円未満切捨て）</th><td></td><td></td><td class="num"><fmt:formatNumber value="${ct.netTax}" pattern="#,##0" /></td></tr>
+                    <tr class="is-calc"><th scope="row">地方消費税（譲渡割額）</th><td></td><td></td><td class="num"><fmt:formatNumber value="${ct.localTax}" pattern="#,##0" /></td></tr>
+                    <tr class="is-total"><th scope="row">消費税及び地方消費税の合計（納付）税額</th><td></td><td></td><td class="num"><fmt:formatNumber value="${ct.totalTax}" pattern="#,##0" /></td></tr>
+                    <tr><th scope="row">参考：輸出免税売上高／非課税売上高</th><td colspan="2"></td><td class="num"><fmt:formatNumber value="${ct.exportSales}" pattern="#,##0" /> ／ <fmt:formatNumber value="${ct.nonTaxableSales}" pattern="#,##0" /></td></tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="tr-sheet-note print-only-block">本書は消費税及び地方消費税の申告書（簡易課税用）・付表への転記用に本アプリが作成した計算書です（公式の提出用紙ではありません）。</p>
+    </c:if>
+</section>

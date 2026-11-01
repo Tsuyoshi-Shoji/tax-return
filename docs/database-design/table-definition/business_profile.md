@@ -22,4 +22,9 @@
 | 10 | end_date | 事業終了日 | DATE | - | 許容 | 廃業時のみ |
 | 11 | created_at | 作成日時 | TIMESTAMP | CURRENT_TIMESTAMP | 非許容 | |
 | 12 | updated_at | 更新日時 | TIMESTAMP | CURRENT_TIMESTAMP | 非許容 | |
+| 13 | tax_office | 提出先税務署名 | VARCHAR(100) | - | 許容 | 例: 渋谷税務署 |
+| 14 | household_head_name | 世帯主の氏名 | VARCHAR(100) | - | 許容 | 申告書第一表用、個人情報 |
+| 15 | household_head_relation | 世帯主との続柄 | VARCHAR(30) | - | 許容 | 申告書第一表用 |
+| 16 | consumption_tax_status | 消費税の区分 | VARCHAR(20) | 'EXEMPT' | 非許容 | EXEMPT（免税事業者）/ SIMPLIFIED（簡易課税） |
+| 17 | simplified_business_type | 簡易課税の事業区分 | INT | - | 許容 | 1〜6（第1種90%〜第6種40%）。SIMPLIFIED時のみ設定 |
 

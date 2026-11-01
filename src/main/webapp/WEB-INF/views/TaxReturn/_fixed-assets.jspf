@@ -1,0 +1,70 @@
+<%@ page pageEncoding="UTF-8" %>
+<c:set var="x" value="${page.extras}" />
+<section id="section-fixed-assets" class="profit-loss-card tr-section" aria-labelledby="heading-fixed-assets">
+    <h2 id="heading-fixed-assets">固定資産台帳・減価償却</h2>
+    <p class="tr-desc">事業で使用する固定資産を登録すると、減価償却費（定額法・少額減価償却資産の特例・一括償却資産）を自動で計算し、決算整理仕訳と貸借対照表に反映します。</p>
+    <div class="tr-table-scroll">
+        <table id="table-fixed-assets" class="tr-table tr-statement">
+            <thead><tr><th scope="col">資産の名称</th><th scope="col">科目</th><th scope="col">取得年月日</th><th scope="col" class="num">取得価額</th><th scope="col">償却方法</th><th scope="col" class="num">耐用年数</th><th scope="col" class="num">償却率</th><th scope="col" class="num">償却期間</th><th scope="col" class="num">期首残高</th><th scope="col" class="num">本年分の償却費</th><th scope="col" class="num">事業専用割合</th><th scope="col" class="num">必要経費算入額</th><th scope="col" class="num">期末残高</th><th scope="col"><span class="visually-hidden">操作</span></th></tr></thead>
+            <tbody>
+                <c:forEach var="a" items="${x.assets}">
+                    <tr>
+                        <th scope="row"><c:out value="${a.name}" /></th>
+                        <td><c:out value="${a.accountName}" /></td>
+                        <td><c:out value="${a.acquired}" /></td>
+                        <td class="num"><fmt:formatNumber value="${a.cost}" pattern="#,##0" /></td>
+                        <td><c:out value="${a.methodLabel}" /></td>
+                        <td class="num"><c:out value="${a.usefulLife}" default="-" /></td>
+                        <td class="num"><c:out value="${a.rate}" default="-" /></td>
+                        <td class="num">${a.months}/12</td>
+                        <td class="num"><fmt:formatNumber value="${a.opening}" pattern="#,##0" /></td>
+                        <td class="num"><fmt:formatNumber value="${a.depreciation}" pattern="#,##0" /></td>
+                        <td class="num"><fmt:formatNumber value="${a.businessRatio}" pattern="0.##" />%</td>
+                        <td class="num"><fmt:formatNumber value="${a.businessPortion}" pattern="#,##0" /></td>
+                        <td class="num"><fmt:formatNumber value="${a.closing}" pattern="#,##0" /></td>
+                        <td>
+                            <c:if test="${a.deletable}">
+                                <form method="post" action="${ctx}/tax-return/assets/delete?year=${page.selectedYear}" class="tr-inline-form" data-confirm="この固定資産を削除しますか？（関連する減価償却仕訳も再計算されます）">
+                                    <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
+                                    <input type="hidden" name="id" value="${a.id}" />
+                                    <button type="submit" class="tr-btn tr-btn-soft tr-btn-small">削除</button>
+                                </form>
+                            </c:if>
+                        </td>
+                    </tr>
+                </c:forEach>
+                <c:if test="${empty x.assets}"><tr><td colspan="14" class="empty">登録されている固定資産はありません。</td></tr></c:if>
+            </tbody>
+            <tfoot><tr class="is-total"><th scope="row" colspan="8">合計</th><td class="num"><fmt:formatNumber value="${x.assetOpeningTotal}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${x.depreciationTotal}" pattern="#,##0" /></td><td></td><td class="num"><fmt:formatNumber value="${x.depreciationBusinessTotal}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${x.assetClosingTotal}" pattern="#,##0" /></td><td></td></tr></tfoot>
+        </table>
+    </div>
+    <c:if test="${not page.closed}">
+        <details class="tr-details">
+            <summary>固定資産を登録する</summary>
+            <form id="fixed-asset-form" method="post" action="${ctx}/tax-return/assets?year=${page.selectedYear}" novalidate>
+                <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
+                <div class="tr-settlement">
+                    <label class="tr-field"><span>資産の名称</span><input name="assetName" maxlength="100" autocomplete="off" required /></label>
+                    <label class="tr-field"><span>勘定科目</span><select name="accountCode"><c:forEach var="o" items="${x.assetAccountOptions}"><option value="${o.value}"><c:out value="${o.label}" /></option></c:forEach></select></label>
+                    <label class="tr-field"><span>取得年月日</span><input type="date" name="acquisitionDate" required /></label>
+                    <label class="tr-field"><span>事業供用開始日</span><input type="date" name="serviceStartDate" /></label>
+                    <label class="tr-field"><span>取得価額（円）</span><input name="acquisitionCost" inputmode="numeric" autocomplete="off" required /></label>
+                    <label class="tr-field"><span>償却方法</span><select name="depreciationMethod">
+                        <option value="STRAIGHT_LINE">定額法</option>
+                        <option value="SMALL_AMOUNT_SPECIAL">少額減価償却資産の特例（30万円未満）</option>
+                        <option value="LUMP_SUM_3Y">一括償却資産（10万円以上20万円未満）</option>
+                    </select></label>
+                    <label class="tr-field"><span>耐用年数（年）</span><input name="usefulLife" inputmode="numeric" autocomplete="off" placeholder="例：4（パソコン）" /></label>
+                    <label class="tr-field"><span>事業専用割合（%）</span><input name="businessRatio" inputmode="numeric" autocomplete="off" value="100" /></label>
+                    <label class="tr-field"><span>取得時の支払</span><select name="acquisitionFunding">
+                        <option value="EXPENSE_ENTRY">支出登録（固定資産購入）で記帳済み</option>
+                        <option value="OWNER_FUNDS">私的資金で購入（事業主借）</option>
+                    </select></label>
+                    <label class="tr-field"><span>摘要</span><input name="notes" maxlength="255" autocomplete="off" /></label>
+                </div>
+                <p class="tr-desc">定額法は使用開始月からの月割りで計算し、未償却残高が1円（備忘価額）になるまで償却します。前年以前に取得した資産は、取得日・取得価額を登録すると期首の未償却残高を自動計算します。資産の売却・除却には対応していません。</p>
+                <div class="tr-actions"><button type="submit" class="tr-btn tr-btn-primary">登録する</button></div>
+            </form>
+        </details>
+    </c:if>
+</section>

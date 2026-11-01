@@ -54,6 +54,19 @@
     }
 
     var taxBasicInfoForm = byId('tax-basic-info-form');
+    var consumptionTaxStatus = byId('select-consumption-tax-status');
+    var simplifiedBusinessType = byId('select-simplified-business-type');
+    function syncBusinessType() {
+        if (!consumptionTaxStatus || !simplifiedBusinessType) { return; }
+        var simplified = consumptionTaxStatus.value === 'SIMPLIFIED';
+        simplifiedBusinessType.disabled = !simplified;
+        simplifiedBusinessType.required = simplified;
+        if (!simplified) { simplifiedBusinessType.value = ''; }
+    }
+    if (consumptionTaxStatus) {
+        consumptionTaxStatus.addEventListener('change', syncBusinessType);
+        syncBusinessType();
+    }
     if (taxBasicInfoForm) {
         taxBasicInfoForm.addEventListener('submit', function (event) {
             var messages = [];
@@ -61,12 +74,26 @@
             var industry = byId('input-industry').value.trim();
             var phone = byId('input-phone').value.trim();
             var address = byId('input-address').value.trim();
+            var nameKana = byId('input-name-kana').value.trim().replace(/[\s\u3000]+/g, '\u3000');
+            var birthDate = byId('input-birth-date').value;
             if (businessName.length > 200) { messages.push('屋号は200文字以内で入力してください。'); }
             if (industry.length > 100) { messages.push('業種は100文字以内で入力してください。'); }
             if (phone && !/^[0-9+()\-\s]{1,30}$/.test(phone)) {
                 messages.push('電話番号は30文字以内で、数字と +()- のみ使用できます。');
             }
             if (address.length > 255) { messages.push('住所は255文字以内で入力してください。'); }
+            if (nameKana && (nameKana.length > 100 || !/^[\u30A1-\u30FC]+(\u3000[\u30A1-\u30FC]+)*$/.test(nameKana))) {
+                messages.push('フリガナは100文字以内で、全角カタカナとスペースのみ使用できます。');
+            }
+            if (birthDate && !(birthDate > '1900-01-01' && birthDate < new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Tokyo' }))) {
+                messages.push('生年月日は1900年1月2日から昨日までの日付を入力してください。');
+            }
+            if (byId('input-tax-office').value.trim().length > 100) { messages.push('提出先税務署は100文字以内で入力してください。'); }
+            if (byId('input-household-head-name').value.trim().length > 100) { messages.push('世帯主の氏名は100文字以内で入力してください。'); }
+            if (byId('input-household-head-relation').value.trim().length > 30) { messages.push('世帯主との続柄は30文字以内で入力してください。'); }
+            if (consumptionTaxStatus && consumptionTaxStatus.value === 'SIMPLIFIED' && !simplifiedBusinessType.value) {
+                messages.push('簡易課税の事業区分（第1種〜第6種）を選択してください。');
+            }
             if (messages.length) {
                 event.preventDefault();
                 window.AppDialog.alert({ message: '入力内容をご確認ください。', details: messages, buttons: [{ label: '内容を確認', primary: true }] });

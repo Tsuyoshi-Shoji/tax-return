@@ -56,6 +56,18 @@ public class SettlementAdjustment {
     @Column(name = "blue_deduction", nullable = false)
     private int blueDeduction = 65;
 
+    /** 決算整理（期末残高）を利用者が保存したか。青色申告特別控除の変更だけで作成された行は false。 */
+    @Column(name = "balances_confirmed", nullable = false)
+    private boolean balancesConfirmed;
+
+    public boolean isBalancesConfirmed() {
+        return balancesConfirmed;
+    }
+
+    public void setBalancesConfirmed(boolean balancesConfirmed) {
+        this.balancesConfirmed = balancesConfirmed;
+    }
+
     @Column(name = "settlement_status", length = 20)
     private String settlementStatus = "UNSETTLED";
 
