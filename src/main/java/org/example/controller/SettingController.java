@@ -55,7 +55,9 @@ public class SettingController {
 
     @InitBinder("taxBasicInfoForm")
     void bindTaxBasicInfo(WebDataBinder binder) {
-        binder.setAllowedFields("businessName", "industry", "phone", "address", "csrfToken");
+        binder.setAllowedFields("businessName", "industry", "phone", "address",
+                "nameKana", "birthDate", "taxOffice", "householdHeadName", "householdHeadRelation",
+                "consumptionTaxStatus", "simplifiedBusinessType", "csrfToken");
     }
 
     @InitBinder({"disableForm", "deleteForm"})
@@ -188,6 +190,14 @@ public class SettingController {
             taxBasicInfoForm.setIndustry(view.getIndustry());
             taxBasicInfoForm.setPhone(view.getPhone());
             taxBasicInfoForm.setAddress(view.getAddress());
+            taxBasicInfoForm.setNameKana(view.getNameKana());
+            taxBasicInfoForm.setBirthDate(view.getBirthDate() == null ? null : view.getBirthDate().toString());
+            taxBasicInfoForm.setTaxOffice(view.getTaxOffice());
+            taxBasicInfoForm.setHouseholdHeadName(view.getHouseholdHeadName());
+            taxBasicInfoForm.setHouseholdHeadRelation(view.getHouseholdHeadRelation());
+            taxBasicInfoForm.setConsumptionTaxStatus(view.getConsumptionTaxStatus());
+            taxBasicInfoForm.setSimplifiedBusinessType(view.getSimplifiedBusinessType() == null
+                    ? null : view.getSimplifiedBusinessType().toString());
             model.addAttribute("taxBasicInfoForm", taxBasicInfoForm);
         }
         if (!model.containsAttribute("ratioForm")) {

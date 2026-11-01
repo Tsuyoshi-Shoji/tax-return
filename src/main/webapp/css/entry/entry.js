@@ -5,11 +5,19 @@
     const DEFAULT_MONTHLY_ROWS = 5;
     const MAX_MONTHLY_ROWS = 50;
     const FORBIDDEN_DETAILS = /[<>"'`\\]/;
+    const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
+    const OTHER_CATEGORY = "other";
+    const OUT_OF_SCOPE_TAX_CATEGORY = "OUT_OF_SCOPE";
     const numberFormatter = new Intl.NumberFormat("ja-JP");
 
     const byId = (id) => document.getElementById(id);
 
     const countCodePoints = (value) => Array.from(value || "").length;
+
+    const normalizeIntegerInput = (value) => (value || "")
+        .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+        .replace(/[,，]/g, "")
+        .trim();
 
     const parseAmount = (value) => {
         const normalized = (value || "").trim();
@@ -122,6 +130,10 @@
         const dateInput = byId("date");
         const amountInput = byId("amount");
         const detailsInput = byId("details");
+        const withholdingInput = byId("withholding-tax");
+        const taxCategorySelect = byId("tax-category");
+        const counterpartyNameInput = byId("counterparty-name");
+        const counterpartyAddressInput = byId("counterparty-address");
         const excludeCheckbox = byId("exclude-from-return");
         const homeApportionmentCheckbox = byId("home-apportionment");
         const confirmationToken = byId("confirmation-token");
@@ -150,7 +162,9 @@
         const monthlyModeDescription = byId("monthly-mode-description");
         const monthlyRowCount = byId("monthly-row-count");
 
-        const fieldOrder = [typeFieldName, "category", "date", "amount", methodFieldName];
+        const fieldOrder = [typeFieldName, "category", "date", "amount"];
+        if (isIncome) fieldOrder.push("withholdingTax", "taxCategory");
+        fieldOrder.push(methodFieldName, "counterpartyName", "counterpartyAddress");
         if (!isIncome) fieldOrder.push("homeApportionment");
         fieldOrder.push("details");
 
@@ -159,7 +173,11 @@
             category: categorySelect ? [categorySelect] : [],
             date: dateInput ? [dateInput] : [],
             amount: amountInput ? [amountInput] : [],
+            withholdingTax: withholdingInput ? [withholdingInput] : [],
+            taxCategory: taxCategorySelect ? [taxCategorySelect] : [],
             [methodFieldName]: methodRadios,
+            counterpartyName: counterpartyNameInput ? [counterpartyNameInput] : [],
+            counterpartyAddress: counterpartyAddressInput ? [counterpartyAddressInput] : [],
             homeApportionment: homeApportionmentCheckbox ? [homeApportionmentCheckbox] : [],
             details: detailsInput ? [detailsInput] : []
         };
@@ -253,6 +271,26 @@
             categorySelect.disabled = !selectedType;
         };
 
+        const syncIncomeTaxControls = (applyItemDefault) => {
+            if (!isIncome) return;
+            const isOtherCategory = getSelectedRadioValue(typeRadios) === OTHER_CATEGORY;
+            if (withholdingInput) {
+                if (isOtherCategory) withholdingInput.value = "0";
+                withholdingInput.readOnly = isOtherCategory;
+            }
+            if (!taxCategorySelect) return;
+            if (isOtherCategory) {
+                // 「その他」区分はサーバー側で不課税に固定するため、選択不可として表示のみ合わせる。
+                taxCategorySelect.value = OUT_OF_SCOPE_TAX_CATEGORY;
+                taxCategorySelect.disabled = true;
+                return;
+            }
+            taxCategorySelect.disabled = false;
+            if (!applyItemDefault) return;
+            const sourceOption = sourceOptions.find((option) => categorySelect && categorySelect.value && option.value === categorySelect.value);
+            taxCategorySelect.value = sourceOption ? sourceOption.dataset.taxCategory || "" : "";
+        };
+
         const updateCounter = () => {
             if (!detailsCount || !detailsInput) return;
             detailsCount.textContent = `${countCodePoints(detailsInput.value)} / 255文字`;
@@ -335,6 +373,34 @@
                 errors[methodFieldName] = isIncome ? "受取方法を選択してください。" : "支払方法を選択してください。";
             }
 
+            if (isIncome && withholdingInput) {
+                const withholdingRaw = normalizeIntegerInput(withholdingInput.value);
+                const withholding = withholdingRaw ? parseAmount(withholdingRaw) : 0n;
+                if (withholding === null) {
+                    errors.withholdingTax = "源泉徴収税額は0以上の整数（円）で入力してください。";
+                } else if (withholding > 0n && selectedType === OTHER_CATEGORY) {
+                    errors.withholdingTax = "源泉徴収税額は売上・雑収入の場合のみ入力できます。";
+                } else if (withholding > 0n && amount !== null && withholding >= amount) {
+                    errors.withholdingTax = "源泉徴収税額は金額未満で入力してください。";
+                }
+            }
+
+            const counterpartyLabel = isIncome ? "取引先" : "支払先";
+            const counterpartyName = counterpartyNameInput ? counterpartyNameInput.value.trim() : "";
+            const counterpartyAddress = counterpartyAddressInput ? counterpartyAddressInput.value.trim() : "";
+            if (countCodePoints(counterpartyName) > 100) {
+                errors.counterpartyName = `${counterpartyLabel}名は100文字以内で入力してください。`;
+            } else if (FORBIDDEN_DETAILS.test(counterpartyName) || CONTROL_CHARACTERS.test(counterpartyName)) {
+                errors.counterpartyName = `${counterpartyLabel}名に使用できない文字が含まれています。`;
+            }
+            if (countCodePoints(counterpartyAddress) > 255) {
+                errors.counterpartyAddress = `${counterpartyLabel}の所在地は255文字以内で入力してください。`;
+            } else if (FORBIDDEN_DETAILS.test(counterpartyAddress) || CONTROL_CHARACTERS.test(counterpartyAddress)) {
+                errors.counterpartyAddress = `${counterpartyLabel}の所在地に使用できない文字が含まれています。`;
+            } else if (counterpartyAddress && !counterpartyName) {
+                errors.counterpartyAddress = `${counterpartyLabel}の所在地を入力する場合は${counterpartyLabel}名も入力してください。`;
+            }
+
             if (!isIncome && homeApportionmentCheckbox && homeApportionmentCheckbox.checked) {
                 if (apportionmentRateHundredths === null) {
                     errors.homeApportionment = "設定されている家事按分率が不正です。設定画面で0〜100%の範囲に修正してください。";
@@ -391,6 +457,16 @@
             const amount = parseAmount(amountInput ? amountInput.value : "");
             setText("confirm-amount", amount === null ? "未入力" : formatBigIntYen(amount));
             setText("confirm-method", getLabelTextForRadio(methodRadios));
+            if (isIncome) {
+                const withholdingRaw = normalizeIntegerInput(withholdingInput ? withholdingInput.value : "");
+                const withholding = withholdingRaw ? parseAmount(withholdingRaw) : 0n;
+                setText("confirm-withholding", withholding === null ? "—" : formatBigIntYen(withholding));
+                setText("confirm-tax-category", taxCategorySelect && taxCategorySelect.selectedOptions[0]
+                    ? taxCategorySelect.selectedOptions[0].textContent.trim()
+                    : "—");
+            }
+            setText("confirm-counterparty", counterpartyNameInput && counterpartyNameInput.value.trim() ? counterpartyNameInput.value.trim() : "未入力");
+            setText("confirm-counterparty-address", counterpartyAddressInput && counterpartyAddressInput.value.trim() ? counterpartyAddressInput.value.trim() : "未入力");
             setText("confirm-exclude", excludeCheckbox && excludeCheckbox.checked ? "対象外にする" : "対象に含める");
             setText("confirm-details", detailsInput && detailsInput.value.trim() ? detailsInput.value.trim() : "未入力");
             if (!isIncome) {
@@ -657,6 +733,7 @@
 
         updateSubmitLabel();
         renderCategoryOptions(false);
+        syncIncomeTaxControls(false);
         updateCounter();
         updateApportionmentPreview();
         if (!isIncome) {
@@ -675,8 +752,11 @@
         typeRadios.forEach((radio) => {
             radio.addEventListener("change", () => {
                 renderCategoryOptions(true);
+                syncIncomeTaxControls(true);
                 clearFieldError(typeFieldName);
                 clearFieldError("category");
+                clearFieldError("withholdingTax");
+                clearFieldError("taxCategory");
                 clearConfirmationState();
             });
         });
@@ -690,10 +770,41 @@
 
         if (categorySelect) {
             categorySelect.addEventListener("change", () => {
+                syncIncomeTaxControls(true);
                 clearFieldError("category");
+                clearFieldError("taxCategory");
                 clearConfirmationState();
             });
         }
+
+        if (withholdingInput) {
+            withholdingInput.addEventListener("input", () => {
+                clearFieldError("withholdingTax");
+                clearConfirmationState();
+            });
+            withholdingInput.addEventListener("blur", () => {
+                const normalized = normalizeIntegerInput(withholdingInput.value);
+                if (/^[0-9]{1,13}$/.test(normalized)) {
+                    withholdingInput.value = BigInt(normalized).toString();
+                }
+            });
+        }
+
+        if (taxCategorySelect) {
+            taxCategorySelect.addEventListener("change", () => {
+                clearFieldError("taxCategory");
+                clearConfirmationState();
+            });
+        }
+
+        [counterpartyNameInput, counterpartyAddressInput].forEach((input) => {
+            if (!input) return;
+            input.addEventListener("input", () => {
+                clearFieldError(input === counterpartyNameInput ? "counterpartyName" : "counterpartyAddress");
+                if (input === counterpartyNameInput) clearFieldError("counterpartyAddress");
+                clearConfirmationState();
+            });
+        });
 
         if (dateInput) {
             dateInput.addEventListener("change", () => {
@@ -705,6 +816,7 @@
         if (amountInput) {
             amountInput.addEventListener("input", () => {
                 clearFieldError("amount");
+                clearFieldError("withholdingTax");
                 clearConfirmationState();
                 updateApportionmentPreview();
             });
@@ -806,7 +918,12 @@
                 if (excludeCheckbox) excludeCheckbox.checked = false;
                 if (homeApportionmentCheckbox) homeApportionmentCheckbox.checked = false;
                 if (detailsInput) detailsInput.value = "";
+                if (withholdingInput) withholdingInput.value = "0";
+                if (taxCategorySelect) taxCategorySelect.value = "";
+                if (counterpartyNameInput) counterpartyNameInput.value = "";
+                if (counterpartyAddressInput) counterpartyAddressInput.value = "";
                 renderCategoryOptions(true);
+                syncIncomeTaxControls(true);
                 updateCounter();
                 updateApportionmentPreview();
                 fieldOrder.forEach((fieldName) => clearFieldError(fieldName));

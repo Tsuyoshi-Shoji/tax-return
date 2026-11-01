@@ -16,6 +16,10 @@ public class EntryForm {
     private boolean excludeFromReturn;
     private boolean homeApportionment;
     private String details;
+    private String counterpartyName;
+    private String counterpartyAddress;
+    private String withholdingTax;
+    private String taxCategory;
     private String entryMode;
     private String targetMonth;
     private List<MonthlyExpenseRowForm> monthlyRows = new ArrayList<>();
@@ -118,6 +122,38 @@ public class EntryForm {
 
     public void setDetails(String details) {
         this.details = details;
+    }
+
+    public String getCounterpartyName() {
+        return counterpartyName;
+    }
+
+    public void setCounterpartyName(String counterpartyName) {
+        this.counterpartyName = counterpartyName;
+    }
+
+    public String getCounterpartyAddress() {
+        return counterpartyAddress;
+    }
+
+    public void setCounterpartyAddress(String counterpartyAddress) {
+        this.counterpartyAddress = counterpartyAddress;
+    }
+
+    public String getWithholdingTax() {
+        return withholdingTax;
+    }
+
+    public void setWithholdingTax(String withholdingTax) {
+        this.withholdingTax = withholdingTax;
+    }
+
+    public String getTaxCategory() {
+        return taxCategory;
+    }
+
+    public void setTaxCategory(String taxCategory) {
+        this.taxCategory = taxCategory;
     }
 
     public String getEntryMode() {

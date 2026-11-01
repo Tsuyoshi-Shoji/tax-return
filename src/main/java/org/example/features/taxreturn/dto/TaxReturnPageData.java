@@ -23,6 +23,7 @@ public class TaxReturnPageData {
     private final Diff incomeDiff;
     private final List<ReportMonthRow> months;
     private final List<PlRow> plRows;
+    private final List<StatementRow> statementRows;
     private final SettlementForm settlement;
     private final List<BsRow> assets;
     private final List<BsRow> liabilities;
@@ -36,13 +37,20 @@ public class TaxReturnPageData {
     private final List<CheckItem> checks;
     private final List<String> errors;
     private final List<String> warnings;
+    private TaxReturnExtras extras = new TaxReturnExtras();
+    private boolean balanceCarriedForward;
+
+    public TaxReturnExtras getExtras() { return extras; }
+    public void setExtras(TaxReturnExtras extras) { this.extras = extras; }
+    public boolean isBalanceCarriedForward() { return balanceCarriedForward; }
+    public void setBalanceCarriedForward(boolean balanceCarriedForward) { this.balanceCarriedForward = balanceCarriedForward; }
 
     public TaxReturnPageData(
             List<ReportYearOption> yearOptions, int selectedYear, String yearLabel, boolean closed,
             BasicInfo basicInfo, int deduction,
             BigDecimal sales, BigDecimal expenses, BigDecimal income, BigDecimal incomeAfterDeduction,
             Diff salesDiff, Diff expensesDiff, Diff incomeDiff,
-            List<ReportMonthRow> months, List<PlRow> plRows, SettlementForm settlement,
+            List<ReportMonthRow> months, List<PlRow> plRows, List<StatementRow> statementRows, SettlementForm settlement,
             List<BsRow> assets, List<BsRow> liabilities,
             BigDecimal assetsOpening, BigDecimal assetsClosing,
             BigDecimal liabilitiesOpening, BigDecimal liabilitiesClosing,
@@ -63,6 +71,7 @@ public class TaxReturnPageData {
         this.incomeDiff = incomeDiff;
         this.months = months;
         this.plRows = plRows;
+        this.statementRows = statementRows;
         this.settlement = settlement;
         this.assets = assets;
         this.liabilities = liabilities;
@@ -93,6 +102,25 @@ public class TaxReturnPageData {
     public Diff getIncomeDiff() { return incomeDiff; }
     public List<ReportMonthRow> getMonths() { return months; }
     public List<PlRow> getPlRows() { return plRows; }
+    public List<StatementRow> getStatementRows() { return statementRows; }
+    /** 決算書の左列（①〜㉜：売上・売上原価・経費）。 */
+    public List<StatementRow> getStatementMainRows() {
+        int split = statementSplitIndex();
+        return statementRows.subList(0, split);
+    }
+    /** 決算書の右列（㉝以降：引当金等・所得金額の計算）。 */
+    public List<StatementRow> getStatementIncomeRows() {
+        int split = statementSplitIndex();
+        return statementRows.subList(split, statementRows.size());
+    }
+    private int statementSplitIndex() {
+        for (int i = 0; i < statementRows.size(); i++) {
+            if ("EXPENSE_TOTAL".equals(statementRows.get(i).getCode())) {
+                return i + 1;
+            }
+        }
+        return statementRows.size();
+    }
     public SettlementForm getSettlement() { return settlement; }
     public List<BsRow> getAssets() { return assets; }
     public List<BsRow> getLiabilities() { return liabilities; }
@@ -168,17 +196,58 @@ public class TaxReturnPageData {
         public boolean isGood() { return good; }
     }
 
+    public static class StatementRow {
+        private final int number;
+        private final String numberLabel;
+        private final String code;
+        private final String label;
+        private final BigDecimal amount;
+        private final String type;
+        private final String accounts;
+        private final boolean total;
+
+        public StatementRow(int number, String numberLabel, String code, String label, BigDecimal amount, String type,
+                String accounts, boolean total) {
+            this.number = number;
+            this.numberLabel = numberLabel;
+            this.code = code;
+            this.label = label;
+            this.amount = amount;
+            this.type = type;
+            this.accounts = accounts;
+            this.total = total;
+        }
+
+        public int getNumber() { return number; }
+        public String getNumberLabel() { return numberLabel; }
+        public String getCode() { return code; }
+        public String getLabel() { return label; }
+        public BigDecimal getAmount() { return amount; }
+        public String getType() { return type; }
+        public String getAccounts() { return accounts; }
+        public boolean isTotal() { return total; }
+        public boolean isCalculated() { return "CALC".equals(type); }
+    }
+
     public static class PlRow {
         private final String label;
         private final BigDecimal amount;
+        private final String section;
 
         public PlRow(String label, BigDecimal amount) {
+            this(label, amount, null);
+        }
+
+        public PlRow(String label, BigDecimal amount, String section) {
             this.label = label;
             this.amount = amount;
+            this.section = section;
         }
 
         public String getLabel() { return label; }
         public BigDecimal getAmount() { return amount; }
+        /** REVENUE / EXPENSE / ADJUSTMENT。旧データ互換のため null を許容する。 */
+        public String getSection() { return section; }
     }
 
     public static class BsRow {

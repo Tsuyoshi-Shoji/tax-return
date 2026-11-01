@@ -10,8 +10,8 @@
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css?v=20261016a">
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/home/home.css?v=20261011c">
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/profit-loss/profit-loss.css?v=20261011d">
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/setting/settings.css?v=20261016a">
-    <script src="${pageContext.request.contextPath}/css/setting/settings.js?v=20261016a" defer></script>
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/setting/settings.css?v=20261101a">
+    <script src="${pageContext.request.contextPath}/css/setting/settings.js?v=20261101a" defer></script>
 </head>
 <body class="home-page profit-loss-page settings-page">
 <jsp:include page="/WEB-INF/views/Header/header.jsp" />
@@ -86,7 +86,7 @@
 
             <section class="profit-loss-card settings-card" aria-labelledby="heading-tax-basic-info">
                 <h2 id="heading-tax-basic-info">確定申告の基本情報</h2>
-                <p class="settings-desc">確定申告画面の基本情報（屋号・業種・電話番号・住所）を設定できます。</p>
+                <p class="settings-desc">確定申告書（第一表・第二表）や消費税の計算に使う基本情報を設定できます。</p>
 
                 <c:if test="${failedSection eq 'taxBasicInfo' and not empty formErrors}">
                     <div class="settings-errors" role="alert" aria-live="polite">
@@ -118,7 +118,55 @@
                             <label id="label-address" for="input-address">住所</label>
                             <input id="input-address" name="address" type="text" maxlength="255" autocomplete="street-address" value="<c:out value='${taxBasicInfoForm.address}' />" />
                         </div>
+                        <div class="settings-field">
+                            <label id="label-name-kana" for="input-name-kana">フリガナ</label>
+                            <input id="input-name-kana" name="nameKana" type="text" maxlength="100" autocomplete="off" placeholder="例）ヤマダ　タロウ" value="<c:out value='${taxBasicInfoForm.nameKana}' />" />
+                            <small class="settings-hint">全角カタカナで入力してください（姓と名の間はスペース）。</small>
+                        </div>
+                        <div class="settings-field">
+                            <label id="label-birth-date" for="input-birth-date">生年月日</label>
+                            <input id="input-birth-date" name="birthDate" type="date" min="1900-01-02" autocomplete="off" value="<c:out value='${taxBasicInfoForm.birthDate}' />" />
+                        </div>
+                        <div class="settings-field">
+                            <label id="label-tax-office" for="input-tax-office">提出先税務署</label>
+                            <input id="input-tax-office" name="taxOffice" type="text" maxlength="100" autocomplete="off" placeholder="例）渋谷税務署" value="<c:out value='${taxBasicInfoForm.taxOffice}' />" />
+                        </div>
+                        <div class="settings-field">
+                            <label id="label-household-head-name" for="input-household-head-name">世帯主の氏名</label>
+                            <input id="input-household-head-name" name="householdHeadName" type="text" maxlength="100" autocomplete="off" value="<c:out value='${taxBasicInfoForm.householdHeadName}' />" />
+                        </div>
+                        <div class="settings-field">
+                            <label id="label-household-head-relation" for="input-household-head-relation">世帯主との続柄</label>
+                            <input id="input-household-head-relation" name="householdHeadRelation" type="text" maxlength="30" autocomplete="off" placeholder="例）本人" value="<c:out value='${taxBasicInfoForm.householdHeadRelation}' />" />
+                        </div>
                     </div>
+
+                    <fieldset class="settings-subgroup" aria-describedby="text-consumption-tax-note">
+                        <legend id="heading-consumption-tax">消費税</legend>
+                        <div class="settings-grid-2">
+                            <div class="settings-field">
+                                <label id="label-consumption-tax-status" for="select-consumption-tax-status">消費税の区分</label>
+                                <select id="select-consumption-tax-status" name="consumptionTaxStatus">
+                                    <option value="EXEMPT" <c:if test="${taxBasicInfoForm.consumptionTaxStatus ne 'SIMPLIFIED'}">selected</c:if>>免税事業者</option>
+                                    <option value="SIMPLIFIED" <c:if test="${taxBasicInfoForm.consumptionTaxStatus eq 'SIMPLIFIED'}">selected</c:if>>課税事業者（簡易課税）</option>
+                                </select>
+                            </div>
+                            <div class="settings-field">
+                                <label id="label-simplified-business-type" for="select-simplified-business-type">簡易課税の事業区分</label>
+                                <select id="select-simplified-business-type" name="simplifiedBusinessType">
+                                    <option value="">選択してください</option>
+                                    <option value="1" <c:if test="${taxBasicInfoForm.simplifiedBusinessType eq '1'}">selected</c:if>>第1種 卸売業（みなし仕入率90%）</option>
+                                    <option value="2" <c:if test="${taxBasicInfoForm.simplifiedBusinessType eq '2'}">selected</c:if>>第2種 小売業等（みなし仕入率80%）</option>
+                                    <option value="3" <c:if test="${taxBasicInfoForm.simplifiedBusinessType eq '3'}">selected</c:if>>第3種 製造業等（みなし仕入率70%）</option>
+                                    <option value="4" <c:if test="${taxBasicInfoForm.simplifiedBusinessType eq '4'}">selected</c:if>>第4種 その他の事業（みなし仕入率60%）</option>
+                                    <option value="5" <c:if test="${taxBasicInfoForm.simplifiedBusinessType eq '5'}">selected</c:if>>第5種 サービス業等（みなし仕入率50%）</option>
+                                    <option value="6" <c:if test="${taxBasicInfoForm.simplifiedBusinessType eq '6'}">selected</c:if>>第6種 不動産業（みなし仕入率40%）</option>
+                                </select>
+                                <small class="settings-hint">課税事業者（簡易課税）の場合に選択してください。</small>
+                            </div>
+                        </div>
+                        <small id="text-consumption-tax-note" class="settings-hint">※ 本則課税・2割特例には対応していません。簡易課税を選ぶ場合は、所轄税務署へ「消費税簡易課税制度選択届出書」を提出済みである必要があります。</small>
+                    </fieldset>
                     <div class="settings-actions"><button id="button-save-tax-basic-info" type="submit" class="btn-primary">基本情報を保存</button></div>
                 </form>
             </section>

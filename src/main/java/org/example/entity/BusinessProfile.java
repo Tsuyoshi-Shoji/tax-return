@@ -31,6 +31,63 @@ public class BusinessProfile {
     @Column(name = "industry", length = 100)
     private String industry;
 
+    @Column(name = "tax_office", length = 100)
+    private String taxOffice;
+
+    @Column(name = "household_head_name", length = 100)
+    private String householdHeadName;
+
+    @Column(name = "household_head_relation", length = 30)
+    private String householdHeadRelation;
+
+    /** EXEMPT（免税事業者）/ SIMPLIFIED（課税事業者・簡易課税） */
+    @Column(name = "consumption_tax_status", nullable = false, length = 20)
+    private String consumptionTaxStatus = "EXEMPT";
+
+    /** 簡易課税の事業区分（1〜6） */
+    @Column(name = "simplified_business_type")
+    private Integer simplifiedBusinessType;
+
+    public String getTaxOffice() {
+        return taxOffice;
+    }
+
+    public void setTaxOffice(String taxOffice) {
+        this.taxOffice = taxOffice;
+    }
+
+    public String getHouseholdHeadName() {
+        return householdHeadName;
+    }
+
+    public void setHouseholdHeadName(String householdHeadName) {
+        this.householdHeadName = householdHeadName;
+    }
+
+    public String getHouseholdHeadRelation() {
+        return householdHeadRelation;
+    }
+
+    public void setHouseholdHeadRelation(String householdHeadRelation) {
+        this.householdHeadRelation = householdHeadRelation;
+    }
+
+    public String getConsumptionTaxStatus() {
+        return consumptionTaxStatus;
+    }
+
+    public void setConsumptionTaxStatus(String consumptionTaxStatus) {
+        this.consumptionTaxStatus = consumptionTaxStatus;
+    }
+
+    public Integer getSimplifiedBusinessType() {
+        return simplifiedBusinessType;
+    }
+
+    public void setSimplifiedBusinessType(Integer simplifiedBusinessType) {
+        this.simplifiedBusinessType = simplifiedBusinessType;
+    }
+
     @Column(name = "filing_type", nullable = false, length = 50)
     private String filingType;
 

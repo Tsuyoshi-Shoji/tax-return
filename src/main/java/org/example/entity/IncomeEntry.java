@@ -52,6 +52,41 @@ public class IncomeEntry {
     @Column(name = "details")
     private String details;
 
+    @ManyToOne
+    @JoinColumn(name = "counterparty_id")
+    private Counterparty counterparty;
+
+    @Column(name = "withholding_tax", nullable = false, precision = 15, scale = 2)
+    private BigDecimal withholdingTax = BigDecimal.ZERO;
+
+    /** TAXABLE_10 / TAXABLE_8 / NON_TAXABLE / OUT_OF_SCOPE / EXPORT_EXEMPT。null は未設定（課税10%として扱う）。 */
+    @Column(name = "tax_category", length = 20)
+    private String taxCategory;
+
+    public Counterparty getCounterparty() {
+        return counterparty;
+    }
+
+    public void setCounterparty(Counterparty counterparty) {
+        this.counterparty = counterparty;
+    }
+
+    public BigDecimal getWithholdingTax() {
+        return withholdingTax;
+    }
+
+    public void setWithholdingTax(BigDecimal withholdingTax) {
+        this.withholdingTax = withholdingTax;
+    }
+
+    public String getTaxCategory() {
+        return taxCategory;
+    }
+
+    public void setTaxCategory(String taxCategory) {
+        this.taxCategory = taxCategory;
+    }
+
     @Column(name = "is_deleted", nullable = false)
     private boolean deleted;
 

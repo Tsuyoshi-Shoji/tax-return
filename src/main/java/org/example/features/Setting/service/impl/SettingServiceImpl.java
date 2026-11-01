@@ -2,6 +2,9 @@ package org.example.features.setting.service.impl;
 
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -31,6 +34,14 @@ public class SettingServiceImpl implements SettingService {
     private static final Logger log = LoggerFactory.getLogger(SettingServiceImpl.class);
     private static final Pattern RATIO_PATTERN = Pattern.compile("^[0-9]{1,3}$");
     private static final Pattern PHONE_PATTERN = Pattern.compile("^[0-9+()\\-\\s]{0,30}$");
+    private static final Pattern KANA_PATTERN = Pattern.compile("^[\\u30A1-\\u30FC]+(\\u3000[\\u30A1-\\u30FC]+)*$");
+    private static final Pattern WHITESPACE_PATTERN = Pattern.compile("[\\s\\u3000]+");
+    private static final Pattern DATE_PATTERN = Pattern.compile("^[0-9]{4}-[0-9]{2}-[0-9]{2}$");
+    private static final Pattern BUSINESS_TYPE_PATTERN = Pattern.compile("^[1-6]$");
+    private static final LocalDate MIN_BIRTH_DATE = LocalDate.of(1900, 1, 1);
+    private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Tokyo");
+    private static final String CONSUMPTION_TAX_EXEMPT = "EXEMPT";
+    private static final String CONSUMPTION_TAX_SIMPLIFIED = "SIMPLIFIED";
     private static final String STATUS_ACTIVE = "active";
     private static final String PASSWORD_MISMATCH = "現在のパスワードが正しくありません。";
 
@@ -66,7 +77,14 @@ public class SettingServiceImpl implements SettingService {
                 profile.getIndustry(),
                 user.getPhone(),
                 user.getAddress(),
-                rate.setScale(0, java.math.RoundingMode.DOWN));
+                rate.setScale(0, java.math.RoundingMode.DOWN),
+                user.getNameKana(),
+                user.getBirthDate(),
+                profile.getTaxOffice(),
+                profile.getHouseholdHeadName(),
+                profile.getHouseholdHeadRelation(),
+                profile.getConsumptionTaxStatus(),
+                profile.getSimplifiedBusinessType());
     }
 
     @Override
@@ -118,6 +136,13 @@ public class SettingServiceImpl implements SettingService {
         String industry = normalizeOptional(form == null ? null : form.getIndustry());
         String phone = normalizeOptional(form == null ? null : form.getPhone());
         String address = normalizeOptional(form == null ? null : form.getAddress());
+        String nameKana = normalizeKana(form == null ? null : form.getNameKana());
+        String rawBirthDate = normalizeOptional(form == null ? null : form.getBirthDate());
+        String taxOffice = normalizeOptional(form == null ? null : form.getTaxOffice());
+        String householdHeadName = normalizeOptional(form == null ? null : form.getHouseholdHeadName());
+        String householdHeadRelation = normalizeOptional(form == null ? null : form.getHouseholdHeadRelation());
+        String consumptionTaxStatus = normalizeOptional(form == null ? null : form.getConsumptionTaxStatus());
+        String rawBusinessType = normalizeOptional(form == null ? null : form.getSimplifiedBusinessType());
 
         List<String> errors = new java.util.ArrayList<>();
         if (businessName != null && businessName.length() > 200) {
@@ -132,6 +157,36 @@ public class SettingServiceImpl implements SettingService {
         if (address != null && address.length() > 255) {
             errors.add("住所は255文字以内で入力してください。");
         }
+        if (nameKana != null && (nameKana.length() > 100 || !KANA_PATTERN.matcher(nameKana).matches())) {
+            errors.add("フリガナは100文字以内で、全角カタカナとスペースのみ使用できます。");
+        }
+        LocalDate birthDate = null;
+        if (rawBirthDate != null) {
+            birthDate = parseBirthDate(rawBirthDate);
+            if (birthDate == null) {
+                errors.add("生年月日は1900年1月2日から昨日までの日付を入力してください。");
+            }
+        }
+        if (taxOffice != null && taxOffice.length() > 100) {
+            errors.add("提出先税務署は100文字以内で入力してください。");
+        }
+        if (householdHeadName != null && householdHeadName.length() > 100) {
+            errors.add("世帯主の氏名は100文字以内で入力してください。");
+        }
+        if (householdHeadRelation != null && householdHeadRelation.length() > 30) {
+            errors.add("世帯主との続柄は30文字以内で入力してください。");
+        }
+        Integer simplifiedBusinessType = null;
+        if (!CONSUMPTION_TAX_EXEMPT.equals(consumptionTaxStatus)
+                && !CONSUMPTION_TAX_SIMPLIFIED.equals(consumptionTaxStatus)) {
+            errors.add("消費税の区分を選択してください。");
+        } else if (CONSUMPTION_TAX_SIMPLIFIED.equals(consumptionTaxStatus)) {
+            if (rawBusinessType == null || !BUSINESS_TYPE_PATTERN.matcher(rawBusinessType).matches()) {
+                errors.add("簡易課税の事業区分（第1種〜第6種）を選択してください。");
+            } else {
+                simplifiedBusinessType = Integer.valueOf(rawBusinessType);
+            }
+        }
         if (!errors.isEmpty()) {
             return SettingOperationResult.invalid(errors);
         }
@@ -140,8 +195,15 @@ public class SettingServiceImpl implements SettingService {
         BusinessProfile profile = findProfileForUpdate(appUserId);
         user.setPhone(phone);
         user.setAddress(address);
+        user.setNameKana(nameKana);
+        user.setBirthDate(birthDate);
         profile.setBusinessName(businessName);
         profile.setIndustry(industry);
+        profile.setTaxOffice(taxOffice);
+        profile.setHouseholdHeadName(householdHeadName);
+        profile.setHouseholdHeadRelation(householdHeadRelation);
+        profile.setConsumptionTaxStatus(consumptionTaxStatus);
+        profile.setSimplifiedBusinessType(simplifiedBusinessType);
         appUserRepository.save(user);
         businessProfileRepository.save(profile);
         log.info("Tax basic info updated. userId={}", appUserId);
@@ -227,7 +289,25 @@ public class SettingServiceImpl implements SettingService {
         if (value == null) {
             return null;
         }
-        String normalized = value.trim();
+        String normalized = value.strip();
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    private String normalizeKana(String value) {
+        String normalized = normalizeOptional(value);
+        return normalized == null ? null : WHITESPACE_PATTERN.matcher(normalized).replaceAll("\u3000");
+    }
+
+    private LocalDate parseBirthDate(String value) {
+        if (!DATE_PATTERN.matcher(value).matches()) {
+            return null;
+        }
+        try {
+            LocalDate date = LocalDate.parse(value);
+            LocalDate today = LocalDate.now(BUSINESS_ZONE);
+            return date.isAfter(MIN_BIRTH_DATE) && date.isBefore(today) ? date : null;
+        } catch (DateTimeParseException ex) {
+            return null;
+        }
     }
 }

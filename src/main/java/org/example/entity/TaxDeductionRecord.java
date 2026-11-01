@@ -59,6 +59,17 @@ public class TaxDeductionRecord {
     @Column(name = "notes", length = 255)
     private String notes;
 
+    @Column(name = "reimbursed_amount", precision = 15, scale = 2)
+    private BigDecimal reimbursedAmount;
+
+    public BigDecimal getReimbursedAmount() {
+        return reimbursedAmount;
+    }
+
+    public void setReimbursedAmount(BigDecimal reimbursedAmount) {
+        this.reimbursedAmount = reimbursedAmount;
+    }
+
     @Column(name = "status", nullable = false, length = 20)
     private String status;
 

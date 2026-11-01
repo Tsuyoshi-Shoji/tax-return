@@ -1,0 +1,108 @@
+<%@ page pageEncoding="UTF-8" %>
+<c:set var="x" value="${page.extras}" />
+<section id="section-blue-return-print" class="profit-loss-card tr-section print-section print-only tr-form-sheet" data-print-groups="return" aria-label="青色申告決算書">
+    <div class="tr-sheet-page">
+        <h2 class="tr-sheet-title"><c:out value="${page.yearLabel}" />分所得税青色申告決算書（一般用）　1ページ　損益計算書</h2>
+        <table class="tr-sheet-table">
+            <tbody><tr><th>住所</th><td><c:out value="${x.filer.address}" /></td><th>氏名</th><td><c:out value="${x.filer.name}" /></td><th>屋号</th><td><c:out value="${x.filer.businessName}" /></td><th>業種名</th><td><c:out value="${x.filer.industry}" /></td></tr></tbody>
+        </table>
+        <div class="tr-sheet-grid">
+            <table class="tr-sheet-table">
+                <thead><tr><th>欄</th><th>科目</th><th class="num">金額（円）</th></tr></thead>
+                <tbody><c:forEach var="r" items="${page.statementMainRows}"><tr class="${r.total ? 'is-total' : ''}"><td class="no"><c:out value="${r.numberLabel}" /></td><th><c:out value="${r.label}" /></th><td class="num"><fmt:formatNumber value="${r.amount}" pattern="#,##0" /></td></tr></c:forEach></tbody>
+            </table>
+            <table class="tr-sheet-table">
+                <thead><tr><th>欄</th><th>科目</th><th class="num">金額（円）</th></tr></thead>
+                <tbody><c:forEach var="r" items="${page.statementIncomeRows}"><tr class="${r.total ? 'is-total' : ''}"><td class="no"><c:out value="${r.numberLabel}" /></td><th><c:out value="${r.label}" /></th><td class="num"><fmt:formatNumber value="${r.amount}" pattern="#,##0" /></td></tr></c:forEach></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="tr-sheet-page">
+        <h2 class="tr-sheet-title">2ページ　月別売上（収入）金額及び仕入金額・給料賃金・専従者給与・青色申告特別控除額の計算</h2>
+        <div class="tr-sheet-grid">
+            <table class="tr-sheet-table">
+                <caption>月別売上（収入）金額及び仕入金額</caption>
+                <thead><tr><th>月</th><th class="num">売上（収入）金額</th><th class="num">仕入金額</th></tr></thead>
+                <tbody>
+                    <c:forEach var="m" items="${x.monthlySalesPurchases}"><tr><th>${m.month}月</th><td class="num"><fmt:formatNumber value="${m.sales}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${m.purchases}" pattern="#,##0" /></td></tr></c:forEach>
+                    <tr><th>家事消費等</th><td class="num">0</td><td></td></tr>
+                    <tr><th>雑収入</th><td class="num"><fmt:formatNumber value="${x.miscIncome}" pattern="#,##0" /></td><td></td></tr>
+                    <tr class="is-total"><th>計</th><td class="num"><fmt:formatNumber value="${x.salesTotal + x.miscIncome}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${x.purchaseTotal}" pattern="#,##0" /></td></tr>
+                </tbody>
+            </table>
+            <div>
+                <table class="tr-sheet-table">
+                    <caption>給料賃金・専従者給与</caption>
+                    <tbody>
+                        <tr><th>給料賃金の合計</th><td class="num"><fmt:formatNumber value="${x.salaries}" pattern="#,##0" /></td></tr>
+                        <tr><th>専従者給与の合計</th><td class="num"><fmt:formatNumber value="${x.dedicatedSalary}" pattern="#,##0" /></td></tr>
+                    </tbody>
+                </table>
+                <table class="tr-sheet-table">
+                    <caption>青色申告特別控除額の計算</caption>
+                    <tbody>
+                        <tr><th>青色申告特別控除前の所得金額</th><td class="num"><fmt:formatNumber value="${x.incomeBeforeBlue}" pattern="#,##0" /></td></tr>
+                        <tr><th>控除の区分</th><td><c:out value="${page.deduction}" />万円控除</td></tr>
+                        <tr class="is-total"><th>青色申告特別控除額</th><td class="num"><fmt:formatNumber value="${x.blueDeductionApplied}" pattern="#,##0" /></td></tr>
+                    </tbody>
+                </table>
+                <p class="tr-sheet-note">給料賃金・専従者給与の個人別内訳（氏名・従事月数等）は本アプリでは管理していません。様式に記入してください。</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="tr-sheet-page">
+        <h2 class="tr-sheet-title">3ページ　減価償却費の計算・利子割引料・地代家賃・税理士等の報酬の内訳</h2>
+        <table class="tr-sheet-table">
+            <caption>減価償却費の計算</caption>
+            <thead><tr><th>減価償却資産の名称等</th><th>取得年月</th><th class="num">取得価額<br />（償却保証額）</th><th class="num">償却の基礎になる金額</th><th>償却方法</th><th class="num">耐用年数</th><th class="num">償却率又は改定償却率</th><th class="num">本年中の償却期間</th><th class="num">本年分の普通償却費</th><th class="num">特別償却費</th><th class="num">本年分の償却費合計</th><th class="num">事業専用割合</th><th class="num">本年分の必要経費算入額</th><th class="num">未償却残高（期末残高）</th></tr></thead>
+            <tbody>
+                <c:forEach var="a" items="${x.assets}">
+                    <tr><th><c:out value="${a.name}" /></th><td><c:out value="${a.acquired}" /></td><td class="num"><fmt:formatNumber value="${a.cost}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${a.cost}" pattern="#,##0" /></td><td><c:out value="${a.methodLabel}" /></td><td class="num"><c:out value="${a.usefulLife}" default="-" /></td><td class="num"><c:out value="${a.rate}" default="-" /></td><td class="num">${a.months}/12</td><td class="num"><fmt:formatNumber value="${a.depreciation}" pattern="#,##0" /></td><td class="num">0</td><td class="num"><fmt:formatNumber value="${a.depreciation}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${a.businessRatio}" pattern="0.##" />%</td><td class="num"><fmt:formatNumber value="${a.businessPortion}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${a.closing}" pattern="#,##0" /></td></tr>
+                </c:forEach>
+                <tr class="is-total"><th colspan="10">計</th><td class="num"><fmt:formatNumber value="${x.depreciationTotal}" pattern="#,##0" /></td><td></td><td class="num"><fmt:formatNumber value="${x.depreciationBusinessTotal}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${x.assetClosingTotal}" pattern="#,##0" /></td></tr>
+            </tbody>
+        </table>
+        <div class="tr-sheet-grid">
+            <table class="tr-sheet-table">
+                <caption>利子割引料の内訳（金融機関を除く）</caption>
+                <thead><tr><th>支払先の住所・氏名</th><th class="num">本年中の利子割引料</th><th class="num">左のうち必要経費算入額</th></tr></thead>
+                <tbody><c:forEach var="p" items="${x.interestRows}"><tr><td><c:out value="${p.address}" /> <c:out value="${p.name}" /></td><td class="num"><fmt:formatNumber value="${p.amount}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${p.deductible}" pattern="#,##0" /></td></tr></c:forEach></tbody>
+            </table>
+            <table class="tr-sheet-table">
+                <caption>税理士・弁護士等の報酬・料金の内訳</caption>
+                <thead><tr><th>支払先の住所・氏名</th><th class="num">本年中の報酬等の金額</th><th class="num">左のうち必要経費算入額</th></tr></thead>
+                <tbody><c:forEach var="p" items="${x.feeRows}"><tr><td><c:out value="${p.address}" /> <c:out value="${p.name}" /></td><td class="num"><fmt:formatNumber value="${p.amount}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${p.deductible}" pattern="#,##0" /></td></tr></c:forEach></tbody>
+            </table>
+        </div>
+        <table class="tr-sheet-table">
+            <caption>地代家賃の内訳</caption>
+            <thead><tr><th>支払先の住所・氏名</th><th>賃借物件</th><th class="num">本年中の賃借料・権利金等</th><th class="num">左の賃借料のうち必要経費算入額</th></tr></thead>
+            <tbody><c:forEach var="p" items="${x.rentRows}"><tr><td><c:out value="${p.address}" /> <c:out value="${p.name}" /></td><td><c:out value="${p.description}" /></td><td class="num"><fmt:formatNumber value="${p.amount}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${p.deductible}" pattern="#,##0" /></td></tr></c:forEach></tbody>
+        </table>
+    </div>
+
+    <div class="tr-sheet-page">
+        <h2 class="tr-sheet-title">4ページ　貸借対照表（資産負債調）　<c:out value="${page.yearLabel}" />12月31日現在</h2>
+        <div class="tr-sheet-grid">
+            <table class="tr-sheet-table">
+                <caption>資産の部</caption>
+                <thead><tr><th>科目</th><th class="num">1月1日（期首）</th><th class="num">12月31日（期末）</th></tr></thead>
+                <tbody>
+                    <c:forEach var="r" items="${page.assets}"><tr><th><c:out value="${r.label}" /></th><td class="num"><fmt:formatNumber value="${r.opening}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${r.closing}" pattern="#,##0" /></td></tr></c:forEach>
+                    <tr class="is-total"><th>合計</th><td class="num"><fmt:formatNumber value="${page.assetsOpening}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${page.assetsClosing}" pattern="#,##0" /></td></tr>
+                </tbody>
+            </table>
+            <table class="tr-sheet-table">
+                <caption>負債・資本の部</caption>
+                <thead><tr><th>科目</th><th class="num">1月1日（期首）</th><th class="num">12月31日（期末）</th></tr></thead>
+                <tbody>
+                    <c:forEach var="r" items="${page.liabilities}"><tr><th><c:out value="${r.label}" /></th><td class="num"><fmt:formatNumber value="${r.opening}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${r.closing}" pattern="#,##0" /></td></tr></c:forEach>
+                    <tr class="is-total"><th>合計</th><td class="num"><fmt:formatNumber value="${page.liabilitiesOpening}" pattern="#,##0" /></td><td class="num"><fmt:formatNumber value="${page.liabilitiesClosing}" pattern="#,##0" /></td></tr>
+                </tbody>
+            </table>
+        </div>
+        <p class="tr-sheet-note">本書は青色申告決算書（一般用）の記載項目に沿って本アプリが作成した帳票です（国税庁の公式用紙ではありません）。提出時は確定申告書等作成コーナー等で正式な様式に転記するか、様式と照合のうえご利用ください。</p>
+    </div>
+</section>

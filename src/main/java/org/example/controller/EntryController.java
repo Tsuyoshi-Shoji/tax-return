@@ -71,6 +71,10 @@ public class EntryController {
                 "excludeFromReturn",
                 "homeApportionment",
                 "details",
+                "counterpartyName",
+                "counterpartyAddress",
+                "withholdingTax",
+                "taxCategory",
                 "entryMode",
                 "targetMonth",
                 "monthlyRows[*].expenseType",
@@ -300,6 +304,8 @@ public class EntryController {
         model.addAttribute("categories", pageData.getCategories());
         model.addAttribute("items", pageData.getItems());
         model.addAttribute("methods", pageData.getMethods());
+        model.addAttribute("counterpartyNames", pageData.getCounterpartyNames());
+        model.addAttribute("taxCategories", pageData.getTaxCategories());
         model.addAttribute("apportionmentRate", pageData.getApportionmentRate());
         model.addAttribute("today", pageData.getToday());
         model.addAttribute("fieldErrors", pageData.getFieldErrors());
@@ -392,6 +398,10 @@ public class EntryController {
                 String.valueOf(form.isExcludeFromReturn()),
                 String.valueOf(form.isHomeApportionment()),
                 nullToEmpty(form.getDetails()),
+                nullToEmpty(form.getCounterpartyName()),
+                nullToEmpty(form.getCounterpartyAddress()),
+                nullToEmpty(form.getWithholdingTax()),
+                nullToEmpty(form.getTaxCategory()),
                 nullToEmpty(form.getEntryMode()),
                 nullToEmpty(form.getTargetMonth()),
                 monthlyRowsHash.toString(),

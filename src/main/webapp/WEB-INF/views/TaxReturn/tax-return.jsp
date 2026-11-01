@@ -12,8 +12,8 @@
     <link rel="stylesheet" href="${ctx}/css/style.css?v=20261016a">
     <link rel="stylesheet" href="${ctx}/css/home/home.css?v=20261011c">
     <link rel="stylesheet" href="${ctx}/css/profit-loss/profit-loss.css?v=20261011d">
-    <link rel="stylesheet" href="${ctx}/css/tax-return/tax-return.css?v=20261016b">
-    <script src="${ctx}/css/tax-return/tax-return.js?v=20261011c" defer></script>
+    <link rel="stylesheet" href="${ctx}/css/tax-return/tax-return.css?v=20261101b">
+    <script src="${ctx}/css/tax-return/tax-return.js?v=20261101b" defer></script>
 </head>
 <body class="home-page profit-loss-page tax-return-page">
 <jsp:include page="/WEB-INF/views/Header/header.jsp" />
@@ -66,12 +66,17 @@
                 <a id="tab-monthly-sales" class="tr-tab" href="#section-monthly">月別売上</a>
                 <a id="tab-profit-loss" class="tr-tab" href="#section-profit-loss">損益計算書</a>
                 <a id="tab-settlement" class="tr-tab" href="#section-settlement">決算整理</a>
+                <a id="tab-blue-statement" class="tr-tab" href="#section-blue-statement">決算書様式</a>
+                <a id="tab-fixed-assets" class="tr-tab" href="#section-fixed-assets">固定資産</a>
                 <a id="tab-balance-sheet" class="tr-tab" href="#section-balance-sheet">貸借対照表</a>
                 <a id="tab-journal" class="tr-tab" href="#section-journal">仕訳帳</a>
+                <a id="tab-deductions" class="tr-tab" href="#section-deductions">所得控除</a>
+                <a id="tab-tax" class="tr-tab" href="#section-tax">税額計算</a>
+                <a id="tab-consumption" class="tr-tab" href="#section-consumption">消費税</a>
                 <a id="tab-output" class="tr-tab" href="#section-output">出力</a>
             </nav>
 
-            <section id="section-basic-info" class="profit-loss-card tr-section print-section" data-print-groups="return" aria-labelledby="heading-basic-info">
+            <section id="section-basic-info" class="profit-loss-card tr-section" aria-labelledby="heading-basic-info">
                 <div class="tr-section-head">
                     <div>
                         <h2 id="heading-basic-info">基本情報</h2>
@@ -94,7 +99,7 @@
                 </div>
             </section>
 
-            <section id="section-annual-summary" class="profit-loss-card tr-section print-section" data-print-groups="return profit-loss" aria-labelledby="heading-annual-summary">
+            <section id="section-annual-summary" class="profit-loss-card tr-section print-section" data-print-groups="profit-loss" aria-labelledby="heading-annual-summary">
                 <h2 id="heading-annual-summary">年間収支サマリー</h2>
                 <p id="text-annual-financial-description" class="tr-desc"><c:out value="${page.yearLabel}" />の収支の概要です。</p>
                 <div class="tr-cards">
@@ -136,7 +141,7 @@
                 </div>
             </section>
 
-            <section id="section-monthly" class="profit-loss-card tr-section print-section" data-print-groups="return" aria-labelledby="heading-annual-revenue-breakdown">
+            <section id="section-monthly" class="profit-loss-card tr-section" aria-labelledby="heading-annual-revenue-breakdown">
                 <h2 id="heading-annual-revenue-breakdown">年間収支</h2>
                 <p id="text-annual-revenue-description" class="tr-desc"><c:out value="${page.yearLabel}" />の月別収支の推移です。</p>
                 <div class="tr-table-scroll">
@@ -162,12 +167,12 @@
             </section>
 
             <div class="tr-two-col">
-                <section id="section-profit-loss" class="profit-loss-card tr-section print-section" data-print-groups="return profit-loss" aria-labelledby="heading-profit-loss-statement">
+                <section id="section-profit-loss" class="profit-loss-card tr-section print-section" data-print-groups="profit-loss" aria-labelledby="heading-profit-loss-statement">
                     <h2 id="heading-profit-loss-statement">損益計算書</h2>
-                    <p id="text-profit-loss-description" class="tr-desc"><c:out value="${page.yearLabel}" />の損益計算書の内訳です。</p>
+                    <p id="text-profit-loss-description" class="tr-desc"><c:out value="${page.yearLabel}" />の損益計算書の勘定科目別内訳です。</p>
                     <div class="tr-table-scroll">
                         <table id="table-profit-loss-statement" class="tr-table tr-pl">
-                            <thead><tr><th scope="col">科目</th><th scope="col" class="num">金額（円）</th><th scope="col"><span class="visually-hidden">内訳</span></th></tr></thead>
+                            <thead><tr><th scope="col">勘定科目</th><th scope="col" class="num">金額（円）</th><th scope="col"><span class="visually-hidden">内訳</span></th></tr></thead>
                             <tbody>
                                 <c:forEach var="r" items="${page.plRows}">
                                     <tr>
@@ -185,7 +190,7 @@
 
                 <section id="section-settlement" class="profit-loss-card tr-section" aria-labelledby="heading-settlement-management">
                     <h2 id="heading-settlement-management">決算整理</h2>
-                    <p id="text-settlement-description" class="tr-desc">年末の決算整理に関する項目を入力してください。</p>
+                    <p id="text-settlement-description" class="tr-desc">年末の決算整理に関する項目を入力してください。売掛金・未収入金・買掛金・未払金は12月31日時点の残高を入力すると、帳簿残高との差額を普通預金で決済したものとして決算整理仕訳を作成します。</p>
                     <form id="settlement-form" method="post" action="${ctx}/tax-return/settlement?year=${page.selectedYear}" novalidate>
                         <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
                         <c:set var="s" value="${page.settlement}" />
@@ -193,12 +198,12 @@
                             <fieldset class="tr-settlement" <c:if test="${page.closed}">disabled</c:if>>
                                 <label class="tr-field"><span>期首棚卸（円）</span><input name="openingInventory" inputmode="numeric" autocomplete="off" value="<c:out value='${s.openingInventory}' />" /></label>
                                 <label class="tr-field"><span>期末棚卸（円）</span><input name="closingInventory" inputmode="numeric" autocomplete="off" value="<c:out value='${s.closingInventory}' />" /></label>
-                                <label class="tr-field"><span>減価償却費（円）</span><input name="depreciation" inputmode="numeric" autocomplete="off" value="<c:out value='${s.depreciation}' />" /></label>
+                                <label class="tr-field"><span>減価償却費（円）</span><output id="display-register-depreciation" class="tr-field-output"><fmt:formatNumber value="${page.extras.depreciationBusinessTotal}" pattern="#,##0" />（固定資産台帳から自動計算）</output></label>
                                 <label class="tr-field"><span>売掛金（円）</span><input name="accountsReceivable" inputmode="numeric" autocomplete="off" value="<c:out value='${s.accountsReceivable}' />" /></label>
                                 <label class="tr-field"><span>買掛金（円）</span><input name="accountsPayable" inputmode="numeric" autocomplete="off" value="<c:out value='${s.accountsPayable}' />" /></label>
                                 <label class="tr-field"><span>未払金（円）</span><input name="unpaidExpenses" inputmode="numeric" autocomplete="off" value="<c:out value='${s.unpaidExpenses}' />" /></label>
                                 <label class="tr-field"><span>未収入金（円）</span><input name="unreceivedIncome" inputmode="numeric" autocomplete="off" value="<c:out value='${s.unreceivedIncome}' />" /></label>
-                                <label class="tr-field"><span>期首残高（円）</span><input name="openingBalance" inputmode="numeric" autocomplete="off" value="<c:out value='${s.openingBalance}' />" /></label>
+                                <label class="tr-field"><span>期首残高（円）</span><input name="openingBalance" inputmode="numeric" autocomplete="off" value="<c:out value='${s.openingBalance}' />" <c:if test="${page.balanceCarriedForward}">disabled title="前年の期末残高を繰り越すため入力不要です"</c:if> /></label>
                                 <label class="tr-field"><span>期末現預金（円）</span><input name="closingCash" inputmode="numeric" autocomplete="off" value="<c:out value='${s.closingCash}' />" /></label>
                             </fieldset>
                         </div>
@@ -207,9 +212,55 @@
                 </section>
             </div>
 
-            <section id="section-balance-sheet" class="profit-loss-card tr-section print-section" data-print-groups="return balance-sheet" aria-labelledby="heading-balance-sheet">
+            <section id="section-blue-statement" class="profit-loss-card tr-section print-section" data-print-groups="profit-loss" aria-labelledby="heading-blue-statement">
+                <h2 id="heading-blue-statement">青色申告決算書（損益計算書）</h2>
+                <p id="text-blue-statement-description" class="tr-desc">勘定科目を青色申告決算書（一般用）1ページ目の各欄へ集約した金額です。欄番号・様式は提出前に国税庁の最新様式でご確認ください。</p>
+                <c:choose>
+                    <c:when test="${empty page.statementRows}">
+                        <p class="tr-desc">対象年度の決算書様式が登録されていません。</p>
+                    </c:when>
+                    <c:otherwise>
+                        <div class="tr-statement-grid">
+                            <div class="tr-table-scroll">
+                                <table id="table-blue-statement-main" class="tr-table tr-statement">
+                                    <thead><tr><th scope="col" class="no">欄</th><th scope="col">科目</th><th scope="col" class="num">金額（円）</th><th scope="col">集計元</th></tr></thead>
+                                    <tbody>
+                                        <c:forEach var="r" items="${page.statementMainRows}">
+                                            <tr id="statement-line-${r.number}" class="${r.total ? 'is-total' : (r.calculated ? 'is-calc' : '')}">
+                                                <td class="no"><c:out value="${r.numberLabel}" /></td>
+                                                <th scope="row"><c:out value="${r.label}" /></th>
+                                                <td class="num ${r.amount.signum() < 0 ? 'is-negative' : ''}"><fmt:formatNumber value="${r.amount}" pattern="#,##0" /></td>
+                                                <td class="src"><c:out value="${r.accounts}" /></td>
+                                            </tr>
+                                        </c:forEach>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="tr-table-scroll">
+                                <table id="table-blue-statement-income" class="tr-table tr-statement">
+                                    <thead><tr><th scope="col" class="no">欄</th><th scope="col">科目</th><th scope="col" class="num">金額（円）</th><th scope="col">集計元</th></tr></thead>
+                                    <tbody>
+                                        <c:forEach var="r" items="${page.statementIncomeRows}">
+                                            <tr id="statement-line-${r.number}" class="${r.total ? 'is-total' : (r.calculated ? 'is-calc' : '')}">
+                                                <td class="no"><c:out value="${r.numberLabel}" /></td>
+                                                <th scope="row"><c:out value="${r.label}" /></th>
+                                                <td class="num ${r.amount.signum() < 0 ? 'is-negative' : ''}"><fmt:formatNumber value="${r.amount}" pattern="#,##0" /></td>
+                                                <td class="src"><c:out value="${r.accounts}" /></td>
+                                            </tr>
+                                        </c:forEach>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </c:otherwise>
+                </c:choose>
+            </section>
+
+            <%@ include file="/WEB-INF/views/TaxReturn/_fixed-assets.jspf" %>
+
+            <section id="section-balance-sheet" class="profit-loss-card tr-section print-section" data-print-groups="balance-sheet" aria-labelledby="heading-balance-sheet">
                 <h2 id="heading-balance-sheet">貸借対照表</h2>
-                <p id="text-balance-sheet-description" class="tr-desc"><c:out value="${page.yearLabel}" />12月31日時点の貸借対照表です。</p>
+                <p id="text-balance-sheet-description" class="tr-desc"><c:out value="${page.yearLabel}" />12月31日時点の貸借対照表です。仕訳の残高から作成し、<c:choose><c:when test="${page.balanceCarriedForward}">期首残高は前年の期末残高を繰り越しています（元入金＝期首の資産合計−負債合計）。</c:when><c:otherwise>期首残高は決算整理の「期首残高（普通預金）」「期首棚卸」と固定資産台帳から作成しています。</c:otherwise></c:choose></p>
                 <div class="tr-bs">
                     <table id="table-balance-sheet" class="tr-table tr-bs-table">
                         <thead><tr class="is-asset"><th scope="col">資産の部</th><th scope="col" class="num">期首（円）</th><th scope="col" class="num">期末（円）</th></tr></thead>
@@ -271,6 +322,11 @@
                 </c:forEach>
             </section>
 
+            <%@ include file="/WEB-INF/views/TaxReturn/_deductions.jspf" %>
+            <%@ include file="/WEB-INF/views/TaxReturn/_tax-calculation.jspf" %>
+            <%@ include file="/WEB-INF/views/TaxReturn/_consumption.jspf" %>
+            <%@ include file="/WEB-INF/views/TaxReturn/_blue-return-print.jspf" %>
+
             <section id="section-checklist" class="profit-loss-card tr-section" aria-labelledby="heading-blue-tax-checklist">
                 <h2 id="heading-blue-tax-checklist">青色申告決算書チェック</h2>
                 <p id="text-blue-tax-checklist-description" class="tr-desc">申告書の作成に必要な項目のチェック状況です。</p>
@@ -293,8 +349,12 @@
                     <button id="button-pdf-profit-loss" type="button" class="tr-btn tr-btn-outline" data-print="profit-loss" data-title="損益計算書">損益計算書PDF</button>
                     <button id="button-pdf-journal" type="button" class="tr-btn tr-btn-outline" data-print="journal" data-title="仕訳帳">仕訳帳PDF</button>
                     <button id="button-pdf-ledger" type="button" class="tr-btn tr-btn-outline" data-print="ledger" data-title="総勘定元帳">総勘定元帳PDF</button>
+                    <c:if test="${not empty page.extras.tax}"><button id="button-pdf-final-return" type="button" class="tr-btn tr-btn-outline" data-print="final-return" data-title="確定申告書（第一表・第二表）">確定申告書（第一表・第二表）PDF</button></c:if>
+                    <c:if test="${not empty page.extras.consumption}"><button id="button-pdf-consumption" type="button" class="tr-btn tr-btn-outline" data-print="consumption" data-title="消費税計算書（簡易課税）">消費税計算書PDF</button></c:if>
+                    <a id="button-export-etax-csv" class="tr-btn tr-btn-outline" href="${ctx}/tax-return/export/etax-csv?year=${page.selectedYear}" data-export="etax-csv">e-Tax入力用CSV</a>
                 </div>
-                <p class="tr-desc">PDF出力はブラウザの印刷ダイアログを使用します。送信先で「PDFに保存」を選択してください。</p>
+                <p class="tr-desc">PDF出力はブラウザの印刷ダイアログを使用します。送信先で「PDFに保存」を選択してください。帳票は国税庁様式の記載項目に沿った転記用で、公式の提出用紙ではありません。</p>
+                <p class="tr-desc">e-Tax入力用CSVは、確定申告書等作成コーナー・e-Taxソフトへ入力する際に参照する欄別の一覧です（e-Taxへ直接取り込むデータ（XTX形式）ではありません）。</p>
             </section>
         </div>
     </main>

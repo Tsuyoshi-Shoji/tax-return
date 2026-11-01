@@ -23,7 +23,13 @@
 | `payment_method` | 支払方法マスタ | 現金、振込、カードなど |
 | `income_entry` | 収益登録データ | 区分、項目、日付、金額、申告対象外、詳細 |
 | `expense_entry` | 支出登録データ | 区分、項目、日付、金額、申告対象外、家事按分、詳細 |
-| `ledger_account` | 勘定科目 | 勘定科目コード、種別、申告区分 |
+| `ledger_account` | 勘定科目 | 勘定科目コード、種別（資産/負債/純資産/収益/費用）、正常残高（システム共通マスタ） |
+| `statement_line` | 決算書様式欄 | 様式コード、欄番号、欄名、欄種別、適用年度 |
+| `account_statement_mapping` | 科目→様式欄対応 | 勘定科目、様式欄（任意記載欄を含む）、適用年度 |
+| `ui_item_account_mapping` | 画面品目→科目対応 | 収益/支出の区分・項目コード、勘定科目、要確認フラグ、適用期間 |
+| `fixed_asset` | 固定資産台帳 | 取得日、取得価額、耐用年数、償却方法、事業専用割合 |
+| `tax_return_input` | 年分別の申告情報 | 給与・雑所得、本人・配偶者の状況、予定納税額、基準期間の課税売上高 |
+| `tax_dependent` | 扶養親族（年分別） | 氏名、続柄、生年月日、所得、同居、障害者区分 |
 | `counterparty` | 取引先 | 顧客、仕入先、金融機関、メモ |
 | `classification_rule` | 自動仕分け規則 | キーワード、取引先、勘定科目割当 |
 | `accounting_transaction` | 取引ヘッダ | 日付、摘要、金額、入力元、状態 |
@@ -52,7 +58,6 @@ erDiagram
     app_user ||--o{ ai_conversation : starts
 
     business_profile ||--o{ fiscal_year : has
-    business_profile ||--o{ ledger_account : defines
     business_profile ||--o{ counterparty : registers
     business_profile ||--o{ classification_rule : maintains
     business_profile ||--o{ income_category : defines
@@ -77,6 +82,14 @@ erDiagram
 
     accounting_transaction ||--o{ accounting_transaction_line : has
     ledger_account ||--o{ accounting_transaction_line : used_by
+    ledger_account ||--o{ account_statement_mapping : mapped_to
+    statement_line ||--o{ account_statement_mapping : aggregates
+    ledger_account ||--o{ ui_item_account_mapping : assigned_by
+    business_profile ||--o{ fixed_asset : owns
+    fiscal_year ||--o| tax_return_input : has
+    fiscal_year ||--o{ tax_dependent : lists
+    counterparty ||--o{ income_entry : pays
+    counterparty ||--o{ expense_entry : receives
     accounting_transaction ||--o{ transaction_attachment : evidence
 
     income_entry ||--o| accounting_transaction : posted_to
@@ -363,7 +376,10 @@ erDiagram
 - `income_item.income_category_id, item_code` UNIQUE
 - `expense_category.business_profile_id, category_code` UNIQUE
 - `expense_item.expense_category_id, item_code` UNIQUE
-- `ledger_account.business_profile_id, account_code` UNIQUE
+- `ledger_account.account_code` UNIQUE
+- `statement_line.form_code, line_code, effective_from_year` UNIQUE
+- `account_statement_mapping.ledger_account_id, form_code, effective_from_year` UNIQUE
+- `ui_item_account_mapping.entry_kind, category_code, item_code, effective_from` UNIQUE
 - `income_entry.fiscal_year_id, transaction_date`
 - `expense_entry.fiscal_year_id, transaction_date`
 - `accounting_transaction.source_type, accounting_transaction.source_id` INDEX

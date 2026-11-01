@@ -30,6 +30,8 @@ import org.example.entity.BusinessProfile;
 import org.example.entity.ExpenseEntry;
 import org.example.entity.FiscalYear;
 import org.example.entity.UserSetting;
+import org.example.features.accounting.service.AccountMappingService;
+import org.example.features.accounting.service.impl.AccountMappingServiceImpl;
 import org.example.features.entry.EntryConflictException;
 import org.example.features.entry.EntryKind;
 import org.example.features.entry.EntryPageData;
@@ -39,9 +41,12 @@ import org.example.features.entry.service.EntrySaveResult;
 import org.example.features.entry.service.EntryService;
 import org.example.features.entry.service.ValidatedEntryCommand;
 import org.example.features.entry.service.impl.EntryServiceImpl;
+import org.example.features.taxreturn.service.ClosingJournalService;
+import org.example.repository.AccountStatementMappingRepository;
 import org.example.repository.AccountingTransactionRepository;
 import org.example.repository.AppUserRepository;
 import org.example.repository.BusinessProfileRepository;
+import org.example.repository.CounterpartyRepository;
 import org.example.repository.ExpenseCategoryRepository;
 import org.example.repository.ExpenseEntryRepository;
 import org.example.repository.ExpenseItemRepository;
@@ -50,9 +55,13 @@ import org.example.repository.IncomeCategoryRepository;
 import org.example.repository.IncomeEntryRepository;
 import org.example.repository.IncomeItemRepository;
 import org.example.repository.JournalEntryRepository;
+import org.example.repository.JournalLineRepository;
+import org.example.repository.LedgerAccountRepository;
 import org.example.repository.PaymentMethodRepository;
 import org.example.repository.ReceiveMethodRepository;
+import org.example.repository.StatementLineRepository;
 import org.example.repository.TaxDeductionRecordRepository;
+import org.example.repository.UiItemAccountMappingRepository;
 import org.example.repository.UserSettingRepository;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -657,7 +666,10 @@ public final class EntryBackendReviewHarness {
                 ReceiveMethodRepository receiveMethodRepository,
                 PaymentMethodRepository paymentMethodRepository,
                 JournalEntryRepository journalEntryRepository,
-                TaxDeductionRecordRepository taxDeductionRecordRepository) {
+                TaxDeductionRecordRepository taxDeductionRecordRepository,
+                AccountMappingService accountMappingService,
+                CounterpartyRepository counterpartyRepository,
+                ClosingJournalService closingJournalService) {
             return new EntryServiceImpl(
                     businessProfileRepository,
                     fiscalYearRepository,
@@ -672,7 +684,36 @@ public final class EntryBackendReviewHarness {
                     receiveMethodRepository,
                     paymentMethodRepository,
                     journalEntryRepository,
-                    taxDeductionRecordRepository);
+                    taxDeductionRecordRepository,
+                    accountMappingService,
+                    counterpartyRepository,
+                    closingJournalService);
+        }
+
+        @Bean
+        ClosingJournalService closingJournalService() {
+            return new ClosingJournalService() {
+                @Override
+                public void rebuild(Long fiscalYearId) {
+                }
+
+                @Override
+                public void rebuildOpenYears(Long businessProfileId) {
+                }
+            };
+        }
+
+        @Bean
+        AccountMappingService accountMappingService(
+                LedgerAccountRepository ledgerAccountRepository,
+                StatementLineRepository statementLineRepository,
+                AccountStatementMappingRepository accountStatementMappingRepository,
+                UiItemAccountMappingRepository uiItemAccountMappingRepository,
+                JournalLineRepository journalLineRepository,
+                ExpenseItemRepository expenseItemRepository) {
+            return new AccountMappingServiceImpl(ledgerAccountRepository, statementLineRepository,
+                    accountStatementMappingRepository, uiItemAccountMappingRepository, journalLineRepository,
+                    expenseItemRepository);
         }
     }
 

@@ -18,4 +18,6 @@
 | 6 | status | ステータス | VARCHAR(20) | 'active' | 非許容 | active/inactive/deleted |
 | 7 | created_at | 作成日時 | TIMESTAMP | CURRENT_TIMESTAMP | 非許容 | 監査用 |
 | 8 | updated_at | 更新日時 | TIMESTAMP | CURRENT_TIMESTAMP | 非許容 | 更新時に上書き |
+| 9 | name_kana | フリガナ | VARCHAR(100) | - | 許容 | 全角カタカナ・スペース。申告書第一表用、個人情報 |
+| 10 | birth_date | 生年月日 | DATE | - | 許容 | 申告書第一表用、個人情報 |
 
