@@ -35,7 +35,10 @@ import org.example.repository.ExpenseItemRepository;
 import org.example.repository.FiscalYearRepository;
 import org.example.repository.IncomeEntryRepository;
 import org.example.repository.IncomeItemRepository;
+import org.example.repository.AccountingTransactionRepository;
 import org.example.repository.JournalEntryRepository;
+import org.example.repository.TaxDeductionRecordRepository;
+import org.example.repository.TransactionSettlementRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,6 +55,9 @@ public class ProfitLossServiceImpl implements ProfitLossService {
     private final IncomeItemRepository incomeItemRepository;
     private final ExpenseItemRepository expenseItemRepository;
     private final JournalEntryRepository journalEntryRepository;
+    private final AccountingTransactionRepository accountingTransactionRepository;
+    private final TransactionSettlementRepository transactionSettlementRepository;
+    private final TaxDeductionRecordRepository taxDeductionRecordRepository;
     private final ClosingJournalService closingJournalService;
 
     public ProfitLossServiceImpl(
@@ -62,6 +68,9 @@ public class ProfitLossServiceImpl implements ProfitLossService {
             IncomeItemRepository incomeItemRepository,
             ExpenseItemRepository expenseItemRepository,
             JournalEntryRepository journalEntryRepository,
+            AccountingTransactionRepository accountingTransactionRepository,
+            TransactionSettlementRepository transactionSettlementRepository,
+            TaxDeductionRecordRepository taxDeductionRecordRepository,
             ClosingJournalService closingJournalService) {
         this.businessProfileRepository = businessProfileRepository;
         this.fiscalYearRepository = fiscalYearRepository;
@@ -70,6 +79,9 @@ public class ProfitLossServiceImpl implements ProfitLossService {
         this.incomeItemRepository = incomeItemRepository;
         this.expenseItemRepository = expenseItemRepository;
         this.journalEntryRepository = journalEntryRepository;
+        this.accountingTransactionRepository = accountingTransactionRepository;
+        this.transactionSettlementRepository = transactionSettlementRepository;
+        this.taxDeductionRecordRepository = taxDeductionRecordRepository;
         this.closingJournalService = closingJournalService;
     }
 
@@ -229,9 +241,12 @@ public class ProfitLossServiceImpl implements ProfitLossService {
             IncomeEntry e = incomeEntryRepository.findOwnedByIdForUpdate(id, appUserId)
                     .orElseThrow(() -> new EntryNotFoundException("Entry not found"));
             requireDeletable(lockMessage(e.getFiscalYear(), e.getAccountingTransaction()));
-            deleteJournalEntry(e.getAccountingTransaction());
+            AccountingTransaction transaction = e.getAccountingTransaction();
+            deleteLinkedRecords(transaction);
+            e.setAccountingTransaction(null);
             e.markDeleted();
-            incomeEntryRepository.save(e);
+            incomeEntryRepository.saveAndFlush(e);
+            deleteTransaction(transaction);
             closingJournalService.rebuild(fiscalYearId);
             return;
         }
@@ -243,19 +258,32 @@ public class ProfitLossServiceImpl implements ProfitLossService {
             ExpenseEntry e = expenseEntryRepository.findOwnedByIdForUpdate(id, appUserId)
                     .orElseThrow(() -> new EntryNotFoundException("Entry not found"));
             requireDeletable(lockMessage(e.getFiscalYear(), e.getAccountingTransaction()));
-            deleteJournalEntry(e.getAccountingTransaction());
+            AccountingTransaction transaction = e.getAccountingTransaction();
+            deleteLinkedRecords(transaction);
+            e.setAccountingTransaction(null);
             e.markDeleted();
-            expenseEntryRepository.save(e);
+            expenseEntryRepository.saveAndFlush(e);
+            deleteTransaction(transaction);
             closingJournalService.rebuild(fiscalYearId);
             return;
         }
         throw new EntryNotFoundException("Unknown record type");
     }
 
-    private void deleteJournalEntry(AccountingTransaction transaction) {
+    /** 取引に紐づく仕訳・決済紐付け・控除候補を削除する。取引本体は収支レコードの参照を外した後に削除する。 */
+    private void deleteLinkedRecords(AccountingTransaction transaction) {
         if (transaction != null) {
             journalEntryRepository.findByAccountingTransactionId(transaction.getId())
                     .ifPresent(journalEntryRepository::delete);
+            transactionSettlementRepository.deleteBySourceTransactionId(transaction.getId());
+            taxDeductionRecordRepository.deleteBySourceTransactionId(transaction.getId());
+        }
+    }
+
+    private void deleteTransaction(AccountingTransaction transaction) {
+        if (transaction != null) {
+            journalEntryRepository.flush();
+            accountingTransactionRepository.delete(transaction);
         }
     }
 

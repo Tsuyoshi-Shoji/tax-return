@@ -875,12 +875,12 @@ public class TaxReturnServiceImpl implements TaxReturnService {
                 AccountMasterSeed.ACC_OWNER_DRAW, AccountMasterSeed.ACC_OWNER_CONTRIBUTION);
         BalanceSheet bs = new BalanceSheet();
         for (BalanceSheetService.Balance b : r.assetSide()) {
-            if (alwaysShown.contains(b.getCode()) || b.getOpening().signum() != 0 || b.getClosing().signum() != 0) {
+            if ((b.getCode() != null && alwaysShown.contains(b.getCode())) || b.getOpening().signum() != 0 || b.getClosing().signum() != 0) {
                 bs.assets.add(new BsRow(b.getName(), b.getOpening(), b.getClosing()));
             }
         }
         for (BalanceSheetService.Balance b : r.liabilitySide()) {
-            if (alwaysShown.contains(b.getCode()) || b.getOpening().signum() != 0 || b.getClosing().signum() != 0) {
+            if ((b.getCode() != null && alwaysShown.contains(b.getCode())) || b.getOpening().signum() != 0 || b.getClosing().signum() != 0) {
                 bs.liabilities.add(new BsRow(b.getName(), b.getOpening(), b.getClosing()));
             }
         }

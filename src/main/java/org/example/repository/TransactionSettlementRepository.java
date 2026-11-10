@@ -14,6 +14,10 @@ public interface TransactionSettlementRepository extends JpaRepository<Transacti
     @Query("delete from TransactionSettlement ts where ts.settlementAdjustment.id = :adjustmentId")
     void deleteBySettlementAdjustmentId(@Param("adjustmentId") Long adjustmentId);
 
+    @Modifying
+    @Query("delete from TransactionSettlement ts where ts.sourceTransaction.id = :transactionId")
+    void deleteBySourceTransactionId(@Param("transactionId") Long transactionId);
+
     @Query("select coalesce(sum(ts.settledAmount), 0) from TransactionSettlement ts where ts.sourceTransaction.id = :transactionId")
     BigDecimal sumSettledAmountBySourceTransactionId(@Param("transactionId") Long transactionId);
 
