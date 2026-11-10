@@ -3,6 +3,7 @@ package org.example.controller;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -354,11 +355,16 @@ public class EntryController {
     }
 
     private void logDataAccessFailure(Long userId, EntryKind kind, String action, DataAccessException ex) {
-        LOGGER.warn("entry userId={} kind={} action={} result=data-access-error type={}",
+        Throwable cause = ex.getMostSpecificCause();
+        SQLException sqlException = cause instanceof SQLException ? (SQLException) cause : null;
+        LOGGER.warn("entry userId={} kind={} action={} result=data-access-error type={} causeType={} sqlState={} vendorCode={}",
                 userId,
                 kind.getCode(),
                 action,
-                ex.getClass().getSimpleName());
+                ex.getClass().getSimpleName(),
+                cause.getClass().getSimpleName(),
+                sqlException == null ? "n/a" : sqlException.getSQLState(),
+                sqlException == null ? "n/a" : sqlException.getErrorCode());
     }
 
     private boolean isBlank(String value) {
