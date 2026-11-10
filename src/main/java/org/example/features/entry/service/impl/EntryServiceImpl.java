@@ -1786,8 +1786,7 @@ public class EntryServiceImpl implements EntryService {
             lines.add(buildJournalLine(mapping, lineNo++, "D", debitAccount, amount, entry.getDetails()));
         }
         lines.add(buildJournalLine(mapping, lineNo, "C", creditAccount, amount, entry.getDetails()));
-        journalEntry.setLines(lines);
-        journalEntryRepository.save(journalEntry);
+        replaceJournalLines(journalEntry, lines);
     }
 
     private void syncExpenseJournalEntry(ExpenseEntry entry, AccountingTransaction transaction) {
@@ -1830,6 +1829,19 @@ public class EntryServiceImpl implements EntryService {
             lines.add(buildJournalLine(mapping, lineNo++, "D", debitAccount, amount, entry.getDetails()));
         }
         lines.add(buildJournalLine(mapping, lineNo, "C", creditAccount, amount, entry.getDetails()));
+        replaceJournalLines(journalEntry, lines);
+    }
+
+    /**
+     * 既存の仕訳明細を新しい内容へ入れ替える。先に明細をクリアしてflushすることで、
+     * line_no を再利用する新しい行の挿入が、orphanRemovalによる旧行の削除より先に
+     * 実行されて一意制約（journal_entry_id, line_no）に違反するのを防ぐ。
+     */
+    private void replaceJournalLines(JournalEntry journalEntry, List<JournalLine> lines) {
+        if (journalEntry.getId() != null) {
+            journalEntry.setLines(null);
+            journalEntryRepository.saveAndFlush(journalEntry);
+        }
         journalEntry.setLines(lines);
         journalEntryRepository.save(journalEntry);
     }

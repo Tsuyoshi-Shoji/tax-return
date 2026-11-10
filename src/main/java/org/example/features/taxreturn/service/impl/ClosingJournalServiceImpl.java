@@ -115,8 +115,7 @@ public class ClosingJournalServiceImpl implements ClosingJournalService {
             JournalEntry entry = journalEntryRepository.findBySourceTypeAndSourceId(SOURCE_ASSET_ACQUISITION, asset.getId())
                     .orElseGet(JournalEntry::new);
             fill(entry, year, SOURCE_ASSET_ACQUISITION, asset.getId(), asset.getAcquisitionDate(), "固定資産の取得：" + asset.getAssetName());
-            entry.setLines(lines);
-            journalEntryRepository.save(entry);
+            replaceLines(entry, lines);
         }
         for (JournalEntry stale : journalEntryRepository.findByFiscalYearIdAndSourceType(year.getId(), SOURCE_ASSET_ACQUISITION)) {
             if (!keep.contains(stale.getSourceId())) {
@@ -162,8 +161,7 @@ public class ClosingJournalServiceImpl implements ClosingJournalService {
         }
         JournalEntry entry = existing != null ? existing : new JournalEntry();
         fill(entry, year, SOURCE_DEPRECIATION, year.getId(), year.getPeriodEnd(), "減価償却費の計上");
-        entry.setLines(lines);
-        journalEntryRepository.save(entry);
+        replaceLines(entry, lines);
     }
 
     private void rebuildSettlement(FiscalYear year, AccountMapping mapping) {
@@ -197,6 +195,19 @@ public class ClosingJournalServiceImpl implements ClosingJournalService {
         }
         JournalEntry entry = existing != null ? existing : new JournalEntry();
         fill(entry, year, SOURCE_SETTLEMENT, settlement.getId(), year.getPeriodEnd(), "決算整理仕訳");
+        replaceLines(entry, lines);
+    }
+
+    /**
+     * 既存の仕訳明細を新しい内容へ入れ替える。先に明細をクリアしてflushすることで、
+     * line_no を再利用する新しい行の挿入が、orphanRemovalによる旧行の削除より先に
+     * 実行されて一意制約（journal_entry_id, line_no）に違反するのを防ぐ。
+     */
+    private void replaceLines(JournalEntry entry, List<JournalLine> lines) {
+        if (entry.getId() != null) {
+            entry.setLines(null);
+            journalEntryRepository.saveAndFlush(entry);
+        }
         entry.setLines(lines);
         journalEntryRepository.save(entry);
     }
