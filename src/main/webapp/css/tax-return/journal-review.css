@@ -1,0 +1,43 @@
+.journal-review-page .journal-filters,
+.journal-review-page .journal-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.journal-review-page .journal-pagination {
+    align-items: center;
+    margin-top: 20px;
+}
+
+.journal-review-page .journal-review-table {
+    min-width: 760px;
+}
+
+.journal-review-page .journal-heading > th,
+.journal-review-page .journal-heading > td {
+    border-top: 2px solid #dce2e8;
+    vertical-align: top;
+}
+
+.journal-review-page .journal-heading > th {
+    max-width: 240px;
+    overflow-wrap: anywhere;
+}
+
+.journal-review-page .journal-confirm {
+    display: grid;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.journal-review-page .journal-success {
+    color: #17653b;
+}
+
+.journal-review-page .journal-error {
+    color: #a72332;
+    overflow-wrap: anywhere;
+}

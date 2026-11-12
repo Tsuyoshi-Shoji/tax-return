@@ -201,7 +201,8 @@ public class TaxReturnServiceImpl implements TaxReturnService {
             months.add(new ReportMonthRow(i + 1, current.incomeByMonth[i], current.expenseByMonth[i], 0, 0));
         }
 
-        long draftCount = transactionRepository.countByFiscalYearIdAndStatus(selected.getId(), DRAFT);
+        long draftCount = journalEntryRepository.countByFiscalYearIdAndStatus(selected.getId(), DRAFT)
+                + transactionRepository.countDraftsWithoutJournal(selected.getId());
         long unsettledCount = transactionRepository
                 .findByFiscalYearIdAndSettlementStatusInOrderByTransactionDateAscIdAsc(
                         selected.getId(),

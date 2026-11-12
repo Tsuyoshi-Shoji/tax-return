@@ -100,6 +100,9 @@ public class ClosingJournalServiceImpl implements ClosingJournalService {
             if (year.getTaxYear() < fromYear || CLOSED.equals(year.getStatus())) {
                 continue;
             }
+            if (fiscalYearRepository.findOpenForRebuild(year.getId(), businessProfileId).isEmpty()) {
+                continue;
+            }
             rebuildAcquisitions(year, assets, events, mapping);
             rebuildDepreciation(year, assets, events, mapping);
             journalEntryRepository.flush();
@@ -352,12 +355,30 @@ public class ClosingJournalServiceImpl implements ClosingJournalService {
      * 実行されて一意制約（journal_entry_id, line_no）に違反するのを防ぐ。
      */
     private void replaceLines(JournalEntry entry, List<JournalLine> lines) {
+        List<JournalLine> existing = entry.getLines().stream()
+                .sorted(Comparator.comparing(JournalLine::getLineNo)).toList();
+        if (existing.size() == lines.size()
+                && java.util.stream.IntStream.range(0, lines.size())
+                        .allMatch(i -> sameLine(existing.get(i), lines.get(i)))) {
+            journalEntryRepository.save(entry);
+            return;
+        }
+        entry.setStatus(DRAFT);
         if (entry.getId() != null) {
             entry.setLines(null);
             journalEntryRepository.saveAndFlush(entry);
         }
         entry.setLines(lines);
         journalEntryRepository.save(entry);
+    }
+
+    private static boolean sameLine(JournalLine a, JournalLine b) {
+        return java.util.Objects.equals(a.getLineNo(), b.getLineNo())
+                && java.util.Objects.equals(a.getDebitCredit(), b.getDebitCredit())
+                && java.util.Objects.equals(a.getAccountCode(), b.getAccountCode())
+                && java.util.Objects.equals(a.getAccountName(), b.getAccountName())
+                && a.getAmount().compareTo(b.getAmount()) == 0
+                && java.util.Objects.equals(a.getMemo(), b.getMemo());
     }
 
     /** 期末残高（入力値）と帳簿残高の差額を普通預金との間で消込（決済）する。 */
@@ -381,13 +402,16 @@ public class ClosingJournalServiceImpl implements ClosingJournalService {
 
     private static void fill(JournalEntry entry, FiscalYear year, String sourceType, Long sourceId,
             java.time.LocalDate date, String summary) {
+        if (entry.getId() == null || !java.util.Objects.equals(entry.getEntryDate(), date)
+                || !java.util.Objects.equals(entry.getSummary(), summary)) {
+            entry.setStatus(DRAFT);
+        }
         entry.setFiscalYear(year);
         entry.setAccountingTransaction(null);
         entry.setSourceType(sourceType);
         entry.setSourceId(sourceId);
         entry.setEntryDate(date);
         entry.setSummary(summary);
-        entry.setStatus(DRAFT);
     }
 
     private static JournalLine line(AccountMapping mapping, int no, String dc, String code, String name, BigDecimal amount, String memo) {
