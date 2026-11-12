@@ -11,6 +11,7 @@ import java.util.Set;
 
 import org.example.entity.FiscalYear;
 import org.example.entity.FixedAsset;
+import org.example.entity.FixedAssetEvent;
 import org.example.entity.JournalEntry;
 import org.example.entity.JournalLine;
 import org.example.entity.SettlementAdjustment;
@@ -18,8 +19,10 @@ import org.example.features.accounting.AccountMapping;
 import org.example.features.accounting.AccountMapping.AccountRef;
 import org.example.features.accounting.AccountMasterSeed;
 import org.example.features.taxreturn.asset.DepreciationCalculator;
+import org.example.features.taxreturn.asset.DepreciationRules;
 import org.example.repository.FiscalYearRepository;
 import org.example.repository.FixedAssetRepository;
+import org.example.repository.FixedAssetEventRepository;
 import org.example.repository.JournalEntryRepository;
 import org.example.repository.SettlementAdjustmentRepository;
 import org.springframework.stereotype.Component;
@@ -42,13 +45,15 @@ public class BalanceSheetService {
     private final JournalEntryRepository journalEntryRepository;
     private final SettlementAdjustmentRepository settlementRepository;
     private final FixedAssetRepository fixedAssetRepository;
+    private final FixedAssetEventRepository fixedAssetEventRepository;
 
     public BalanceSheetService(FiscalYearRepository fiscalYearRepository, JournalEntryRepository journalEntryRepository,
-            SettlementAdjustmentRepository settlementRepository, FixedAssetRepository fixedAssetRepository) {
+            SettlementAdjustmentRepository settlementRepository,             FixedAssetRepository fixedAssetRepository, FixedAssetEventRepository fixedAssetEventRepository) {
         this.fiscalYearRepository = fiscalYearRepository;
         this.journalEntryRepository = journalEntryRepository;
         this.settlementRepository = settlementRepository;
         this.fixedAssetRepository = fixedAssetRepository;
+        this.fixedAssetEventRepository = fixedAssetEventRepository;
     }
 
     public Result compute(FiscalYear target, AccountMapping mapping) {
@@ -63,6 +68,7 @@ public class BalanceSheetService {
         List<FiscalYear> years = new ArrayList<>(fiscalYearRepository.findByBusinessProfileIdOrderByTaxYearDesc(profileId));
         years.sort(Comparator.comparing(FiscalYear::getTaxYear));
         List<FixedAsset> assets = fixedAssetRepository.findByBusinessProfileIdOrderByAcquisitionDateAscIdAsc(profileId);
+        List<FixedAssetEvent> events = fixedAssetEventRepository.findByBusinessProfileIdOrderByEffectiveDateAscIdAsc(profileId);
         Result previous = null;
         for (FiscalYear year : years) {
             if (year.getTaxYear() > target.getTaxYear()) {
@@ -74,7 +80,7 @@ public class BalanceSheetService {
             if (carried) {
                 carryForward(previous, result);
             } else {
-                initialOpening(year, assets, mapping, result);
+                initialOpening(year, assets, events, mapping, result);
             }
             applyJournal(year, mapping, isTarget ? excludedSourceTypesInTarget : Set.of(), result);
             result.finish();
@@ -97,16 +103,23 @@ public class BalanceSheetService {
         }
     }
 
-    private void initialOpening(FiscalYear year, List<FixedAsset> assets, AccountMapping mapping, Result result) {
+    private void initialOpening(FiscalYear year, List<FixedAsset> assets, List<FixedAssetEvent> events,
+            AccountMapping mapping, Result result) {
         SettlementAdjustment settlement = settlementRepository.findByFiscalYearId(year.getId()).orElse(null);
         if (settlement != null) {
             addOpening(result, mapping, AccountMasterSeed.ACC_BANK_DEPOSIT, safe(settlement.getOpeningBalance()));
             addOpening(result, mapping, AccountMasterSeed.ACC_INVENTORY, safe(settlement.getOpeningInventory()));
         }
         for (FixedAsset asset : assets) {
-            if (asset.getAcquisitionDate().isBefore(year.getPeriodStart())) {
+            boolean disposed = events.stream().anyMatch(e -> asset.getId().equals(e.getFixedAsset().getId())
+                    && (FixedAssetEvent.SALE.equals(e.getEventType()) || FixedAssetEvent.DISPOSAL.equals(e.getEventType()))
+                    && e.getEffectiveDate().isBefore(year.getPeriodStart()));
+            if (disposed && !DepreciationCalculator.LUMP_SUM_3Y.equals(asset.getDepreciationMethod())) {
+                continue;
+            }
+            if (DepreciationRules.recognitionDate(asset, events).isBefore(year.getPeriodStart())) {
                 addOpening(result, mapping, asset.getAccountCode(),
-                        DepreciationCalculator.bookValueAtStartOf(asset, year.getTaxYear()));
+                        DepreciationCalculator.forYear(asset, year.getTaxYear(), asset.getBusinessRatio(), events, assets).opening());
             }
         }
     }

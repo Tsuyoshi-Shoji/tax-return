@@ -89,6 +89,37 @@ public class TaxReturnInput {
     @Column(name = "base_period_taxable_sales", precision = 15, scale = 0)
     private BigDecimal basePeriodTaxableSales;
 
+    @Column(name = "depreciation_rule_version", length = 40)
+    private String depreciationRuleVersion;
+
+    @Column(name = "depreciation_method_basis", nullable = false, length = 20)
+    private String depreciationMethodBasis = "UNCONFIRMED";
+
+    @Column(name = "depreciation_special_confirmed", nullable = false)
+    private boolean depreciationSpecialConfirmed;
+
+    @Column(name = "depreciation_business_months", nullable = false)
+    private int depreciationBusinessMonths = 12;
+
+    @Column(name = "depreciation_evidence", length = 500)
+    private String depreciationEvidence;
+
+    @Column(name = "depreciation_confirmed_at")
+    private LocalDateTime depreciationConfirmedAt;
+
+    public String getDepreciationRuleVersion() { return depreciationRuleVersion; }
+    public void setDepreciationRuleVersion(String v) { depreciationRuleVersion = v; }
+    public String getDepreciationMethodBasis() { return depreciationMethodBasis; }
+    public void setDepreciationMethodBasis(String v) { depreciationMethodBasis = v; }
+    public boolean isDepreciationSpecialConfirmed() { return depreciationSpecialConfirmed; }
+    public void setDepreciationSpecialConfirmed(boolean v) { depreciationSpecialConfirmed = v; }
+    public int getDepreciationBusinessMonths() { return depreciationBusinessMonths; }
+    public void setDepreciationBusinessMonths(int v) { depreciationBusinessMonths = v; }
+    public String getDepreciationEvidence() { return depreciationEvidence; }
+    public void setDepreciationEvidence(String v) { depreciationEvidence = v; }
+    public LocalDateTime getDepreciationConfirmedAt() { return depreciationConfirmedAt; }
+    public void setDepreciationConfirmedAt(LocalDateTime v) { depreciationConfirmedAt = v; }
+
     @Version
     @Column(name = "version")
     private Long version;

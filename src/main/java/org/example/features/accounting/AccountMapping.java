@@ -56,6 +56,12 @@ public final class AccountMapping {
         return Optional.ofNullable(name == null ? null : accountsByName.get(name));
     }
 
+    public List<AccountRef> accounts() {
+        return accountsByCode.values().stream()
+                .sorted(Comparator.comparingInt(AccountRef::displayOrder).thenComparing(AccountRef::code))
+                .toList();
+    }
+
     public Optional<AccountRef> forIncomeItem(IncomeItem item, LocalDate date) {
         if (item == null || item.getIncomeCategory() == null) {
             return Optional.empty();

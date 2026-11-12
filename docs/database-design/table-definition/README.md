@@ -19,13 +19,22 @@
 - `account_statement_mapping.md`
 - `ui_item_account_mapping.md`
 - `fixed_asset.md`
+- `fixed_asset_event.md`
 - `tax_return_input.md`
 - `tax_dependent.md`
 - `counterparty.md`
 - `classification_rule.md`
 - `accounting_transaction.md`
 - `accounting_transaction_line.md`
+- `journal_entry.md`
 - `transaction_attachment.md`
+- `retention_record.md`
+- `evidence_file.md`
+- `evidence_drive_connection.md`
+- `fiscal_year_closing_event.md`
+- `report_output_record.md`
+- `household_consumption.md`
+- `employee_salary_detail.md`
 - `tax_return_case.md`
 - `tax_return_item.md`
 - `generated_document.md`
@@ -56,4 +65,3 @@ powershell -ExecutionPolicy Bypass -File .\docs\database-design\table-definition
   -InputDir .\docs\database-design\table-definition `
   -OutputFile .\docs\database-design\table-definition\schema.mysql.sql
 ```
-

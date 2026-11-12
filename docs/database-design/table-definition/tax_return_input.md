@@ -34,3 +34,11 @@
 | 22 | version | 版 | BIGINT | - | 許容 | 楽観ロック |
 | 23 | created_at | 作成日時 | DATETIME | - | 非許容 | |
 | 24 | updated_at | 更新日時 | DATETIME | - | 非許容 | |
+| 25 | depreciation_rule_version | 償却確認ルール版 | VARCHAR(40) | - | 許容 | 年分-2026-04-01-v2。未確認・資産変更後はNULL。従来3方式・追加条件なしの場合だけv1も有効 |
+| 26 | depreciation_method_basis | 償却方法の適用根拠 | VARCHAR(20) | UNCONFIRMED | 非許容 | STATUTORY / NOTIFIED / APPROVED / MIXED。定率資産にSTATUTORYのみは不可 |
+| 27 | depreciation_special_confirmed | 少額特例の利用者確認 | BOOLEAN | FALSE | 非許容 | 対象者要件等の自己申告であり証明ではない |
+| 28 | depreciation_business_months | 事業月数 | INT | 12 | 非許容 | 1〜12、少額特例の上限按分 |
+| 29 | depreciation_evidence | 償却確認根拠 | VARCHAR(500) | - | 許容 | 種類別届出・承認等の参照メモ。秘密情報・個人情報を記入しない |
+| 30 | depreciation_confirmed_at | 償却要件確認日時 | DATETIME | - | 許容 | サーバー時刻、未確認時NULL |
+
+V11で追加。既存行へ確認済みを付与しない。所有年分・未確定状態を確認して更新し、資産・イベント変更が影響する未確定年分は版・日時をNULLにして再確認を要求する。法定適格性は自動判定しない。

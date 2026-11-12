@@ -6,23 +6,33 @@ import java.util.List;
 
 import org.example.features.taxreturn.consumption.ConsumptionTaxCalculator;
 import org.example.features.taxreturn.form.TaxReturnForms.ReturnInputForm;
+import org.example.features.taxreturn.form.TaxReturnForms.DepreciationRulesForm;
 import org.example.features.taxreturn.incometax.IncomeTaxCalculator;
 
 /** 確定申告画面の拡張データ（固定資産台帳・決算書2〜3ページ・所得控除・税額・第一表/第二表・消費税）。 */
 public class TaxReturnExtras {
     private Filer filer = new Filer();
     private final List<AssetRow> assets = new ArrayList<>();
+    private final List<AssetEventRow> fixedAssetEvents = new ArrayList<>();
     private BigDecimal depreciationTotal = BigDecimal.ZERO;
     private BigDecimal depreciationBusinessTotal = BigDecimal.ZERO;
     private BigDecimal assetOpeningTotal = BigDecimal.ZERO;
     private BigDecimal assetClosingTotal = BigDecimal.ZERO;
     private final List<MonthRow> monthlySalesPurchases = new ArrayList<>();
+    private final List<HouseholdConsumptionRow> householdConsumptionRows = new ArrayList<>();
+    private final List<EmployeeSalaryRow> employeeSalaryRows = new ArrayList<>();
+    private BigDecimal householdConsumptionTotal = BigDecimal.ZERO;
     private BigDecimal salesTotal = BigDecimal.ZERO;
     private BigDecimal purchaseTotal = BigDecimal.ZERO;
     private BigDecimal miscIncome = BigDecimal.ZERO;
     private final List<PayeeRow> rentRows = new ArrayList<>();
     private final List<PayeeRow> interestRows = new ArrayList<>();
     private final List<PayeeRow> feeRows = new ArrayList<>();
+    /** 売上（収入）金額の明細（主な売上先。上位 {@code PARTNER_ROWS} 件、残りは「上記以外」に合算）。 */
+    private final List<PayeeRow> salesPartnerRows = new ArrayList<>();
+    private BigDecimal salesPartnerOther = BigDecimal.ZERO;
+    private final List<PayeeRow> purchasePartnerRows = new ArrayList<>();
+    private BigDecimal purchasePartnerOther = BigDecimal.ZERO;
     private BigDecimal salaries = BigDecimal.ZERO;
     private BigDecimal dedicatedSalary = BigDecimal.ZERO;
     private BigDecimal incomeBeforeBlue = BigDecimal.ZERO;
@@ -47,10 +57,21 @@ public class TaxReturnExtras {
     private final List<Option> assetAccountOptions = new ArrayList<>();
     private final List<Option> deductionTypeOptions = new ArrayList<>();
     private String ruleNote;
+    private DepreciationRulesForm depreciationRules;
+    private String depreciationRuleVersion;
+    private String depreciationConfirmedAt;
+
+    public DepreciationRulesForm getDepreciationRules() { return depreciationRules; }
+    public void setDepreciationRules(DepreciationRulesForm v) { depreciationRules = v; }
+    public String getDepreciationRuleVersion() { return depreciationRuleVersion; }
+    public void setDepreciationRuleVersion(String v) { depreciationRuleVersion = v; }
+    public String getDepreciationConfirmedAt() { return depreciationConfirmedAt; }
+    public void setDepreciationConfirmedAt(String v) { depreciationConfirmedAt = v; }
 
     public Filer getFiler() { return filer; }
     public void setFiler(Filer filer) { this.filer = filer; }
     public List<AssetRow> getAssets() { return assets; }
+    public List<AssetEventRow> getFixedAssetEvents() { return fixedAssetEvents; }
     public BigDecimal getDepreciationTotal() { return depreciationTotal; }
     public void setDepreciationTotal(BigDecimal v) { depreciationTotal = v; }
     public BigDecimal getDepreciationBusinessTotal() { return depreciationBusinessTotal; }
@@ -60,6 +81,10 @@ public class TaxReturnExtras {
     public BigDecimal getAssetClosingTotal() { return assetClosingTotal; }
     public void setAssetClosingTotal(BigDecimal v) { assetClosingTotal = v; }
     public List<MonthRow> getMonthlySalesPurchases() { return monthlySalesPurchases; }
+    public List<HouseholdConsumptionRow> getHouseholdConsumptionRows() { return householdConsumptionRows; }
+    public List<EmployeeSalaryRow> getEmployeeSalaryRows() { return employeeSalaryRows; }
+    public BigDecimal getHouseholdConsumptionTotal() { return householdConsumptionTotal; }
+    public void setHouseholdConsumptionTotal(BigDecimal v) { householdConsumptionTotal = v; }
     public BigDecimal getSalesTotal() { return salesTotal; }
     public void setSalesTotal(BigDecimal v) { salesTotal = v; }
     public BigDecimal getPurchaseTotal() { return purchaseTotal; }
@@ -159,6 +184,8 @@ public class TaxReturnExtras {
         private final BigDecimal closing;
         private final String notes;
         private final boolean deletable;
+        private String calculationDetails;
+        private BigDecimal depreciationBasis;
 
         public AssetRow(Long id, String name, String accountName, String acquired, String serviceStart, BigDecimal cost,
                 String methodLabel, Integer usefulLife, BigDecimal rate, int months, BigDecimal opening,
@@ -200,23 +227,161 @@ public class TaxReturnExtras {
         public BigDecimal getClosing() { return closing; }
         public String getNotes() { return notes; }
         public boolean isDeletable() { return deletable; }
+        public String getCalculationDetails() { return calculationDetails; }
+        public void setCalculationDetails(String v) { calculationDetails = v; }
+        public BigDecimal getDepreciationBasis() { return depreciationBasis; }
+        public void setDepreciationBasis(BigDecimal v) { depreciationBasis = v; }
+    }
+
+    public static class AssetEventRow {
+        private final Long id;
+        private final String assetName;
+        private final String eventType;
+        private final String effectiveDate;
+        private final BigDecimal businessRatio;
+        private final BigDecimal proceeds;
+        private final BigDecimal openingBookValue;
+        private final String newDepreciationMethod;
+        private final boolean deletable;
+
+        public AssetEventRow(Long id, String assetName, String eventType, String effectiveDate,
+                BigDecimal businessRatio, BigDecimal proceeds, BigDecimal openingBookValue,
+                String newDepreciationMethod, boolean deletable) {
+            this.id = id;
+            this.assetName = assetName;
+            this.eventType = eventType;
+            this.effectiveDate = effectiveDate;
+            this.businessRatio = businessRatio;
+            this.proceeds = proceeds;
+            this.openingBookValue = openingBookValue;
+            this.newDepreciationMethod = newDepreciationMethod;
+            this.deletable = deletable;
+        }
+
+        public Long getId() { return id; }
+        public String getAssetName() { return assetName; }
+        public String getEventType() { return eventType; }
+        public String getEffectiveDate() { return effectiveDate; }
+        public BigDecimal getBusinessRatio() { return businessRatio; }
+        public BigDecimal getProceeds() { return proceeds; }
+        public BigDecimal getOpeningBookValue() { return openingBookValue; }
+        public String getNewDepreciationMethod() { return newDepreciationMethod; }
+        public boolean isDeletable() { return deletable; }
+        public String getEventTypeLabel() {
+            return switch (eventType) {
+                case "BUSINESS_RATIO_CHANGE" -> "事業専用割合変更";
+                case "SALE" -> "売却";
+                case "DISPOSAL" -> "除却";
+                case "INHERITANCE" -> "相続";
+                case "GIFT" -> "贈与";
+                case "METHOD_CHANGE" -> "償却方法変更";
+                case "BUSINESS_CESSATION" -> "廃業";
+                default -> eventType;
+            };
+        }
     }
 
     public static class MonthRow {
         private final int month;
         private final BigDecimal sales;
         private final BigDecimal purchases;
+        private final BigDecimal householdConsumption;
 
         public MonthRow(int month, BigDecimal sales, BigDecimal purchases) {
+            this(month, sales, purchases, BigDecimal.ZERO);
+        }
+
+        public MonthRow(int month, BigDecimal sales, BigDecimal purchases, BigDecimal householdConsumption) {
             this.month = month;
             this.sales = sales;
             this.purchases = purchases;
+            this.householdConsumption = householdConsumption;
         }
 
         public int getMonth() { return month; }
         public BigDecimal getSales() { return sales; }
         public BigDecimal getPurchases() { return purchases; }
+        public BigDecimal getHouseholdConsumption() { return householdConsumption; }
     }
+
+    public static class HouseholdConsumptionRow {
+        private final Long id;
+        private final String date;
+        private final String details;
+        private final BigDecimal amount;
+        private final boolean deletable;
+
+        public HouseholdConsumptionRow(Long id, String date, String details, BigDecimal amount, boolean deletable) {
+            this.id = id;
+            this.date = date;
+            this.details = details;
+            this.amount = amount;
+            this.deletable = deletable;
+        }
+
+        public Long getId() { return id; }
+        public String getDate() { return date; }
+        public String getDetails() { return details; }
+        public BigDecimal getAmount() { return amount; }
+        public boolean isDeletable() { return deletable; }
+    }
+
+    public static class EmployeeSalaryRow {
+        private final Long id;
+        private final String salaryKind;
+        private final String personName;
+        private final String jobDescription;
+        private final String workPeriodStart;
+        private final String workPeriodEnd;
+        private final String paymentPeriod;
+        private final BigDecimal amount;
+        private final boolean deletable;
+
+        public EmployeeSalaryRow(Long id, String salaryKind, String personName, String jobDescription,
+                String workPeriodStart, String workPeriodEnd, String paymentPeriod, BigDecimal amount,
+                boolean deletable) {
+            this.id = id;
+            this.salaryKind = salaryKind;
+            this.personName = personName;
+            this.jobDescription = jobDescription;
+            this.workPeriodStart = workPeriodStart;
+            this.workPeriodEnd = workPeriodEnd;
+            this.paymentPeriod = paymentPeriod;
+            this.amount = amount;
+            this.deletable = deletable;
+        }
+
+        public Long getId() { return id; }
+        public String getSalaryKind() { return salaryKind; }
+        public String getPersonName() { return personName; }
+        public String getJobDescription() { return jobDescription; }
+        public String getWorkPeriodStart() { return workPeriodStart; }
+        public String getWorkPeriodEnd() { return workPeriodEnd; }
+        public String getPaymentPeriod() { return paymentPeriod; }
+        public BigDecimal getAmount() { return amount; }
+        public boolean isDeletable() { return deletable; }
+        public String getSalaryKindLabel() { return "DEDICATED_SALARY".equals(salaryKind) ? "青色事業専従者給与" : "給料賃金"; }
+        public boolean isDedicated() { return "DEDICATED_SALARY".equals(salaryKind); }
+
+        /** 従事期間（開始月〜終了月、両端を含む）から求めた従事月数。12か月を上限とする。 */
+        public int getWorkMonths() {
+            try {
+                java.time.LocalDate start = java.time.LocalDate.parse(workPeriodStart);
+                java.time.LocalDate end = java.time.LocalDate.parse(workPeriodEnd);
+                int months = (end.getYear() - start.getYear()) * 12 + end.getMonthValue() - start.getMonthValue() + 1;
+                return Math.max(0, Math.min(12, months));
+            } catch (RuntimeException ex) {
+                return 0;
+            }
+        }
+    }
+
+    public List<PayeeRow> getSalesPartnerRows() { return salesPartnerRows; }
+    public BigDecimal getSalesPartnerOther() { return salesPartnerOther; }
+    public void setSalesPartnerOther(BigDecimal salesPartnerOther) { this.salesPartnerOther = salesPartnerOther; }
+    public List<PayeeRow> getPurchasePartnerRows() { return purchasePartnerRows; }
+    public BigDecimal getPurchasePartnerOther() { return purchasePartnerOther; }
+    public void setPurchasePartnerOther(BigDecimal purchasePartnerOther) { this.purchasePartnerOther = purchasePartnerOther; }
 
     public static class PayeeRow {
         private final String name;

@@ -6,6 +6,7 @@ import java.util.List;
 import org.example.features.report.dto.ReportMonthRow;
 import org.example.features.report.dto.ReportYearOption;
 import org.example.features.taxreturn.form.SettlementForm;
+import org.example.features.taxreturn.incometax.BlueReturnEdition;
 
 public class TaxReturnPageData {
     private final List<ReportYearOption> yearOptions;
@@ -39,11 +40,28 @@ public class TaxReturnPageData {
     private final List<String> warnings;
     private TaxReturnExtras extras = new TaxReturnExtras();
     private boolean balanceCarriedForward;
+    private boolean blueDeductionRequirementsConfirmed;
+    private String blueDeduction65Method = "UNCONFIRMED";
+    private BlueReturnEdition blueReturnEdition;
+    private org.example.features.taxreturn.requirements.FilingRequirements.Result filingRequirements;
+
+    public org.example.features.taxreturn.requirements.FilingRequirements.Result getFilingRequirements() {
+        return filingRequirements;
+    }
+    public void setFilingRequirements(org.example.features.taxreturn.requirements.FilingRequirements.Result result) {
+        this.filingRequirements = result;
+    }
 
     public TaxReturnExtras getExtras() { return extras; }
     public void setExtras(TaxReturnExtras extras) { this.extras = extras; }
     public boolean isBalanceCarriedForward() { return balanceCarriedForward; }
     public void setBalanceCarriedForward(boolean balanceCarriedForward) { this.balanceCarriedForward = balanceCarriedForward; }
+    public boolean isBlueDeductionRequirementsConfirmed() { return blueDeductionRequirementsConfirmed; }
+    public void setBlueDeductionRequirementsConfirmed(boolean confirmed) { this.blueDeductionRequirementsConfirmed = confirmed; }
+    public String getBlueDeduction65Method() { return blueDeduction65Method; }
+    public void setBlueDeduction65Method(String method) { this.blueDeduction65Method = method; }
+    public BlueReturnEdition getBlueReturnEdition() { return blueReturnEdition; }
+    public void setBlueReturnEdition(BlueReturnEdition edition) { this.blueReturnEdition = edition; }
 
     public TaxReturnPageData(
             List<ReportYearOption> yearOptions, int selectedYear, String yearLabel, boolean closed,

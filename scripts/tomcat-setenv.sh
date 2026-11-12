@@ -16,6 +16,15 @@ if [ -z "${DB_NAME:-}" ] || [ -z "${DB_USER:-}" ] || [ -z "${DB_PASS:-}" ]; then
 fi
 
 export DB_PASS
+
+# Optional: Google Drive evidence storage (docs/GOOGLE-DRIVE-SETUP.md). Absent file keeps the feature disabled.
+if [ -r /opt/evidence-drive.env ]; then
+  if ! source /opt/evidence-drive.env; then
+    echo "ERROR: Failed to load evidence storage settings" >&2
+    exit 1
+  fi
+  export EVIDENCE_UPLOAD_ENABLED GOOGLE_OAUTH_CLIENT_ID GOOGLE_OAUTH_CLIENT_SECRET GOOGLE_OAUTH_REDIRECT_URI EVIDENCE_TOKEN_KEY
+fi
 export JAVA_OPTS="-Xms128m -Xmx256m -XX:+UseG1GC -Djava.awt.headless=true -Dfile.encoding=UTF-8 -Duser.timezone=UTC"
 export CATALINA_OPTS="-Dapp.config=application-production.properties -Dapp.datasource.url=jdbc:mysql://localhost:3306/${DB_NAME}?useSSL=false\&serverTimezone=UTC\&allowPublicKeyRetrieval=true -Dapp.datasource.username=${DB_USER} -Dapp.datasource.driver-class-name=com.mysql.cj.jdbc.Driver -Dapp.jpa.hibernate.ddl-auto=validate -Dapp.jpa.dialect=org.hibernate.dialect.MySQL8Dialect -Dspring.profiles.active=production -Dspring.datasource.hikari.maximumPoolSize=3 -Dlogging.file.name=/opt/tomcat/logs/application.log"
 export CATALINA_PID=/opt/tomcat/run/catalina.pid

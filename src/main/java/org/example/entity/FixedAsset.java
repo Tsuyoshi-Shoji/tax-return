@@ -28,6 +28,13 @@ public class FixedAsset {
     @JoinColumn(name = "business_profile_id", nullable = false)
     private BusinessProfile businessProfile;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parent_asset_id")
+    private FixedAsset parentAsset;
+
+    @Column(name = "asset_origin", nullable = false, length = 30)
+    private String assetOrigin = "ACQUISITION";
+
     @Column(name = "asset_name", nullable = false, length = 100)
     private String assetName;
 
@@ -46,9 +53,27 @@ public class FixedAsset {
     @Column(name = "useful_life", nullable = false)
     private Integer usefulLife;
 
-    /** STRAIGHT_LINE / SMALL_AMOUNT_SPECIAL / LUMP_SUM_3Y */
+    /** 償却方法コードは DepreciationCalculator で管理。 */
     @Column(name = "depreciation_method", nullable = false, length = 30)
     private String depreciationMethod;
+
+    @Column(name = "life_basis", nullable = false, length = 30)
+    private String lifeBasis = "STATUTORY";
+
+    @Column(name = "statutory_useful_life")
+    private Integer statutoryUsefulLife;
+
+    @Column(name = "used_elapsed_months")
+    private Integer usedElapsedMonths;
+
+    @Column(name = "used_requirements_confirmed", nullable = false)
+    private boolean usedRequirementsConfirmed;
+
+    @Column(name = "private_use_conversion", nullable = false)
+    private boolean privateUseConversion;
+
+    @Column(name = "rate_transition_confirmed", nullable = false)
+    private boolean rateTransitionConfirmed;
 
     @Column(name = "business_ratio", nullable = false, precision = 5, scale = 2)
     private BigDecimal businessRatio;
@@ -85,6 +110,10 @@ public class FixedAsset {
     public Long getId() { return id; }
     public BusinessProfile getBusinessProfile() { return businessProfile; }
     public void setBusinessProfile(BusinessProfile businessProfile) { this.businessProfile = businessProfile; }
+    public FixedAsset getParentAsset() { return parentAsset; }
+    public void setParentAsset(FixedAsset parentAsset) { this.parentAsset = parentAsset; }
+    public String getAssetOrigin() { return assetOrigin; }
+    public void setAssetOrigin(String assetOrigin) { this.assetOrigin = assetOrigin; }
     public String getAssetName() { return assetName; }
     public void setAssetName(String assetName) { this.assetName = assetName; }
     public String getAccountCode() { return accountCode; }
@@ -99,6 +128,18 @@ public class FixedAsset {
     public void setUsefulLife(Integer usefulLife) { this.usefulLife = usefulLife; }
     public String getDepreciationMethod() { return depreciationMethod; }
     public void setDepreciationMethod(String depreciationMethod) { this.depreciationMethod = depreciationMethod; }
+    public String getLifeBasis() { return lifeBasis; }
+    public void setLifeBasis(String v) { lifeBasis = v; }
+    public Integer getStatutoryUsefulLife() { return statutoryUsefulLife; }
+    public void setStatutoryUsefulLife(Integer v) { statutoryUsefulLife = v; }
+    public Integer getUsedElapsedMonths() { return usedElapsedMonths; }
+    public void setUsedElapsedMonths(Integer v) { usedElapsedMonths = v; }
+    public boolean isUsedRequirementsConfirmed() { return usedRequirementsConfirmed; }
+    public void setUsedRequirementsConfirmed(boolean v) { usedRequirementsConfirmed = v; }
+    public boolean isPrivateUseConversion() { return privateUseConversion; }
+    public void setPrivateUseConversion(boolean v) { privateUseConversion = v; }
+    public boolean isRateTransitionConfirmed() { return rateTransitionConfirmed; }
+    public void setRateTransitionConfirmed(boolean v) { rateTransitionConfirmed = v; }
     public BigDecimal getBusinessRatio() { return businessRatio; }
     public void setBusinessRatio(BigDecimal businessRatio) { this.businessRatio = businessRatio; }
     public String getAcquisitionFunding() { return acquisitionFunding; }

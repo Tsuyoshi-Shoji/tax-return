@@ -13,9 +13,10 @@
     }
 
     var deductionSelect = document.getElementById('deduction-select');
-    if (deductionSelect) {
+    var deduction65Options = document.getElementById('deduction-65-options');
+    if (deductionSelect && deduction65Options) {
         deductionSelect.addEventListener('change', function () {
-            document.getElementById('deduction-form').submit();
+            deduction65Options.hidden = deductionSelect.value !== '65';
         });
     }
 
@@ -50,38 +51,6 @@
         errorCheckButton.addEventListener('click', function () { checkDialog.showModal(); });
     }
 
-    function printSection(type, title, forceWarningOutput) {
-        if (errorCount > 0) {
-            alertDialog.showModal();
-            return;
-        }
-        if (warningCount > 0 && !forceWarningOutput) {
-            window.AppDialog.confirm({
-                message: '警告があります。このまま出力しますか？（エラーチェックで内容を確認できます）',
-                confirmLabel: '出力する'
-            }).then(function (accepted) {
-                if (accepted) { printSection(type, title, true); }
-            });
-            return;
-        }
-        var originalTitle = document.title;
-        document.querySelectorAll('.print-section').forEach(function (section) {
-            var groups = (section.getAttribute('data-print-groups') || '').split(/\s+/);
-            section.classList.toggle('print-hide', groups.indexOf(type) < 0);
-        });
-        document.body.classList.add('tr-printing');
-        document.title = title + '_' + (yearSelect ? yearSelect.value : '') + '年度';
-        window.print();
-        document.body.classList.remove('tr-printing');
-        document.title = originalTitle;
-    }
-
-    document.querySelectorAll('[data-print]').forEach(function (button) {
-        button.addEventListener('click', function () {
-            printSection(button.getAttribute('data-print'), button.getAttribute('data-title'));
-        });
-    });
-
     var pdfButton = document.getElementById('button-pdf-output');
     if (pdfButton) {
         pdfButton.addEventListener('click', function () {
@@ -95,7 +64,10 @@
                 return;
             }
             event.preventDefault();
-            window.AppDialog.confirm({ message: form.getAttribute('data-confirm'), confirmLabel: '削除する' })
+            window.AppDialog.confirm({
+                message: form.getAttribute('data-confirm'),
+                confirmLabel: form.getAttribute('data-confirm-label') || '削除する'
+            })
                 .then(function (accepted) {
                     if (accepted) {
                         form.setAttribute('data-confirmed', 'true');
@@ -105,9 +77,8 @@
         });
     });
 
-    var exportLink = document.querySelector('[data-export="etax-csv"]');
-    if (exportLink) {
-        exportLink.addEventListener('click', function (event) {
+    document.querySelectorAll('[data-export]').forEach(function (exportControl) {
+        exportControl.addEventListener('click', function (event) {
             if (errorCount > 0) {
                 event.preventDefault();
                 alertDialog.showModal();
@@ -119,11 +90,30 @@
                     message: '警告があります。このまま出力しますか？（エラーチェックで内容を確認できます）',
                     confirmLabel: '出力する'
                 }).then(function (accepted) {
-                    if (accepted) { window.location.href = exportLink.href; }
+                    if (!accepted) {
+                        return;
+                    }
+                    if (exportControl.form) {
+                        if (typeof exportControl.form.requestSubmit === 'function') {
+                            exportControl.form.requestSubmit(exportControl);
+                        } else {
+                            var formAction = exportControl.getAttribute('formaction');
+                            if (formAction) {
+                                exportControl.form.setAttribute('action', formAction);
+                            }
+                            exportControl.form.submit();
+                        }
+                    } else {
+                        var target = exportControl.href;
+                        if (exportControl.getAttribute('data-confirm-warning') === 'true') {
+                            target += (target.indexOf('?') < 0 ? '?' : '&') + 'confirmed=true';
+                        }
+                        window.location.href = target;
+                    }
                 });
             }
         });
-    }
+    });
 
     var tabs = Array.prototype.slice.call(document.querySelectorAll('.tr-tab'));
     tabs.forEach(function (tab) {

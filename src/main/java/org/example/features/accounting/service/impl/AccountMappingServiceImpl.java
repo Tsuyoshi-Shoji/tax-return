@@ -1,5 +1,6 @@
 package org.example.features.accounting.service.impl;
 
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -77,11 +78,22 @@ public class AccountMappingServiceImpl implements AccountMappingService {
 
         String form = AccountMasterSeed.FORM_BLUE_GENERAL_PL;
         int fromYear = AccountMasterSeed.FORM_BLUE_GENERAL_PL_FROM_YEAR;
-        Set<String> existingLines = new HashSet<>();
+        Map<String, StatementLine> existingLines = new HashMap<>();
         statementLineRepository.findByFormCodeOrderByDisplayOrderAscIdAsc(form)
-                .forEach(l -> existingLines.add(l.getLineCode() + "@" + l.getEffectiveFromYear()));
+                .forEach(l -> existingLines.put(l.getLineCode() + "@" + l.getEffectiveFromYear(), l));
         for (LineSeed seed : AccountMasterSeed.BLUE_GENERAL_PL_LINES) {
-            if (existingLines.contains(seed.lineCode() + "@" + fromYear)) {
+            StatementLine existing = existingLines.get(seed.lineCode() + "@" + fromYear);
+            if (existing != null) {
+                // 様式の欄番号・欄名の訂正を既存環境へ反映する（金額や科目対応は変えない）。
+                if (!java.util.Objects.equals(existing.getLineNumber(), seed.number())
+                        || !java.util.Objects.equals(existing.getDisplayOrder(), seed.number())
+                        || !seed.label().equals(existing.getLineLabel()) || !seed.type().equals(existing.getLineType())) {
+                    existing.setLineNumber(seed.number());
+                    existing.setDisplayOrder(seed.number());
+                    existing.setLineLabel(seed.label());
+                    existing.setLineType(seed.type());
+                    statementLineRepository.save(existing);
+                }
                 continue;
             }
             StatementLine line = new StatementLine();

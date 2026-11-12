@@ -50,6 +50,8 @@ public final class EtaxAssistCsv {
         for (TaxReturnExtras.AssetRow a : x.getAssets()) {
             String key = a.getName() + "（" + a.getAccountName() + "・取得" + a.getAcquired() + "）";
             rows.add(new String[] {"青色申告決算書", "減価償却費の計算", key + " 取得価額", amount(a.getCost())});
+            rows.add(new String[] {"青色申告決算書", "減価償却費の計算", key + " 償却基礎金額",
+                    a.getDepreciationBasis() == null ? "" : a.getDepreciationBasis().toPlainString()});
             rows.add(new String[] {"青色申告決算書", "減価償却費の計算", key + " 償却方法", a.getMethodLabel()});
             rows.add(new String[] {"青色申告決算書", "減価償却費の計算", key + " 耐用年数", a.getUsefulLife() == null ? "" : a.getUsefulLife().toString()});
             rows.add(new String[] {"青色申告決算書", "減価償却費の計算", key + " 償却率", a.getRate() == null ? "" : a.getRate().toPlainString()});
@@ -58,6 +60,7 @@ public final class EtaxAssistCsv {
             rows.add(new String[] {"青色申告決算書", "減価償却費の計算", key + " 事業専用割合(%)", amount(a.getBusinessRatio())});
             rows.add(new String[] {"青色申告決算書", "減価償却費の計算", key + " 本年分の必要経費算入額", amount(a.getBusinessPortion())});
             rows.add(new String[] {"青色申告決算書", "減価償却費の計算", key + " 未償却残高（期末残高）", amount(a.getClosing())});
+            rows.add(new String[] {"青色申告決算書", "減価償却費の計算", key + " 計算根拠", a.getCalculationDetails()});
         }
         payees(rows, "地代家賃の内訳", x.getRentRows());
         payees(rows, "利子割引料の内訳", x.getInterestRows());

@@ -56,7 +56,7 @@ public final class ClosingJournalRebuildHarness {
         String url = "jdbc:h2:file:" + dir.toAbsolutePath().resolve("db") + ";MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1";
         System.setProperty("bootstrap.url", url);
 
-        applyMigrations(url, 1, 6);
+        applyMigrations(url, 1, 16);
         try (Connection c = DriverManager.getConnection(url, "sa", ""); Statement s = c.createStatement()) {
             s.execute("INSERT INTO app_user (login_id, email, password_hash, display_name, status, mfa_enabled, created_at, updated_at) "
                     + "VALUES ('u@example.com','u@example.com','x','User','active',FALSE,NOW(),NOW())");
