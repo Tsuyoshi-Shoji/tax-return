@@ -28,6 +28,9 @@ public class UserSetting {
     @Column(name = "home_apportionment_rate", nullable = false, precision = 5, scale = 2)
     private BigDecimal homeApportionmentRate;
 
+    @Column(name = "hidden_tax_return_sections", length = 500)
+    private String hiddenTaxReturnSections;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -64,6 +67,14 @@ public class UserSetting {
 
     public void setHomeApportionmentRate(BigDecimal homeApportionmentRate) {
         this.homeApportionmentRate = homeApportionmentRate;
+    }
+
+    public String getHiddenTaxReturnSections() {
+        return hiddenTaxReturnSections;
+    }
+
+    public void setHiddenTaxReturnSections(String hiddenTaxReturnSections) {
+        this.hiddenTaxReturnSections = hiddenTaxReturnSections;
     }
 
     public LocalDateTime getCreatedAt() {

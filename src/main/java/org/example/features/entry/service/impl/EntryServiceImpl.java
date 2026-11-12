@@ -20,6 +20,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
 
 import org.example.entity.AccountingTransaction;
@@ -45,6 +46,9 @@ import org.example.features.entry.EntryKind;
 import org.example.features.entry.EntryNotFoundException;
 import org.example.features.entry.EntryOption;
 import org.example.features.entry.EntryPageData;
+import org.example.features.entry.csv.ExpenseCsvImportPreparation;
+import org.example.features.entry.csv.ExpenseCsvParser;
+import org.example.features.entry.csv.ExpenseCsvRow;
 import org.example.features.entry.form.EntryForm;
 import org.example.features.entry.form.MonthlyExpenseRowForm;
 import org.example.features.entry.service.EntryPrepareResult;
@@ -83,6 +87,18 @@ public class EntryServiceImpl implements EntryService {
     private static final Pattern AMOUNT_PATTERN = Pattern.compile("^[0-9]{1,13}$");
     private static final Pattern FORBIDDEN_DETAILS = Pattern.compile("[<>\"'`\\\\]");
     private static final Pattern CONTROL_CHARACTERS = Pattern.compile("[\\p{Cntrl}\\u2028\\u2029]");
+    private static final Pattern CSV_DATE = Pattern.compile("^(\\d{4})[/-](\\d{1,2})[/-](\\d{1,2})$");
+    private static final Set<String> CSV_TRUE_VALUES = Set.of("1", "true", "yes", "はい", "○");
+    private static final Set<String> CSV_FALSE_VALUES = Set.of("", "0", "false", "no", "いいえ");
+    private static final Map<String, String> CSV_FIELD_LABELS = Map.of(
+            "expenseType", "区分",
+            "category", "項目",
+            "date", "支出発生日",
+            "amount", "金額",
+            "paymentMethodId", "支払方法",
+            "excludeFromReturn", "申告対象外",
+            "homeApportionment", "家事按分",
+            "details", "支出詳細");
     private static final int MAX_COUNTERPARTY_NAME_LENGTH = 100;
     private static final int MAX_COUNTERPARTY_ADDRESS_LENGTH = 255;
     private static final String CATEGORY_SALES = "sales";
@@ -895,102 +911,16 @@ public class EntryServiceImpl implements EntryService {
                 fieldErrors.putIfAbsent("monthlyRows[" + (rowNo - 1) + "].row", "行" + rowNo + "の入力が不正です。");
                 continue;
             }
-            checkMaxLength(row.getExpenseType(), 30, buildRowField(rowNo - 1, "expenseType"), "区分を選択してください。", fieldErrors);
-            checkMaxLength(row.getCategory(), 30, buildRowField(rowNo - 1, "category"), "選択された項目がマスタに存在しません。", fieldErrors);
-            checkMaxLength(row.getDate(), 10, buildRowField(rowNo - 1, "date"), "存在する日付を選択してください。", fieldErrors);
-            checkMaxLength(row.getAmount(), 32, buildRowField(rowNo - 1, "amount"), "金額は数値のみで入力してください。", fieldErrors);
-            checkMaxLength(row.getPaymentMethodId(), 30, buildRowField(rowNo - 1, "paymentMethodId"), "支払方法を選択してください。", fieldErrors);
-            checkMaxLength(row.getDetails(), 1024, buildRowField(rowNo - 1, "details"), "支出詳細は1〜255文字で入力してください。", fieldErrors);
-
-            String typeCode = trimToEmpty(row.getExpenseType());
-            CategorySelection categorySelection = resolveCategory(EntryKind.EXPENSE, masterData, typeCode, fieldErrors, buildRowField(rowNo - 1, "expenseType"));
-            ExpenseItem itemSelection = resolveExpenseItem(masterData, categorySelection, row.getCategory(), fieldErrors, buildRowField(rowNo - 1, "category"));
-            LocalDate transactionDate = resolveDate(row.getDate(), fieldErrors, EntryKind.EXPENSE, buildRowField(rowNo - 1, "date"));
-            BigDecimal amount = resolveAmount(row.getAmount(), fieldErrors, buildRowField(rowNo - 1, "amount"));
-            PaymentMethod methodSelection = resolvePaymentMethod(masterData, row.getPaymentMethodId(), fieldErrors, buildRowField(rowNo - 1, "paymentMethodId"));
-            String details = resolveDetails(row.getDetails(), fieldErrors, EntryKind.EXPENSE, buildRowField(rowNo - 1, "details"));
-
-            if (transactionDate != null && targetMonth != null && !YearMonth.from(transactionDate).equals(targetMonth)) {
-                fieldErrors.putIfAbsent(buildRowField(rowNo - 1, "date"), "支出発生日は対象月内の日付を入力してください。");
-            }
-
-            BigDecimal apportionmentRate = ZERO;
-            boolean effectiveExcludeFromReturn = row.isExcludeFromReturn();
-            if (itemSelection != null && requiresExcludeFromBusinessPl(itemSelection)) {
-                effectiveExcludeFromReturn = true;
-                if (row.isHomeApportionment()) {
-                    fieldErrors.putIfAbsent(buildRowField(rowNo - 1, "homeApportionment"),
-                            "資金移動・私的支出項目は確定申告対象外として扱うため、家事按分は適用できません。");
-                }
-            }
-            if (itemSelection != null && isSocialInsuranceExpense(itemSelection) && details != null && !containsSocialInsuranceDetail(details)) {
-                fieldErrors.putIfAbsent(buildRowField(rowNo - 1, "details"),
-                        "国民健康保険か国民年金かが分かるように支出詳細へ記載してください。");
-            }
-            if (row.isHomeApportionment()) {
-                if (currentRate.isEmpty()
-                        || currentRate.get().compareTo(BigDecimal.ZERO) < 0
-                        || currentRate.get().compareTo(new BigDecimal("100")) > 0) {
-                    fieldErrors.putIfAbsent(buildRowField(rowNo - 1, "homeApportionment"),
-                            "設定されている家事按分率が不正です。設定画面で0〜100%の範囲に修正してください。");
-                } else {
-                    apportionmentRate = currentRate.get();
-                }
-            }
-            BigDecimal deductibleAmount = calculateDeductibleAmount(amount, effectiveExcludeFromReturn, row.isHomeApportionment(), apportionmentRate);
-
-            FiscalYear fiscalYear = null;
-            if (transactionDate != null) {
-                List<FiscalYear> fiscalYears = fiscalYearRepository.findOpenByAppUserIdAndDate(appUserId, transactionDate);
-                if (fiscalYears.isEmpty()) {
-                    fieldErrors.putIfAbsent(buildRowField(rowNo - 1, "date"), "取引日が登録可能な年度に含まれていません。");
-                } else {
-                    fiscalYear = fiscalYears.get(0);
-                }
-            }
-
-            if (fiscalYear == null || amount == null || transactionDate == null || details == null || itemSelection == null || methodSelection == null || categorySelection == null) {
+            int rowIndex = rowNo - 1;
+            ValidatedEntryCommand validatedRow = validateExpenseRow(
+                    appUserId, row, masterData, currentRate, targetMonth, fieldErrors, field -> buildRowField(rowIndex, field));
+            if (validatedRow == null) {
                 continue;
             }
-
-            String payloadHash = hashPayload(
-                    EntryKind.EXPENSE,
-                    appUserId,
-                    null,
-                    0L,
-                    fiscalYear.getId(),
-                    categorySelection.code(),
-                    itemSelection.getId(),
-                    methodSelection.getId(),
-                    transactionDate,
-                    amount,
-                    effectiveExcludeFromReturn,
-                    row.isHomeApportionment(),
-                    apportionmentRate,
-                    deductibleAmount,
-                    details);
-            if (amount.compareTo(HIGH_AMOUNT_THRESHOLD) >= 0) {
+            if (validatedRow.isConfirmationRequired()) {
                 confirmationRequired = true;
             }
-            validatedRows.add(new ValidatedEntryCommand(
-                    EntryKind.EXPENSE,
-                    appUserId,
-                    null,
-                    0L,
-                    fiscalYear,
-                    null,
-                    itemSelection,
-                    null,
-                    methodSelection,
-                    transactionDate,
-                    amount,
-                    effectiveExcludeFromReturn,
-                    row.isHomeApportionment(),
-                    apportionmentRate,
-                    deductibleAmount,
-                    details,
-                    payloadHash,
-                    amount.compareTo(HIGH_AMOUNT_THRESHOLD) >= 0));
+            validatedRows.add(validatedRow);
         }
 
         if (!fieldErrors.isEmpty() || validatedRows.isEmpty()) {
@@ -1025,6 +955,254 @@ public class EntryServiceImpl implements EntryService {
             errors.putIfAbsent("targetMonth", "登録対象月の形式が不正です。");
             return null;
         }
+    }
+
+    private ValidatedEntryCommand validateExpenseRow(
+            Long appUserId,
+            MonthlyExpenseRowForm row,
+            MasterData masterData,
+            Optional<BigDecimal> currentRate,
+            YearMonth targetMonth,
+            Map<String, String> fieldErrors,
+            UnaryOperator<String> field) {
+        checkMaxLength(row.getExpenseType(), 30, field.apply("expenseType"), "区分を選択してください。", fieldErrors);
+        checkMaxLength(row.getCategory(), 30, field.apply("category"), "選択された項目がマスタに存在しません。", fieldErrors);
+        checkMaxLength(row.getDate(), 10, field.apply("date"), "存在する日付を選択してください。", fieldErrors);
+        checkMaxLength(row.getAmount(), 32, field.apply("amount"), "金額は数値のみで入力してください。", fieldErrors);
+        checkMaxLength(row.getPaymentMethodId(), 30, field.apply("paymentMethodId"), "支払方法を選択してください。", fieldErrors);
+        checkMaxLength(row.getDetails(), 1024, field.apply("details"), "支出詳細は1〜255文字で入力してください。", fieldErrors);
+
+        String typeCode = trimToEmpty(row.getExpenseType());
+        CategorySelection categorySelection = resolveCategory(EntryKind.EXPENSE, masterData, typeCode, fieldErrors, field.apply("expenseType"));
+        ExpenseItem itemSelection = resolveExpenseItem(masterData, categorySelection, row.getCategory(), fieldErrors, field.apply("category"));
+        LocalDate transactionDate = resolveDate(row.getDate(), fieldErrors, EntryKind.EXPENSE, field.apply("date"));
+        BigDecimal amount = resolveAmount(row.getAmount(), fieldErrors, field.apply("amount"));
+        PaymentMethod methodSelection = resolvePaymentMethod(masterData, row.getPaymentMethodId(), fieldErrors, field.apply("paymentMethodId"));
+        String details = resolveDetails(row.getDetails(), fieldErrors, EntryKind.EXPENSE, field.apply("details"));
+
+        if (transactionDate != null && targetMonth != null && !YearMonth.from(transactionDate).equals(targetMonth)) {
+            fieldErrors.putIfAbsent(field.apply("date"), "支出発生日は対象月内の日付を入力してください。");
+        }
+
+        BigDecimal apportionmentRate = ZERO;
+        boolean effectiveExcludeFromReturn = row.isExcludeFromReturn();
+        if (itemSelection != null && requiresExcludeFromBusinessPl(itemSelection)) {
+            effectiveExcludeFromReturn = true;
+            if (row.isHomeApportionment()) {
+                fieldErrors.putIfAbsent(field.apply("homeApportionment"),
+                        "資金移動・私的支出項目は確定申告対象外として扱うため、家事按分は適用できません。");
+            }
+        }
+        if (itemSelection != null && isSocialInsuranceExpense(itemSelection) && details != null && !containsSocialInsuranceDetail(details)) {
+            fieldErrors.putIfAbsent(field.apply("details"),
+                    "国民健康保険か国民年金かが分かるように支出詳細へ記載してください。");
+        }
+        if (row.isHomeApportionment()) {
+            if (currentRate.isEmpty()
+                    || currentRate.get().compareTo(BigDecimal.ZERO) < 0
+                    || currentRate.get().compareTo(new BigDecimal("100")) > 0) {
+                fieldErrors.putIfAbsent(field.apply("homeApportionment"),
+                        "設定されている家事按分率が不正です。設定画面で0〜100%の範囲に修正してください。");
+            } else {
+                apportionmentRate = currentRate.get();
+            }
+        }
+        BigDecimal deductibleAmount = calculateDeductibleAmount(amount, effectiveExcludeFromReturn, row.isHomeApportionment(), apportionmentRate);
+
+        FiscalYear fiscalYear = null;
+        if (transactionDate != null) {
+            List<FiscalYear> fiscalYears = fiscalYearRepository.findOpenByAppUserIdAndDate(appUserId, transactionDate);
+            if (fiscalYears.isEmpty()) {
+                fieldErrors.putIfAbsent(field.apply("date"), "取引日が登録可能な年度に含まれていません。");
+            } else {
+                fiscalYear = fiscalYears.get(0);
+            }
+        }
+
+        if (fiscalYear == null || amount == null || transactionDate == null || details == null || itemSelection == null || methodSelection == null || categorySelection == null) {
+            return null;
+        }
+
+        String payloadHash = hashPayload(
+                EntryKind.EXPENSE,
+                appUserId,
+                null,
+                0L,
+                fiscalYear.getId(),
+                categorySelection.code(),
+                itemSelection.getId(),
+                methodSelection.getId(),
+                transactionDate,
+                amount,
+                effectiveExcludeFromReturn,
+                row.isHomeApportionment(),
+                apportionmentRate,
+                deductibleAmount,
+                details);
+        return new ValidatedEntryCommand(
+                EntryKind.EXPENSE,
+                appUserId,
+                null,
+                0L,
+                fiscalYear,
+                null,
+                itemSelection,
+                null,
+                methodSelection,
+                transactionDate,
+                amount,
+                effectiveExcludeFromReturn,
+                row.isHomeApportionment(),
+                apportionmentRate,
+                deductibleAmount,
+                details,
+                payloadHash,
+                amount.compareTo(HIGH_AMOUNT_THRESHOLD) >= 0);
+    }
+
+    @Override
+    @Transactional
+    public ExpenseCsvImportPreparation prepareExpenseCsvImport(Long appUserId, List<ExpenseCsvRow> rows) {
+        if (rows == null || rows.isEmpty()) {
+            return new ExpenseCsvImportPreparation(List.of("登録するデータ行がありません。"), null);
+        }
+        if (rows.size() > ExpenseCsvParser.MAX_ROWS) {
+            return new ExpenseCsvImportPreparation(
+                    List.of("一度に取り込めるのは" + ExpenseCsvParser.MAX_ROWS + "件までです。ファイルを分割してください。"), null);
+        }
+        BusinessProfile profile = ensureCatalogs(appUserId);
+        MasterData masterData = loadMasterData(EntryKind.EXPENSE, profile.getId());
+        Optional<BigDecimal> currentRate = loadCurrentApportionmentRate(appUserId);
+
+        List<String> errors = new ArrayList<>();
+        List<ValidatedEntryCommand> validatedRows = new ArrayList<>();
+        for (ExpenseCsvRow csvRow : rows) {
+            Map<String, String> rowErrors = new LinkedHashMap<>();
+            MonthlyExpenseRowForm row = toExpenseRowForm(csvRow, masterData, rowErrors);
+            ValidatedEntryCommand validatedRow = validateExpenseRow(
+                    appUserId, row, masterData, currentRate, null, rowErrors, UnaryOperator.identity());
+            if (validatedRow != null && validatedRow.isConfirmationRequired()) {
+                rowErrors.putIfAbsent("amount", "1億円以上の支出はCSVで取り込めません。通常モードで確認のうえ登録してください。");
+            }
+            if (validatedRow != null && rowErrors.isEmpty()) {
+                validatedRows.add(validatedRow);
+                continue;
+            }
+            rowErrors.forEach((fieldName, message) -> errors.add(
+                    csvRow.lineNumber() + "行目（" + CSV_FIELD_LABELS.getOrDefault(fieldName, fieldName) + "）: " + message));
+        }
+        if (!errors.isEmpty()) {
+            return new ExpenseCsvImportPreparation(errors, null);
+        }
+
+        String payloadHash = hashMonthlyPayload(String.join("|",
+                "expense-csv",
+                String.valueOf(appUserId),
+                String.valueOf(validatedRows.size()),
+                validatedRows.stream().map(ValidatedEntryCommand::getPayloadHash).reduce("", (a, b) -> a + ";" + b)));
+        return new ExpenseCsvImportPreparation(List.of(),
+                ValidatedEntryCommand.monthlyExpenseBatch(appUserId, "", validatedRows, payloadHash, false));
+    }
+
+    /** CSV の表示名（またはコード）をマスタIDへ変換し、既存の行検証に渡せる形にする。 */
+    private MonthlyExpenseRowForm toExpenseRowForm(ExpenseCsvRow csvRow, MasterData masterData, Map<String, String> errors) {
+        MonthlyExpenseRowForm row = new MonthlyExpenseRowForm();
+
+        String typeValue = normalizeCsvText(csvRow.expenseType());
+        CategorySelection category = masterData.categoriesByCode.values().stream()
+                .filter(candidate -> candidate.label().equals(typeValue) || candidate.code().equals(typeValue))
+                .findFirst()
+                .orElse(null);
+        if (category == null) {
+            errors.putIfAbsent("expenseType", typeValue.isEmpty()
+                    ? "区分を入力してください。"
+                    : "区分「" + typeValue + "」は存在しません。");
+            row.setExpenseType("");
+        } else {
+            row.setExpenseType(category.code());
+        }
+
+        String itemValue = normalizeCsvText(csvRow.item());
+        ExpenseItem item = category == null ? null : masterData.expenseItemsById.values().stream()
+                .filter(candidate -> category.code().equals(candidate.getExpenseCategory().getCategoryCode()))
+                .filter(candidate -> candidate.getItemName().equals(itemValue) || candidate.getItemCode().equals(itemValue))
+                .findFirst()
+                .orElse(null);
+        if (item == null) {
+            if (category != null) {
+                errors.putIfAbsent("category", itemValue.isEmpty()
+                        ? "項目を入力してください。"
+                        : "項目「" + itemValue + "」は区分「" + category.label() + "」に存在しません。");
+            }
+            row.setCategory("");
+        } else {
+            row.setCategory(String.valueOf(item.getId()));
+        }
+
+        String methodValue = normalizeCsvText(csvRow.paymentMethod());
+        PaymentMethod method = masterData.paymentMethodsById.values().stream()
+                .filter(candidate -> candidate.getMethodName().equals(methodValue) || candidate.getMethodCode().equals(methodValue))
+                .findFirst()
+                .orElse(null);
+        if (method == null) {
+            errors.putIfAbsent("paymentMethodId", methodValue.isEmpty()
+                    ? "支払方法を入力してください。"
+                    : "支払方法「" + methodValue + "」は存在しません。");
+            row.setPaymentMethodId("");
+        } else {
+            row.setPaymentMethodId(String.valueOf(method.getId()));
+        }
+
+        row.setDate(normalizeCsvDate(csvRow.date()));
+        row.setAmount(normalizeCsvAmount(csvRow.amount()));
+        row.setExcludeFromReturn(parseCsvFlag(csvRow.excludeFromReturn(), "excludeFromReturn", errors));
+        row.setHomeApportionment(parseCsvFlag(csvRow.homeApportionment(), "homeApportionment", errors));
+
+        String details = csvRow.details() == null ? "" : csvRow.details().trim();
+        if (CONTROL_CHARACTERS.matcher(details).find()) {
+            errors.putIfAbsent("details", "支出詳細に改行・制御文字は使用できません。");
+        }
+        row.setDetails(details);
+        return row;
+    }
+
+    private String normalizeCsvText(String value) {
+        return value == null ? "" : Normalizer.normalize(value, Normalizer.Form.NFKC).trim();
+    }
+
+    private String normalizeCsvDate(String value) {
+        String normalized = normalizeCsvText(value);
+        java.util.regex.Matcher matcher = CSV_DATE.matcher(normalized);
+        if (!matcher.matches()) {
+            return normalized;
+        }
+        return matcher.group(1) + "-" + padTwoDigits(matcher.group(2)) + "-" + padTwoDigits(matcher.group(3));
+    }
+
+    private String padTwoDigits(String value) {
+        return value.length() == 1 ? "0" + value : value;
+    }
+
+    private String normalizeCsvAmount(String value) {
+        String normalized = normalizeCsvText(value).replace(",", "");
+        if (normalized.startsWith("¥")) {
+            normalized = normalized.substring(1);
+        }
+        if (normalized.endsWith("円")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        return normalized.trim();
+    }
+
+    private boolean parseCsvFlag(String value, String fieldName, Map<String, String> errors) {
+        String normalized = normalizeCsvText(value).toLowerCase(java.util.Locale.ROOT);
+        if (CSV_TRUE_VALUES.contains(normalized)) {
+            return true;
+        }
+        if (!CSV_FALSE_VALUES.contains(normalized)) {
+            errors.putIfAbsent(fieldName, "1（適用する）または 0（適用しない）で入力してください。");
+        }
+        return false;
     }
 
     private String buildRowField(int rowIndex, String field) {

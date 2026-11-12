@@ -259,6 +259,109 @@
     display: none;
 }
 
+/* ---------- CSVインポート ---------- */
+.entry-csv-panel {
+    display: grid;
+    gap: 20px;
+}
+
+.entry-csv-step,
+.entry-csv-form {
+    display: grid;
+    gap: 12px;
+    justify-items: start;
+}
+
+.entry-csv-form {
+    justify-items: stretch;
+}
+
+.entry-csv-step-title {
+    margin: 0;
+    font-weight: 700;
+    color: var(--entry-ink);
+}
+
+.entry-csv-dropzone {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    padding: 32px 16px;
+    border: 2px dashed var(--entry-border);
+    border-radius: 12px;
+    background: var(--entry-bg);
+    text-align: center;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.entry-csv-dropzone.is-dragover {
+    border-color: var(--entry-accent);
+    background: #dcebff;
+}
+
+.entry-csv-dropzone.has-file {
+    border-style: solid;
+    border-color: var(--entry-success);
+}
+
+.entry-csv-dropzone:focus-within {
+    outline: 2px solid var(--entry-accent);
+    outline-offset: 2px;
+}
+
+.entry-csv-file-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+}
+
+.entry-csv-dropzone-text,
+.entry-csv-dropzone-or,
+.entry-csv-file-name,
+.entry-csv-hint {
+    margin: 0;
+}
+
+.entry-csv-dropzone-or,
+.entry-csv-hint {
+    color: var(--entry-muted);
+    font-size: 0.875rem;
+}
+
+.entry-csv-file-name {
+    font-weight: 700;
+    color: var(--entry-ink);
+    word-break: break-all;
+}
+
+.entry-csv-help {
+    border: 1px solid var(--entry-line);
+    border-radius: 8px;
+    padding: 8px 16px;
+    color: var(--entry-ink);
+    font-size: 0.875rem;
+}
+
+.entry-csv-help summary {
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.entry-csv-help ul {
+    margin: 8px 0 0;
+    padding-left: 20px;
+    display: grid;
+    gap: 4px;
+}
+
+.entry-csv-help-item:not(:last-child)::after {
+    content: "、";
+}
+
 /* ---------- カードヘッダー ---------- */
 .entry-card-heading {
     min-width: 0;

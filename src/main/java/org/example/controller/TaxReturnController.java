@@ -13,6 +13,8 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
@@ -24,6 +26,9 @@ import org.example.features.auth.AuthUserContext;
 import org.example.features.common.session.FormCsrfTokenManager;
 import org.example.features.entry.EntryNotFoundException;
 import org.example.features.taxreturn.dto.TaxReturnPageData;
+import org.example.features.setting.TaxReturnSection;
+import org.example.features.setting.TaxReturnSectionVisibility;
+import org.example.features.setting.service.SettingService;
 import org.example.features.taxreturn.export.EtaxAssistCsv;
 import org.example.features.taxreturn.form.SettlementForm;
 import org.example.features.taxreturn.form.TaxReturnForms.DeductionForm;
@@ -96,17 +101,20 @@ public class TaxReturnController {
     private final RetentionService retentionService;
     private final EvidenceFileService evidenceFileService;
     private final YearClosingService yearClosingService;
+    private final SettingService settingService;
     private final TaxReturnPdfRenderer pdfRenderer = new TaxReturnPdfRenderer();
 
     public TaxReturnController(TaxReturnService taxReturnService, FormCsrfTokenManager csrfTokenManager,
             TaxReturnInputService inputService, RetentionService retentionService,
-            EvidenceFileService evidenceFileService, YearClosingService yearClosingService) {
+            EvidenceFileService evidenceFileService, YearClosingService yearClosingService,
+            SettingService settingService) {
         this.taxReturnService = taxReturnService;
         this.csrfTokenManager = csrfTokenManager;
         this.inputService = inputService;
         this.retentionService = retentionService;
         this.evidenceFileService = evidenceFileService;
         this.yearClosingService = yearClosingService;
+        this.settingService = settingService;
     }
 
     @InitBinder("settlementForm")
@@ -879,6 +887,8 @@ public class TaxReturnController {
         retention.setDriveStatus(evidenceFileService.status(context.getUserId()));
         model.addAttribute("retention", retention);
         model.addAttribute("closing", call(() -> yearClosingService.view(context.getUserId(), page)));
+        model.addAttribute("sections", TaxReturnSectionVisibility.resolve(
+                settingService.loadHiddenTaxReturnSections(context.getUserId()), sectionsInUse(page, retention)));
         if (formErrors != null) {
             model.addAttribute("formErrors", formErrors);
         }
@@ -890,6 +900,31 @@ public class TaxReturnController {
         response.setHeader("Pragma", "no-cache");
         response.setDateHeader("Expires", 0L);
         return "TaxReturn/tax-return";
+    }
+
+    /** 非表示設定でも表示を続ける（その年分に登録データ・適用がある）任意セクション。 */
+    private static Set<TaxReturnSection> sectionsInUse(TaxReturnPageData page, RetentionPageData retention) {
+        Set<TaxReturnSection> inUse = EnumSet.noneOf(TaxReturnSection.class);
+        var extras = page.getExtras();
+        if (extras != null) {
+            if (extras.getAssets() != null && !extras.getAssets().isEmpty()) {
+                inUse.add(TaxReturnSection.FIXED_ASSETS);
+            }
+            if (extras.getHouseholdConsumptionRows() != null && !extras.getHouseholdConsumptionRows().isEmpty()) {
+                inUse.add(TaxReturnSection.HOUSEHOLD_CONSUMPTION);
+            }
+            if (extras.getEmployeeSalaryRows() != null && !extras.getEmployeeSalaryRows().isEmpty()) {
+                inUse.add(TaxReturnSection.SALARY_DETAILS);
+            }
+            if (extras.isConsumptionTaxable()) {
+                inUse.add(TaxReturnSection.CONSUMPTION);
+            }
+        }
+        if (retention != null && (retention.getTotalCount() > 0
+                || (retention.getSearch() != null && retention.getSearch().isFiltered()))) {
+            inUse.add(TaxReturnSection.RETENTION);
+        }
+        return inUse;
     }
 
     private String redirect(Integer year) {

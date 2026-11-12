@@ -160,6 +160,8 @@
         const monthlyModeBadge = byId("monthly-mode-badge");
         const pageDescription = byId("page-description");
         const monthlyModeDescription = byId("monthly-mode-description");
+        const csvModeSection = byId("csv-mode-section");
+        const csvModeDescription = byId("csv-mode-description");
         const monthlyRowCount = byId("monthly-row-count");
 
         const fieldOrder = [typeFieldName, "category", "date", "amount"];
@@ -195,6 +197,12 @@
             if (isIncome) return false;
             const selected = modeRadios.find((radio) => radio.checked);
             return !!selected && selected.value === "monthly";
+        };
+
+        const isCsvModeSelected = () => {
+            if (isIncome) return false;
+            const selected = modeRadios.find((radio) => radio.checked);
+            return !!selected && selected.value === "csv";
         };
 
         const getCurrentSubmitButton = () => (isMonthlyModeSelected() ? submitMonthlyButton : submitButton);
@@ -498,15 +506,16 @@
         const toggleModePanels = () => {
             if (isIncome) return;
             const monthly = isMonthlyModeSelected();
-            if (normalModeSection) normalModeSection.hidden = monthly;
-            if (normalModeActions) normalModeActions.hidden = monthly;
+            const csv = isCsvModeSelected();
+            if (normalModeSection) normalModeSection.hidden = monthly || csv;
+            if (normalModeActions) normalModeActions.hidden = monthly || csv;
             if (monthlyModeSection) monthlyModeSection.hidden = !monthly;
+            if (csvModeSection) csvModeSection.hidden = !csv;
             if (add5RowsButton) add5RowsButton.hidden = !monthly;
             if (monthlyModeBadge) monthlyModeBadge.hidden = !monthly;
-            if (pageDescription && monthlyModeDescription) {
-                pageDescription.hidden = monthly;
-                monthlyModeDescription.hidden = !monthly;
-            }
+            if (pageDescription) pageDescription.hidden = monthly || csv;
+            if (monthlyModeDescription) monthlyModeDescription.hidden = !monthly;
+            if (csvModeDescription) csvModeDescription.hidden = !csv;
         };
 
         const getCheckedValue = (row, selector) => {
@@ -934,7 +943,7 @@
         }
 
         form.addEventListener("submit", (event) => {
-            if (isSubmitting) {
+            if (isSubmitting || isCsvModeSelected()) {
                 event.preventDefault();
                 return;
             }
@@ -1041,5 +1050,109 @@
                 showConfirmationDialog();
             }, 0);
         }
+
+        setupCsvImport();
     });
+
+    function setupCsvImport() {
+        const csvForm = document.getElementById("csv-import-form");
+        const dropzone = document.getElementById("csv-dropzone");
+        const fileInput = document.getElementById("csv-file");
+        if (!csvForm || !dropzone || !fileInput) return;
+        const selectButton = document.getElementById("button-csv-select");
+        const clearButton = document.getElementById("button-csv-clear");
+        const importButton = document.getElementById("button-csv-import");
+        const fileNameLabel = document.getElementById("csv-file-name");
+        const errorLabel = document.getElementById("csv-file-error");
+        const maxBytes = Number(csvForm.dataset.maxBytes) || 1048576;
+        const emptyLabel = fileNameLabel ? fileNameLabel.textContent : "";
+        let submitting = false;
+
+        const validateFile = (file) => {
+            if (!file) return "CSVファイルを選択してください。";
+            if (!/\.csv$/i.test(file.name)) return "拡張子が .csv のファイルを選択してください。";
+            if (file.size === 0) return "空のファイルは取り込めません。";
+            if (file.size > maxBytes) return "CSVファイルは1MB以下にしてください。";
+            return "";
+        };
+
+        const render = () => {
+            const file = fileInput.files && fileInput.files[0];
+            const error = file ? validateFile(file) : "";
+            if (fileNameLabel) fileNameLabel.textContent = file ? file.name : emptyLabel;
+            if (errorLabel) errorLabel.textContent = error;
+            dropzone.classList.toggle("has-file", !!file && !error);
+            if (importButton) importButton.disabled = submitting || !file || !!error;
+        };
+
+        const assignFiles = (files) => {
+            if (!files || files.length === 0) return;
+            if (files.length > 1) {
+                if (errorLabel) errorLabel.textContent = "CSVファイルは1つだけ選択してください。";
+                return;
+            }
+            try {
+                const transfer = new DataTransfer();
+                transfer.items.add(files[0]);
+                fileInput.files = transfer.files;
+            } catch (e) {
+                if (errorLabel) errorLabel.textContent = "このブラウザーではドラッグ＆ドロップを利用できません。「ファイルを選択」から選択してください。";
+                return;
+            }
+            render();
+        };
+
+        if (selectButton) selectButton.addEventListener("click", () => fileInput.click());
+        fileInput.addEventListener("change", render);
+
+        ["dragenter", "dragover"].forEach((type) => {
+            dropzone.addEventListener(type, (event) => {
+                event.preventDefault();
+                if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+                dropzone.classList.add("is-dragover");
+            });
+        });
+        ["dragleave", "dragend"].forEach((type) => {
+            dropzone.addEventListener(type, (event) => {
+                if (event.type === "dragleave" && dropzone.contains(event.relatedTarget)) return;
+                dropzone.classList.remove("is-dragover");
+            });
+        });
+        dropzone.addEventListener("drop", (event) => {
+            event.preventDefault();
+            dropzone.classList.remove("is-dragover");
+            assignFiles(event.dataTransfer ? event.dataTransfer.files : null);
+        });
+        // ドロップ位置がずれてもブラウザーがファイルを開いて画面遷移しないようにする。
+        ["dragover", "drop"].forEach((type) => {
+            window.addEventListener(type, (event) => {
+                if (!dropzone.contains(event.target)) event.preventDefault();
+            });
+        });
+
+        if (clearButton) {
+            clearButton.addEventListener("click", () => {
+                fileInput.value = "";
+                render();
+            });
+        }
+
+        csvForm.addEventListener("submit", (event) => {
+            const file = fileInput.files && fileInput.files[0];
+            const error = validateFile(file);
+            if (submitting || error) {
+                event.preventDefault();
+                if (errorLabel && error) errorLabel.textContent = error;
+                return;
+            }
+            submitting = true;
+            if (importButton) {
+                importButton.disabled = true;
+                importButton.textContent = "インポート中…";
+            }
+            if (clearButton) clearButton.disabled = true;
+        });
+
+        render();
+    }
 })();

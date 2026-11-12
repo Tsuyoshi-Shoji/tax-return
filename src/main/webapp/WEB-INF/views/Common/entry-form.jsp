@@ -21,7 +21,8 @@
 <c:set var="methodRequiredMessage" value="${isIncome ? '受取方法を選択してください。' : '支払方法を選択してください。'}" />
 <c:set var="selectedType" value="${isIncome ? entryForm.incomeType : entryForm.expenseType}" />
 <c:set var="selectedMethod" value="${isIncome ? entryForm.receiveMethodId : entryForm.paymentMethodId}" />
-<c:set var="selectedEntryMode" value="${empty entryForm.entryMode ? 'normal' : entryForm.entryMode}" />
+<c:set var="csvImportAvailable" value="${not isIncome and empty entryForm.editId}" />
+<c:set var="selectedEntryMode" value="${csvImportAvailable and csvImportOpen ? 'csv' : (empty entryForm.entryMode ? 'normal' : entryForm.entryMode)}" />
 <c:set var="defaultType" value="${empty categories ? '' : categories[0].id}" />
 <c:set var="defaultMethod" value="${empty methods ? '' : methods[0].id}" />
 <fmt:setLocale value="ja_JP" scope="page" />
@@ -38,13 +39,19 @@
                 <span id="entry-mode-label" class="entry-mode-switch-label">登録モード</span>
                 <div class="entry-mode-segment" role="radiogroup" aria-labelledby="entry-mode-label">
                     <label class="entry-mode-option">
-                        <input id="entry-mode-normal" class="entry-mode-input" type="radio" name="entryMode" value="normal" form="entry-form" <c:if test="${selectedEntryMode ne 'monthly'}">checked</c:if>>
+                        <input id="entry-mode-normal" class="entry-mode-input" type="radio" name="entryMode" value="normal" form="entry-form" <c:if test="${selectedEntryMode ne 'monthly' and selectedEntryMode ne 'csv'}">checked</c:if>>
                         <span class="entry-mode-option-text">通常モード</span>
                     </label>
                     <label class="entry-mode-option">
                         <input id="entry-mode-monthly" class="entry-mode-input" type="radio" name="entryMode" value="monthly" form="entry-form" <c:if test="${selectedEntryMode eq 'monthly'}">checked</c:if>>
                         <span class="entry-mode-option-text">月間一括登録モード</span>
                     </label>
+                    <c:if test="${csvImportAvailable}">
+                        <label class="entry-mode-option">
+                            <input id="entry-mode-csv" class="entry-mode-input" type="radio" name="entryMode" value="csv" form="entry-form" <c:if test="${selectedEntryMode eq 'csv'}">checked</c:if>>
+                            <span class="entry-mode-option-text">CSVインポート</span>
+                        </label>
+                    </c:if>
                 </div>
                 <p id="error-entryMode" class="entry-field-error" data-error-for="entryMode"><c:out value="${fieldErrors.entryMode}" /></p>
             </section>
@@ -60,9 +67,12 @@
                         <span id="monthly-mode-badge" class="entry-mode-badge" <c:if test="${selectedEntryMode ne 'monthly'}">hidden</c:if>>月間一括登録モード</span>
                     </c:if>
                 </div>
-                <p id="page-description" class="entry-page-description" <c:if test="${not isIncome and selectedEntryMode eq 'monthly'}">hidden</c:if>><c:out value="${pageDescription}" /></p>
+                <p id="page-description" class="entry-page-description" <c:if test="${not isIncome and selectedEntryMode ne 'normal'}">hidden</c:if>><c:out value="${pageDescription}" /></p>
                 <c:if test="${not isIncome}">
                     <p id="monthly-mode-description" class="entry-page-description" <c:if test="${selectedEntryMode ne 'monthly'}">hidden</c:if>>カード利用分を月末にまとめて登録できます。月間の支出を一括入力してください。</p>
+                </c:if>
+                <c:if test="${csvImportAvailable}">
+                    <p id="csv-mode-description" class="entry-page-description" <c:if test="${selectedEntryMode ne 'csv'}">hidden</c:if>>CSVファイルの支出をまとめて登録します。1行でも誤りがある場合は登録されません。</p>
                 </c:if>
             </div>
             <div class="entry-card-header-side">
@@ -95,7 +105,7 @@
             <input type="hidden" id="confirmation-token" name="confirmationToken" value="${fn:escapeXml(entryForm.confirmationToken)}">
             <input type="hidden" name="returnQuery" value="${fn:escapeXml(entryForm.returnQuery)}">
 
-            <section id="normal-mode-section" class="entry-mode-panel" <c:if test="${not isIncome and selectedEntryMode eq 'monthly'}">hidden</c:if>>
+            <section id="normal-mode-section" class="entry-mode-panel" <c:if test="${not isIncome and selectedEntryMode ne 'normal'}">hidden</c:if>>
             <div class="entry-grid">
                 <div class="entry-row" data-field-group="${fn:escapeXml(typeFieldName)}">
                     <div class="entry-label-wrap">
@@ -495,7 +505,7 @@
                 </section>
             </c:if>
 
-            <div id="normal-mode-actions" class="entry-actions" <c:if test="${not isIncome and selectedEntryMode eq 'monthly'}">hidden</c:if>>
+            <div id="normal-mode-actions" class="entry-actions" <c:if test="${not isIncome and selectedEntryMode ne 'normal'}">hidden</c:if>>
                 <button id="button-clear" class="entry-button entry-button-secondary" type="button">クリア</button>
                 <button id="button-register"
                         class="entry-button entry-button-primary"
@@ -504,6 +514,55 @@
                         data-confirm-label="確認して送信"><c:out value="${confirmationRequired ? '確認して送信' : '登録'}" /></button>
             </div>
         </form>
+
+                                <c:if test="${csvImportAvailable}">
+                                    <section id="csv-mode-section" class="entry-mode-panel entry-csv-panel" aria-label="CSVインポート" <c:if test="${selectedEntryMode ne 'csv'}">hidden</c:if>>
+                                        <div class="entry-csv-step">
+                                            <p class="entry-csv-step-title">1. CSVフォーマットをダウンロードして支出を入力します。</p>
+                                            <a id="link-csv-template" class="entry-button entry-button-outline" href="${pageContext.request.contextPath}/expense/import/template" download>CSVフォーマットをダウンロード</a>
+                                        </div>
+                                        <form id="csv-import-form"
+                                              class="entry-csv-form"
+                                              method="post"
+                                              enctype="multipart/form-data"
+                                              action="${pageContext.request.contextPath}/expense/import"
+                                              data-max-bytes="1048576">
+                                            <input type="hidden" name="csrfToken" value="${fn:escapeXml(entryForm.csrfToken)}">
+                                            <input type="hidden" name="submissionToken" value="${fn:escapeXml(entryForm.submissionToken)}">
+                                            <p class="entry-csv-step-title">2. 入力したCSVファイルを添付します。</p>
+                                            <div id="csv-dropzone" class="entry-csv-dropzone">
+                                                <input id="csv-file" class="entry-csv-file-input" type="file" name="file" accept=".csv,text/csv" aria-describedby="csv-file-hint csv-file-error">
+                                                <p class="entry-csv-dropzone-text">ここにCSVファイルをドラッグ＆ドロップ</p>
+                                                <p class="entry-csv-dropzone-or">または</p>
+                                                <button id="button-csv-select" class="entry-button entry-button-outline" type="button">ファイルを選択</button>
+                                                <p id="csv-file-name" class="entry-csv-file-name" aria-live="polite">ファイルが選択されていません</p>
+                                            </div>
+                                            <p id="csv-file-hint" class="entry-csv-hint">1MB以下・500行までのCSVファイル（UTF-8 または Shift_JIS）</p>
+                                            <p id="csv-file-error" class="entry-field-error" role="alert"></p>
+
+                                            <details class="entry-csv-help">
+                                                <summary>入力ルール</summary>
+                                                <ul>
+                                                    <li>1行目は見出し行のまま残してください。「#」で始まる行と空行は読み飛ばします。</li>
+                                                    <li>区分：<c:forEach var="category" items="${categories}" varStatus="s"><c:out value="${category.label}" /><c:if test="${not s.last}">、</c:if></c:forEach></li>
+                                                    <c:forEach var="category" items="${categories}">
+                                                        <li>項目（<c:out value="${category.label}" />）：<c:forEach var="item" items="${items}"><c:if test="${item.group eq category.id}"><span class="entry-csv-help-item"><c:out value="${item.label}" /></span></c:if></c:forEach></li>
+                                                    </c:forEach>
+                                                    <li>支払方法：<c:forEach var="method" items="${methods}" varStatus="s"><c:out value="${method.label}" /><c:if test="${not s.last}">、</c:if></c:forEach></li>
+                                                    <li>支出発生日：2026/01/31 または 2026-01-31 形式（未来日は不可）</li>
+                                                    <li>金額：1円以上の整数（1億円以上は画面から個別に登録してください）</li>
+                                                    <li>申告対象外・家事按分：適用する場合は 1、しない場合は 0 または空欄</li>
+                                                    <li>1行でも誤りがある場合は、すべての行が登録されません。</li>
+                                                </ul>
+                                            </details>
+
+                                            <div class="entry-actions">
+                                                <button id="button-csv-clear" class="entry-button entry-button-secondary" type="button">クリア</button>
+                                                <button id="button-csv-import" class="entry-button entry-button-primary" type="submit" disabled>インポート開始</button>
+                                            </div>
+                                        </form>
+                                    </section>
+                                </c:if>
     </section>
 </div>
 

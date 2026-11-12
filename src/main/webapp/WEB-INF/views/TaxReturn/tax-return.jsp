@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="${ctx}/css/style.css?v=20261016a">
     <link rel="stylesheet" href="${ctx}/css/home/home.css?v=20261011c">
     <link rel="stylesheet" href="${ctx}/css/profit-loss/profit-loss.css?v=20261011d">
-    <link rel="stylesheet" href="${ctx}/css/tax-return/tax-return.css?v=20261101b">
+    <link rel="stylesheet" href="${ctx}/css/tax-return/tax-return.css?v=20261108a">
     <script src="${ctx}/css/tax-return/tax-return.js?v=20261101b" defer></script>
 </head>
 <body class="home-page profit-loss-page tax-return-page">
@@ -113,8 +113,10 @@
                 </c:if>
             </section>
 
+            <c:if test="${sections.show['retention']}">
             <section id="section-retention" class="profit-loss-card tr-section" aria-labelledby="heading-retention">
                 <h2 id="heading-retention">年分別の保存管理台帳</h2>
+                <c:if test="${sections.forced['retention']}"><p class="tr-section-forced" role="note">設定で非表示にしていますが、この年分に登録データがあるため表示しています。</p></c:if>
                 <p class="tr-desc"><c:out value="${page.yearLabel}" />の取引・帳簿・証憑について、保存起算日・期限・確認根拠を登録します<c:if test="${retention.driveStatus.enabled}">。領収書・請求書等の証憑ファイルは利用者自身の Google Drive に保管します</c:if>。書類種別を選ぶと、申告方式（<c:out value="${retention.blueFiling ? '青色申告' : '白色申告等'}" />）・年分・作成受領日に応じた保存期限をサーバーで計算します。</p>
                 <div id="retention-rule-guidance" class="tr-deduction-verification" role="note">
                     <strong>保存期限ルール（確認日 <c:out value="${retention.ruleCheckedOn}" />）</strong>
@@ -337,6 +339,7 @@
                     </table>
                 </div>
             </section>
+            </c:if>
 
             <nav class="tr-tabs" aria-label="確定申告セクション">
                 <a id="tab-basic-info" class="tr-tab is-active" href="#section-basic-info">基本情報</a>
@@ -345,14 +348,15 @@
                 <a id="tab-profit-loss" class="tr-tab" href="#section-profit-loss">損益計算書</a>
                 <a id="tab-settlement" class="tr-tab" href="#section-settlement">決算整理</a>
                 <a id="tab-blue-statement" class="tr-tab" href="#section-blue-statement">決算書様式</a>
-                <a id="tab-fixed-assets" class="tr-tab" href="#section-fixed-assets">固定資産</a>
+                <c:if test="${sections.show['fixed-assets']}"><a id="tab-fixed-assets" class="tr-tab" href="#section-fixed-assets">固定資産</a></c:if>
                 <a id="tab-balance-sheet" class="tr-tab" href="#section-balance-sheet">貸借対照表</a>
                 <a id="tab-journal" class="tr-tab" href="#section-journal">仕訳帳</a>
                 <a id="tab-deductions" class="tr-tab" href="#section-deductions">所得控除</a>
                 <a id="tab-tax" class="tr-tab" href="#section-tax">税額計算</a>
-                <a id="tab-consumption" class="tr-tab" href="#section-consumption">消費税</a>
+                <c:if test="${sections.show['consumption']}"><a id="tab-consumption" class="tr-tab" href="#section-consumption">消費税</a></c:if>
                 <a id="tab-output" class="tr-tab" href="#section-output">出力</a>
                 <a id="tab-closing" class="tr-tab" href="#section-closing">締め・履歴</a>
+                <a id="link-section-settings" class="tr-tabs-settings-link" href="${ctx}/settings#tax-return-sections">表示セクションの設定</a>
             </nav>
 
             <section id="section-basic-info" class="profit-loss-card tr-section" aria-labelledby="heading-basic-info">
@@ -535,10 +539,14 @@
                 </c:choose>
             </section>
 
+            <c:if test="${sections.show['fixed-assets']}">
             <%@ include file="/WEB-INF/views/TaxReturn/_fixed-assets.jspf" %>
+            </c:if>
 
+            <c:if test="${sections.show['household-consumption']}">
             <section id="section-household-consumption" class="profit-loss-card tr-section" aria-labelledby="heading-household-consumption">
                 <h2 id="heading-household-consumption">家事消費等</h2>
+                <c:if test="${sections.forced['household-consumption']}"><p class="tr-section-forced" role="note">設定で非表示にしていますが、この年分に登録データがあるため表示しています。</p></c:if>
                 <p class="tr-desc">棚卸資産を家事用に消費・贈与した場合等の、利用者が入力した年分別金額です。登録内容は売上高に加算して仕訳・決算書へ反映します。金額の税務上の評価は利用者が確認してください。</p>
                 <div class="tr-table-scroll">
                     <table id="table-household-consumption" class="tr-table tr-statement">
@@ -569,9 +577,12 @@
                     </form>
                 </c:if>
             </section>
+            </c:if>
 
+            <c:if test="${sections.show['salary-details']}">
             <section id="section-salary-details" class="profit-loss-card tr-section" aria-labelledby="heading-salary-details">
                 <h2 id="heading-salary-details">給料賃金・専従者給与の個人別内訳</h2>
+                <c:if test="${sections.forced['salary-details']}"><p class="tr-section-forced" role="note">設定で非表示にしていますが、この年分に登録データがあるため表示しています。</p></c:if>
                 <p class="tr-desc">個人別内訳の登録・出力と、給与仕訳の科目別合計との照合を行います。青色事業専従者の届出・要件や給与額の適正性は本機能では判定しません。</p>
                 <div class="tr-table-scroll">
                     <table id="table-salary-details" class="tr-table tr-statement">
@@ -607,6 +618,7 @@
                     </form>
                 </c:if>
             </section>
+            </c:if>
 
             <section id="section-balance-sheet" class="profit-loss-card tr-section print-section" data-print-groups="balance-sheet" aria-labelledby="heading-balance-sheet">
                 <h2 id="heading-balance-sheet">貸借対照表</h2>
@@ -674,7 +686,9 @@
 
             <%@ include file="/WEB-INF/views/TaxReturn/_deductions.jspf" %>
             <%@ include file="/WEB-INF/views/TaxReturn/_tax-calculation.jspf" %>
+            <c:if test="${sections.show['consumption']}">
             <%@ include file="/WEB-INF/views/TaxReturn/_consumption.jspf" %>
+            </c:if>
             <%@ include file="/WEB-INF/views/TaxReturn/_blue-return-print.jspf" %>
 
             <section id="section-checklist" class="profit-loss-card tr-section" aria-labelledby="heading-blue-tax-checklist">

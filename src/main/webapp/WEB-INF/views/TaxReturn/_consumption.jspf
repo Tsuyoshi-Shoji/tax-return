@@ -3,6 +3,7 @@
 <c:set var="ct" value="${x.consumption}" />
 <section id="section-consumption" class="profit-loss-card tr-section print-section" data-print-groups="consumption" aria-labelledby="heading-consumption">
     <h2 id="heading-consumption">消費税（簡易課税）</h2>
+    <c:if test="${sections.forced['consumption']}"><p class="tr-section-forced" role="note">設定で非表示にしていますが、消費税の区分が課税事業者（簡易課税）のため表示しています。</p></c:if>
     <p class="tr-desc">収益登録の消費税区分（税込経理）から、簡易課税制度による消費税及び地方消費税の納付税額を計算します。消費税の区分・事業区分は各種設定で登録します。</p>
     <dl class="tr-info">
         <div><dt>消費税の区分</dt><dd id="display-consumption-status">${x.consumptionTaxable ? '課税事業者（簡易課税）' : '免税事業者'}</dd></div>
