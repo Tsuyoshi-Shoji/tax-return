@@ -20,3 +20,4 @@
 | 8 | created_at | 作成日時 | TIMESTAMP | CURRENT_TIMESTAMP | 非許容 | |
 | 9 | updated_at | 更新日時 | TIMESTAMP | CURRENT_TIMESTAMP | 非許容 | |
 
+`status`／`closed_at` は年度締め（`POST /tax-return/close`）と締めの取消（`POST /tax-return/reopen`）で更新し、各操作の履歴は `fiscal_year_closing_event` に記録する。締め済み年度は決算整理・出力元データの編集を拒否する。

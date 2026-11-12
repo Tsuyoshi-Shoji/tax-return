@@ -5,6 +5,28 @@ public final class TaxReturnForms {
     private TaxReturnForms() {
     }
 
+    public static class DepreciationRulesForm {
+        private String methodBasis;
+        private boolean scopeConfirmed;
+        private boolean specialConfirmed;
+        private String businessMonths;
+        private String evidence;
+        private String csrfToken;
+
+        public String getMethodBasis() { return methodBasis; }
+        public void setMethodBasis(String v) { methodBasis = v; }
+        public boolean isScopeConfirmed() { return scopeConfirmed; }
+        public void setScopeConfirmed(boolean v) { scopeConfirmed = v; }
+        public boolean isSpecialConfirmed() { return specialConfirmed; }
+        public void setSpecialConfirmed(boolean v) { specialConfirmed = v; }
+        public String getBusinessMonths() { return businessMonths; }
+        public void setBusinessMonths(String v) { businessMonths = v; }
+        public String getEvidence() { return evidence; }
+        public void setEvidence(String v) { evidence = v; }
+        public String getCsrfToken() { return csrfToken; }
+        public void setCsrfToken(String v) { csrfToken = v; }
+    }
+
     public static class FixedAssetForm {
         private String assetName;
         private String accountCode;
@@ -12,9 +34,21 @@ public final class TaxReturnForms {
         private String serviceStartDate;
         private String acquisitionCost;
         private String usefulLife;
+        private String lifeBasis;
+        private String usedElapsedMonths;
+        private boolean usedRequirementsConfirmed;
+        private boolean privateUseConversion;
+        private boolean rateTransitionConfirmed;
         private String depreciationMethod;
         private String businessRatio;
         private String acquisitionFunding;
+        private String assetOrigin;
+        private Long parentAssetId;
+        private String ownershipTransferType;
+        private String ownershipTransferDate;
+        private String ownershipOpeningBookValue;
+        private boolean ownershipHistoryConfirmed;
+        private String ownershipEvidence;
         private String notes;
         private String csrfToken;
 
@@ -30,12 +64,114 @@ public final class TaxReturnForms {
         public void setAcquisitionCost(String v) { acquisitionCost = v; }
         public String getUsefulLife() { return usefulLife; }
         public void setUsefulLife(String v) { usefulLife = v; }
+        public String getLifeBasis() { return lifeBasis; }
+        public void setLifeBasis(String v) { lifeBasis = v; }
+        public String getUsedElapsedMonths() { return usedElapsedMonths; }
+        public void setUsedElapsedMonths(String v) { usedElapsedMonths = v; }
+        public boolean isUsedRequirementsConfirmed() { return usedRequirementsConfirmed; }
+        public void setUsedRequirementsConfirmed(boolean v) { usedRequirementsConfirmed = v; }
+        public boolean isPrivateUseConversion() { return privateUseConversion; }
+        public void setPrivateUseConversion(boolean v) { privateUseConversion = v; }
+        public boolean isRateTransitionConfirmed() { return rateTransitionConfirmed; }
+        public void setRateTransitionConfirmed(boolean v) { rateTransitionConfirmed = v; }
         public String getDepreciationMethod() { return depreciationMethod; }
         public void setDepreciationMethod(String v) { depreciationMethod = v; }
         public String getBusinessRatio() { return businessRatio; }
         public void setBusinessRatio(String v) { businessRatio = v; }
         public String getAcquisitionFunding() { return acquisitionFunding; }
         public void setAcquisitionFunding(String v) { acquisitionFunding = v; }
+        public String getAssetOrigin() { return assetOrigin; }
+        public void setAssetOrigin(String v) { assetOrigin = v; }
+        public Long getParentAssetId() { return parentAssetId; }
+        public void setParentAssetId(Long v) { parentAssetId = v; }
+        public String getOwnershipTransferType() { return ownershipTransferType; }
+        public void setOwnershipTransferType(String v) { ownershipTransferType = v; }
+        public String getOwnershipTransferDate() { return ownershipTransferDate; }
+        public void setOwnershipTransferDate(String v) { ownershipTransferDate = v; }
+        public String getOwnershipOpeningBookValue() { return ownershipOpeningBookValue; }
+        public void setOwnershipOpeningBookValue(String v) { ownershipOpeningBookValue = v; }
+        public boolean isOwnershipHistoryConfirmed() { return ownershipHistoryConfirmed; }
+        public void setOwnershipHistoryConfirmed(boolean v) { ownershipHistoryConfirmed = v; }
+        public String getOwnershipEvidence() { return ownershipEvidence; }
+        public void setOwnershipEvidence(String v) { ownershipEvidence = v; }
+        public String getNotes() { return notes; }
+        public void setNotes(String v) { notes = v; }
+        public String getCsrfToken() { return csrfToken; }
+        public void setCsrfToken(String v) { csrfToken = v; }
+    }
+
+    public static class HouseholdConsumptionForm {
+        private String transactionDate;
+        private String details;
+        private String amount;
+        private String csrfToken;
+
+        public String getTransactionDate() { return transactionDate; }
+        public void setTransactionDate(String v) { transactionDate = v; }
+        public String getDetails() { return details; }
+        public void setDetails(String v) { details = v; }
+        public String getAmount() { return amount; }
+        public void setAmount(String v) { amount = v; }
+        public String getCsrfToken() { return csrfToken; }
+        public void setCsrfToken(String v) { csrfToken = v; }
+    }
+
+    public static class EmployeeSalaryForm {
+        private String salaryKind;
+        private String personName;
+        private String jobDescription;
+        private String workPeriodStart;
+        private String workPeriodEnd;
+        private String paymentPeriod;
+        private String amount;
+        private String csrfToken;
+
+        public String getSalaryKind() { return salaryKind; }
+        public void setSalaryKind(String v) { salaryKind = v; }
+        public String getPersonName() { return personName; }
+        public void setPersonName(String v) { personName = v; }
+        public String getJobDescription() { return jobDescription; }
+        public void setJobDescription(String v) { jobDescription = v; }
+        public String getWorkPeriodStart() { return workPeriodStart; }
+        public void setWorkPeriodStart(String v) { workPeriodStart = v; }
+        public String getWorkPeriodEnd() { return workPeriodEnd; }
+        public void setWorkPeriodEnd(String v) { workPeriodEnd = v; }
+        public String getPaymentPeriod() { return paymentPeriod; }
+        public void setPaymentPeriod(String v) { paymentPeriod = v; }
+        public String getAmount() { return amount; }
+        public void setAmount(String v) { amount = v; }
+        public String getCsrfToken() { return csrfToken; }
+        public void setCsrfToken(String v) { csrfToken = v; }
+    }
+
+    public static class FixedAssetEventForm {
+        private Long assetId;
+        private String eventType;
+        private String effectiveDate;
+        private String businessRatio;
+        private String proceeds;
+        private String openingBookValue;
+        private String newDepreciationMethod;
+        private boolean historyConfirmed;
+        private String notes;
+        private String csrfToken;
+
+        public Long getAssetId() { return assetId; }
+        public void setAssetId(Long v) { assetId = v; }
+        public String getEventType() { return eventType; }
+        public void setEventType(String v) { eventType = v; }
+        public String getEffectiveDate() { return effectiveDate; }
+        public void setEffectiveDate(String v) { effectiveDate = v; }
+        public String getBusinessRatio() { return businessRatio; }
+        public void setBusinessRatio(String v) { businessRatio = v; }
+        public String getProceeds() { return proceeds; }
+        public void setProceeds(String v) { proceeds = v; }
+        public String getOpeningBookValue() { return openingBookValue; }
+        public void setOpeningBookValue(String v) { openingBookValue = v; }
+        public String getNewDepreciationMethod() { return newDepreciationMethod; }
+        public void setNewDepreciationMethod(String v) { newDepreciationMethod = v; }
+        public boolean isHistoryConfirmed() { return historyConfirmed; }
+        public void setHistoryConfirmed(boolean v) { historyConfirmed = v; }
         public String getNotes() { return notes; }
         public void setNotes(String v) { notes = v; }
         public String getCsrfToken() { return csrfToken; }

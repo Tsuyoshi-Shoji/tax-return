@@ -69,10 +69,12 @@ public final class AccountMasterSeed {
     public static final String LINE_NET_BEFORE_RESERVES = "NET_BEFORE_RESERVES";
     public static final String LINE_REVERSAL_BAD_DEBT = "REVERSAL_BAD_DEBT";
     public static final String LINE_REVERSAL_OTHER = "REVERSAL_OTHER";
+    public static final String LINE_REVERSAL_OTHER2 = "REVERSAL_OTHER2";
     public static final String LINE_REVERSAL_TOTAL = "REVERSAL_TOTAL";
     public static final String LINE_DEDICATED_SALARY = "DEDICATED_SALARY";
     public static final String LINE_PROVISION_BAD_DEBT = "PROVISION_BAD_DEBT";
     public static final String LINE_PROVISION_OTHER = "PROVISION_OTHER";
+    public static final String LINE_PROVISION_OTHER2 = "PROVISION_OTHER2";
     public static final String LINE_PROVISION_TOTAL = "PROVISION_TOTAL";
     public static final String LINE_INCOME_BEFORE_BLUE = "INCOME_BEFORE_BLUE";
     public static final String LINE_BLUE_DEDUCTION = "BLUE_DEDUCTION";
@@ -181,14 +183,27 @@ public final class AccountMasterSeed {
             new LineSeed(LINE_NET_BEFORE_RESERVES, 33, "差引金額（⑦－㉜）", LINE_TYPE_CALC),
             new LineSeed(LINE_REVERSAL_BAD_DEBT, 34, "繰戻額等 貸倒引当金", LINE_TYPE_INPUT),
             new LineSeed(LINE_REVERSAL_OTHER, 35, "繰戻額等 その他", LINE_TYPE_INPUT),
-            new LineSeed(LINE_REVERSAL_TOTAL, 36, "繰戻額等 計", LINE_TYPE_CALC),
-            new LineSeed(LINE_DEDICATED_SALARY, 37, "繰入額等 専従者給与", LINE_TYPE_INPUT),
-            new LineSeed(LINE_PROVISION_BAD_DEBT, 38, "繰入額等 貸倒引当金", LINE_TYPE_INPUT),
-            new LineSeed(LINE_PROVISION_OTHER, 39, "繰入額等 その他", LINE_TYPE_INPUT),
-            new LineSeed(LINE_PROVISION_TOTAL, 40, "繰入額等 計", LINE_TYPE_CALC),
-            new LineSeed(LINE_INCOME_BEFORE_BLUE, 41, "青色申告特別控除前の所得金額（㉝＋㊱－㊵）", LINE_TYPE_CALC),
-            new LineSeed(LINE_BLUE_DEDUCTION, 42, "青色申告特別控除額", LINE_TYPE_CALC),
-            new LineSeed(LINE_INCOME, 43, "所得金額（㊶－㊷）", LINE_TYPE_CALC));
+            new LineSeed(LINE_REVERSAL_OTHER2, 36, "繰戻額等 その他（2）", LINE_TYPE_INPUT),
+            new LineSeed(LINE_REVERSAL_TOTAL, 37, "繰戻額等 計", LINE_TYPE_CALC),
+            new LineSeed(LINE_DEDICATED_SALARY, 38, "繰入額等 専従者給与", LINE_TYPE_INPUT),
+            new LineSeed(LINE_PROVISION_BAD_DEBT, 39, "繰入額等 貸倒引当金", LINE_TYPE_INPUT),
+            new LineSeed(LINE_PROVISION_OTHER, 40, "繰入額等 その他", LINE_TYPE_INPUT),
+            new LineSeed(LINE_PROVISION_OTHER2, 41, "繰入額等 その他（2）", LINE_TYPE_INPUT),
+            new LineSeed(LINE_PROVISION_TOTAL, 42, "繰入額等 計", LINE_TYPE_CALC),
+            new LineSeed(LINE_INCOME_BEFORE_BLUE, 43, "青色申告特別控除前の所得金額（㉝＋㊲－㊷）", LINE_TYPE_CALC),
+            new LineSeed(LINE_BLUE_DEDUCTION, 44, "青色申告特別控除額", LINE_TYPE_CALC),
+            new LineSeed(LINE_INCOME, 45, "所得金額（㊸－㊹）", LINE_TYPE_CALC));
+
+    /**
+     * 令和5年分以降用様式（NTA0KOA21）へ欄番号を合わせる前の表示名。締め済み年度の旧指紋を再現するためだけに使う。
+     */
+    public static final java.util.Map<String, String> LEGACY_LINE_LABELS = java.util.Map.of(
+            LINE_INCOME_BEFORE_BLUE, "青色申告特別控除前の所得金額（㉝＋㊱－㊵）",
+            LINE_INCOME, "所得金額（㊶－㊷）");
+
+    /** 欄番号の整合（2026-11-12）で追加した欄。旧指紋の再現時は除外する。 */
+    public static final java.util.Set<String> LINES_ADDED_FOR_OFFICIAL_NUMBERING = java.util.Set.of(
+            LINE_REVERSAL_OTHER2, LINE_PROVISION_OTHER2);
 
     /** 任意記載欄（㉕〜㉚）へ割り当てる科目は lineCode に {@link #LINE_FREE} を指定する。 */
     public static final List<StatementMappingSeed> BLUE_GENERAL_PL_MAPPINGS = List.of(

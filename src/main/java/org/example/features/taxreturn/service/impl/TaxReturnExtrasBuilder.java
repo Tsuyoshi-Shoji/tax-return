@@ -1,6 +1,7 @@
 package org.example.features.taxreturn.service.impl;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -12,6 +13,9 @@ import org.example.entity.BusinessProfile;
 import org.example.entity.ExpenseEntry;
 import org.example.entity.FiscalYear;
 import org.example.entity.FixedAsset;
+import org.example.entity.FixedAssetEvent;
+import org.example.entity.HouseholdConsumption;
+import org.example.entity.EmployeeSalaryDetail;
 import org.example.entity.IncomeEntry;
 import org.example.entity.SettlementAdjustment;
 import org.example.entity.TaxDeductionRecord;
@@ -21,11 +25,16 @@ import org.example.features.accounting.AccountMapping;
 import org.example.features.accounting.AccountMapping.AccountRef;
 import org.example.features.accounting.AccountMasterSeed;
 import org.example.features.taxreturn.asset.DepreciationCalculator;
+import org.example.features.taxreturn.asset.DepreciationRules;
+import org.example.features.taxreturn.form.TaxReturnForms.DepreciationRulesForm;
 import org.example.features.taxreturn.balance.BalanceSheetService;
 import org.example.features.taxreturn.consumption.ConsumptionTaxCalculator;
 import org.example.features.taxreturn.dto.TaxReturnExtras;
 import org.example.features.taxreturn.dto.TaxReturnExtras.AssetRow;
+import org.example.features.taxreturn.dto.TaxReturnExtras.AssetEventRow;
 import org.example.features.taxreturn.dto.TaxReturnExtras.DeductionRow;
+import org.example.features.taxreturn.dto.TaxReturnExtras.EmployeeSalaryRow;
+import org.example.features.taxreturn.dto.TaxReturnExtras.HouseholdConsumptionRow;
 import org.example.features.taxreturn.dto.TaxReturnExtras.IncomeBreakdownRow;
 import org.example.features.taxreturn.dto.TaxReturnExtras.LabelAmount;
 import org.example.features.taxreturn.dto.TaxReturnExtras.MonthRow;
@@ -38,18 +47,27 @@ import org.example.features.taxreturn.incometax.IncomeTaxCalculator;
 import org.example.features.taxreturn.incometax.TaxYearRules;
 import org.example.repository.ExpenseEntryRepository;
 import org.example.repository.FixedAssetRepository;
+import org.example.repository.FixedAssetEventRepository;
 import org.example.repository.IncomeEntryRepository;
 import org.example.repository.TaxDeductionRecordRepository;
 import org.example.repository.TaxDependentRepository;
 import org.example.repository.TaxReturnInputRepository;
+import org.example.repository.HouseholdConsumptionRepository;
+import org.example.repository.EmployeeSalaryDetailRepository;
 
 /** 確定申告画面の拡張データと関連チェックを組み立てる（読み取り専用）。 */
 class TaxReturnExtrasBuilder {
+    /** 売上・仕入金額の明細に個別表示する取引先数（残りは「上記以外」に合算）。 */
+    static final int PARTNER_ROWS = 5;
     static final Map<String, String> DEDUCTION_LABELS = new LinkedHashMap<>();
     static final Map<String, String> STATUS_LABELS = Map.of(
             "CANDIDATE", "未確認", "VERIFIED", "確認済み", "APPLIED", "申告に反映済み", "INELIGIBLE", "対象外");
     static final Map<String, String> METHOD_LABELS = Map.of(
             DepreciationCalculator.STRAIGHT_LINE, "定額法",
+            DepreciationCalculator.DECLINING_200, "200％定率法",
+            DepreciationCalculator.DECLINING_250, "250％定率法",
+            DepreciationCalculator.OLD_STRAIGHT_LINE, "旧定額法",
+            DepreciationCalculator.OLD_DECLINING, "旧定率法",
             DepreciationCalculator.SMALL_AMOUNT_SPECIAL, "少額減価償却資産の特例（措法28の2）",
             DepreciationCalculator.LUMP_SUM_3Y, "一括償却資産（3年均等）");
 
@@ -67,34 +85,44 @@ class TaxReturnExtrasBuilder {
     }
 
     private final FixedAssetRepository fixedAssetRepository;
+    private final FixedAssetEventRepository fixedAssetEventRepository;
     private final TaxReturnInputRepository taxReturnInputRepository;
     private final TaxDependentRepository taxDependentRepository;
     private final TaxDeductionRecordRepository taxDeductionRecordRepository;
     private final IncomeEntryRepository incomeEntryRepository;
     private final ExpenseEntryRepository expenseEntryRepository;
+    private final HouseholdConsumptionRepository householdConsumptionRepository;
+    private final EmployeeSalaryDetailRepository employeeSalaryDetailRepository;
 
-    TaxReturnExtrasBuilder(FixedAssetRepository fixedAssetRepository, TaxReturnInputRepository taxReturnInputRepository,
+    TaxReturnExtrasBuilder(FixedAssetRepository fixedAssetRepository, FixedAssetEventRepository fixedAssetEventRepository,
+            TaxReturnInputRepository taxReturnInputRepository,
             TaxDependentRepository taxDependentRepository, TaxDeductionRecordRepository taxDeductionRecordRepository,
-            IncomeEntryRepository incomeEntryRepository, ExpenseEntryRepository expenseEntryRepository) {
+            IncomeEntryRepository incomeEntryRepository, ExpenseEntryRepository expenseEntryRepository,
+            HouseholdConsumptionRepository householdConsumptionRepository,
+            EmployeeSalaryDetailRepository employeeSalaryDetailRepository) {
         this.fixedAssetRepository = fixedAssetRepository;
+        this.fixedAssetEventRepository = fixedAssetEventRepository;
         this.taxReturnInputRepository = taxReturnInputRepository;
         this.taxDependentRepository = taxDependentRepository;
         this.taxDeductionRecordRepository = taxDeductionRecordRepository;
         this.incomeEntryRepository = incomeEntryRepository;
         this.expenseEntryRepository = expenseEntryRepository;
+        this.householdConsumptionRepository = householdConsumptionRepository;
+        this.employeeSalaryDetailRepository = employeeSalaryDetailRepository;
     }
 
     record Context(BusinessProfile profile, FiscalYear year, List<FiscalYear> fiscalYears, SettlementAdjustment settlement,
             AccountMapping mapping, BalanceSheetService.Result balance, List<StatementRow> statementRows,
-            List<IncomeEntry> incomes, List<ExpenseEntry> expenses, BigDecimal plIncome, boolean closed, Long appUserId) {
+            List<IncomeEntry> incomes, List<ExpenseEntry> expenses, List<HouseholdConsumption> householdConsumptions,
+            BigDecimal plIncome, boolean closed, Long appUserId) {
     }
 
     TaxReturnExtras build(Context c, List<String> errors, List<String> warnings, List<CheckItem> checks) {
         TaxReturnExtras x = new TaxReturnExtras();
         fillFiler(c, x);
         fillOptions(c, x);
-        fillAssets(c, x, warnings, checks);
-        fillStatementPages(c, x);
+        fillAssets(c, x, errors, warnings, checks);
+        fillStatementPages(c, x, warnings, checks);
         balanceChecks(c, warnings, errors);
         fillIncomeTax(c, x, warnings, checks);
         fillConsumption(c, x, errors, warnings);
@@ -127,30 +155,94 @@ class TaxReturnExtrasBuilder {
         }
     }
 
-    private void fillAssets(Context c, TaxReturnExtras x, List<String> warnings, List<CheckItem> checks) {
+    private void fillAssets(Context c, TaxReturnExtras x, List<String> errors, List<String> warnings, List<CheckItem> checks) {
         FiscalYear year = c.year();
         List<FixedAsset> assets = fixedAssetRepository.findByBusinessProfileIdOrderByAcquisitionDateAscIdAsc(c.profile().getId());
+        List<FixedAssetEvent> events = fixedAssetEventRepository.findByBusinessProfileIdOrderByEffectiveDateAscIdAsc(c.profile().getId());
+        TaxReturnInput input = taxReturnInputRepository.findByFiscalYearId(year.getId()).orElse(null);
+        DepreciationRulesForm rulesForm = new DepreciationRulesForm();
+        rulesForm.setMethodBasis(input == null ? "UNCONFIRMED" : input.getDepreciationMethodBasis());
+        rulesForm.setScopeConfirmed(DepreciationRules.confirmationMatches(year.getTaxYear(), assets, input, events));
+        rulesForm.setSpecialConfirmed(input != null && input.isDepreciationSpecialConfirmed());
+        rulesForm.setBusinessMonths(input == null ? "12" : Integer.toString(input.getDepreciationBusinessMonths()));
+        rulesForm.setEvidence(input == null ? null : input.getDepreciationEvidence());
+        x.setDepreciationRules(rulesForm);
+        x.setDepreciationRuleVersion(DepreciationRules.version(year.getTaxYear()));
+        x.setDepreciationConfirmedAt(input == null || input.getDepreciationConfirmedAt() == null
+                ? null : input.getDepreciationConfirmedAt().toString());
+        List<String> ruleErrors = DepreciationRules.annualErrors(year.getTaxYear(), assets, input, events);
+        errors.addAll(ruleErrors);
+        checks.add(new CheckItem("check-depreciation-rules", "償却ルール・届出等の利用者確認",
+                ruleErrors.isEmpty(), ruleErrors.isEmpty() ? "登録範囲の機械検証と利用者確認（法的適格性の証明ではありません）"
+                        : "未確認・対象外・上限超過のため出力できません"));
         BigDecimal smallAmountTotal = BigDecimal.ZERO;
         BigDecimal expenseFundedAcquisitions = BigDecimal.ZERO;
         for (FixedAsset asset : assets) {
-            if (asset.getAcquisitionDate().isAfter(year.getPeriodEnd())) {
+            if (DepreciationRules.recognitionDate(asset, events).isAfter(year.getPeriodEnd())) {
                 continue;
             }
-            DepreciationCalculator.YearResult r = DepreciationCalculator.forYear(asset, year.getTaxYear());
-            if (r.opening().signum() == 0 && r.depreciation().signum() == 0) {
+            FixedAssetEvent disposal = events.stream()
+                    .filter(e -> asset.getId().equals(e.getFixedAsset().getId()))
+                    .filter(e -> FixedAssetEvent.SALE.equals(e.getEventType()) || FixedAssetEvent.DISPOSAL.equals(e.getEventType()))
+                    .findFirst().orElse(null);
+            FixedAssetEvent cessation = events.stream()
+                    .filter(e -> asset.getId().equals(e.getFixedAsset().getId()))
+                    .filter(e -> FixedAssetEvent.BUSINESS_CESSATION.equals(e.getEventType()))
+                    .findFirst().orElse(null);
+            boolean retain = DepreciationRules.retainsBalanceAfterDisposal(asset);
+            if (disposal != null && disposal.getEffectiveDate().getYear() < year.getTaxYear() && !retain) {
+                continue;
+            }
+            boolean ceasedEarlier = cessation != null && cessation.getEffectiveDate().isBefore(year.getPeriodStart());
+            BigDecimal ratio = ratioForYear(asset, events, year.getPeriodStart());
+            int calculationYear = ceasedEarlier ? cessation.getEffectiveDate().getYear() : year.getTaxYear();
+            DepreciationCalculator.YearResult r = DepreciationCalculator.forYear(asset, calculationYear, ratio, events, assets);
+            boolean disposedThisYear = disposal != null && disposal.getEffectiveDate().getYear() == year.getTaxYear()
+                    && (FixedAssetEvent.SALE.equals(disposal.getEventType())
+                        || FixedAssetEvent.DISPOSAL.equals(disposal.getEventType()));
+            if (r.opening().signum() == 0 && r.depreciation().signum() == 0
+                    && r.closing().signum() == 0 && !disposedThisYear) {
                 continue;
             }
             String accountName = c.mapping().byCode(asset.getAccountCode()).map(AccountRef::name).orElse(asset.getAccountCode());
-            x.getAssets().add(new AssetRow(asset.getId(), asset.getAssetName(), accountName,
+            String method = DepreciationRules.methodForYear(asset, year.getTaxYear(), events);
+            BigDecimal opening = asset.isPrivateUseConversion()
+                    && asset.getServiceStartDate().getYear() == year.getTaxYear() ? BigDecimal.ZERO
+                            : ceasedEarlier ? r.closing() : r.opening();
+            BigDecimal depreciation = ceasedEarlier ? BigDecimal.ZERO : r.depreciation();
+            BigDecimal businessPortion = ceasedEarlier ? BigDecimal.ZERO : r.businessPortion();
+            AssetRow row = new AssetRow(asset.getId(), asset.getAssetName(), accountName,
                     asset.getAcquisitionDate().toString(), asset.getServiceStartDate().toString(), asset.getAcquisitionCost(),
-                    METHOD_LABELS.getOrDefault(asset.getDepreciationMethod(), asset.getDepreciationMethod()),
-                    DepreciationCalculator.STRAIGHT_LINE.equals(asset.getDepreciationMethod()) ? asset.getUsefulLife() : null,
-                    r.rate(), r.months(), r.opening(), r.depreciation(), asset.getBusinessRatio(), r.businessPortion(),
-                    r.closing(), asset.getNotes(), !c.closed()));
+                    METHOD_LABELS.getOrDefault(method, method),
+                    DepreciationCalculator.isRegular(method) ? asset.getUsefulLife() : null,
+                    r.rate(), ceasedEarlier ? 0 : r.months(), opening, depreciation, ratio, businessPortion,
+                    disposedThisYear && !retain ? BigDecimal.ZERO : r.closing(), asset.getNotes(), !c.closed());
+            row.setCalculationDetails(DepreciationRules.calculationDetails(asset, r));
+            FixedAssetEvent methodChange = events.stream()
+                    .filter(e -> asset.getId().equals(e.getFixedAsset().getId()))
+                    .filter(e -> FixedAssetEvent.METHOD_CHANGE.equals(e.getEventType())
+                            && e.getEffectiveDate().getYear() <= year.getTaxYear())
+                    .max(java.util.Comparator.comparing(FixedAssetEvent::getEffectiveDate)).orElse(null);
+            if (methodChange != null) {
+                row.setCalculationDetails(row.getCalculationDetails() + "、方法変更="
+                        + asset.getDepreciationMethod() + "→" + method + "、変更時簿価="
+                        + methodChange.getOpeningBookValue().toPlainString());
+            }
+            if ("CAPITAL_IMPROVEMENT".equals(asset.getAssetOrigin())) {
+                row.setCalculationDetails(row.getCalculationDetails() + "、資本的支出として別資産登録"
+                        + (asset.getParentAsset() == null ? "" : "（対象資産=" + asset.getParentAsset().getAssetName() + "）"));
+            }
+            row.setDepreciationBasis(DepreciationRules.depreciationBasis(asset, r, year.getTaxYear(), events));
+            x.getAssets().add(row);
             x.setDepreciationTotal(x.getDepreciationTotal().add(r.depreciation()));
             x.setDepreciationBusinessTotal(x.getDepreciationBusinessTotal().add(r.businessPortion()));
-            x.setAssetOpeningTotal(x.getAssetOpeningTotal().add(r.opening()));
-            x.setAssetClosingTotal(x.getAssetClosingTotal().add(r.closing()));
+            x.setAssetOpeningTotal(x.getAssetOpeningTotal().add(opening));
+            x.setAssetClosingTotal(x.getAssetClosingTotal().add(disposedThisYear && !retain ? BigDecimal.ZERO : r.closing()));
+            if (cessation != null && !cessation.getEffectiveDate().isAfter(year.getPeriodEnd())
+                    && r.closing().signum() > 0) {
+                warnings.add("固定資産「" + asset.getAssetName() + "」は廃業時点で未償却残高が"
+                        + yen(r.closing()) + "円あります。私用転用・譲渡等の処理は別途確認してください。");
+            }
             boolean acquiredThisYear = !asset.getAcquisitionDate().isBefore(year.getPeriodStart());
             if (DepreciationCalculator.SMALL_AMOUNT_SPECIAL.equals(asset.getDepreciationMethod())
                     && asset.getServiceStartDate().getYear() == year.getTaxYear()) {
@@ -160,11 +252,20 @@ class TaxReturnExtrasBuilder {
                 expenseFundedAcquisitions = expenseFundedAcquisitions.add(asset.getAcquisitionCost());
             }
         }
+        for (FixedAssetEvent event : events) {
+            if (event.getEffectiveDate().isAfter(year.getPeriodEnd())) {
+                continue;
+            }
+            x.getFixedAssetEvents().add(new AssetEventRow(event.getId(), event.getFixedAsset().getAssetName(),
+                    event.getEventType(), event.getEffectiveDate().toString(), event.getBusinessRatio(),
+                    event.getProceeds(), event.getOpeningBookValue(), event.getNewDepreciationMethod(), !c.closed()));
+        }
         String reason = null;
-        if (smallAmountTotal.compareTo(DepreciationCalculator.SMALL_AMOUNT_ANNUAL_CAP) > 0) {
-            warnings.add("少額減価償却資産の特例の取得価額合計が年300万円を超えています（" + yen(smallAmountTotal) + "）。超える部分は通常の償却方法で登録してください。");
+        if (smallAmountTotal.compareTo(DepreciationRules.annualCap(input == null ? 12 : input.getDepreciationBusinessMonths())) > 0) {
+            warnings.add("少額減価償却資産の特例の取得価額合計が事業月数に応じた上限を超えています（" + yen(smallAmountTotal) + "）。通常の償却方法で登録し直してください。");
             reason = "少額減価償却資産の上限を超えています";
         }
+
         BigDecimal registeredPurchases = BigDecimal.ZERO;
         for (ExpenseEntry e : expenseEntryRepository.findAllOwnedByFiscalYear(year.getId(), c.appUserId())) {
             if (e.getExpenseItem() != null && "fixed-asset-purchase".equals(e.getExpenseItem().getItemCode()) && e.getAmount() != null) {
@@ -186,7 +287,17 @@ class TaxReturnExtrasBuilder {
                 reason != null ? reason : "固定資産" + x.getAssets().size() + "件（必要経費 " + yen(x.getDepreciationBusinessTotal()) + "）"));
     }
 
-    private void fillStatementPages(Context c, TaxReturnExtras x) {
+    private static BigDecimal ratioForYear(FixedAsset asset, List<FixedAssetEvent> events, java.time.LocalDate periodStart) {
+        return events.stream()
+                .filter(e -> asset.getId().equals(e.getFixedAsset().getId()))
+                .filter(e -> FixedAssetEvent.BUSINESS_RATIO_CHANGE.equals(e.getEventType()))
+                .filter(e -> !e.getEffectiveDate().isAfter(periodStart))
+                .max(java.util.Comparator.comparing(FixedAssetEvent::getEffectiveDate))
+                .map(FixedAssetEvent::getBusinessRatio)
+                .orElse(asset.getBusinessRatio());
+    }
+
+    private void fillStatementPages(Context c, TaxReturnExtras x, List<String> warnings, List<CheckItem> checks) {
         Map<String, BigDecimal> statement = new LinkedHashMap<>();
         for (StatementRow row : c.statementRows()) {
             statement.put(row.getCode(), row.getAmount());
@@ -200,9 +311,13 @@ class TaxReturnExtrasBuilder {
 
         BigDecimal[] sales = new BigDecimal[12];
         BigDecimal[] purchases = new BigDecimal[12];
+        BigDecimal[] household = new BigDecimal[12];
         java.util.Arrays.fill(sales, BigDecimal.ZERO);
         java.util.Arrays.fill(purchases, BigDecimal.ZERO);
+        java.util.Arrays.fill(household, BigDecimal.ZERO);
         Map<String, IncomeBreakdownRow> breakdown = new LinkedHashMap<>();
+        Map<String, PayeeRow> salesPartners = new LinkedHashMap<>();
+        Map<String, PayeeRow> purchasePartners = new LinkedHashMap<>();
         BigDecimal withholding = BigDecimal.ZERO;
         for (IncomeEntry e : c.incomes()) {
             String code = c.mapping().forIncomeItem(e.getIncomeItem(), e.getTransactionDate()).map(AccountRef::code).orElse(AccountMasterSeed.ACC_SALES);
@@ -211,6 +326,7 @@ class TaxReturnExtrasBuilder {
                 x.setMiscIncome(x.getMiscIncome().add(e.getAmount()));
             } else {
                 sales[m] = sales[m].add(e.getAmount());
+                partner(salesPartners, e.getCounterparty(), "（売上先未登録）").add(e.getAmount(), e.getAmount());
             }
             BigDecimal tax = e.getWithholdingTax() == null ? BigDecimal.ZERO : e.getWithholdingTax();
             if (tax.signum() > 0) {
@@ -220,6 +336,24 @@ class TaxReturnExtrasBuilder {
                 String item = e.getIncomeItem() == null ? "売上" : e.getIncomeItem().getItemName();
                 breakdown.computeIfAbsent(item + "|" + payer, k -> new IncomeBreakdownRow("事業（営業等）", item, payer, address))
                         .add(e.getAmount(), tax);
+            }
+        }
+        for (HouseholdConsumption consumption : c.householdConsumptions()) {
+            int month = consumption.getTransactionDate().getMonthValue() - 1;
+            household[month] = household[month].add(consumption.getAmount());
+            x.setHouseholdConsumptionTotal(x.getHouseholdConsumptionTotal().add(consumption.getAmount()));
+            x.getHouseholdConsumptionRows().add(new HouseholdConsumptionRow(consumption.getId(),
+                    consumption.getTransactionDate().toString(), consumption.getDetails(), consumption.getAmount(), !c.closed()));
+        }
+        for (FixedAssetEvent event : fixedAssetEventRepository
+                .findByBusinessProfileIdOrderByEffectiveDateAscIdAsc(c.profile().getId())) {
+            if (FixedAssetEvent.SALE.equals(event.getEventType())
+                    && event.getEffectiveDate().getYear() == c.year().getTaxYear()
+                    && DepreciationRules.retainsBalanceAfterDisposal(event.getFixedAsset())) {
+                BigDecimal ratio = ratioForYear(event.getFixedAsset(), fixedAssetEventRepository
+                        .findByFixedAssetIdOrderByEffectiveDateAscIdAsc(event.getFixedAsset().getId()), c.year().getPeriodStart());
+                x.setMiscIncome(x.getMiscIncome().add(event.getProceeds().multiply(ratio)
+                        .divide(new BigDecimal("100"), 0, RoundingMode.DOWN)));
             }
         }
         x.setBusinessWithholding(withholding);
@@ -234,6 +368,7 @@ class TaxReturnExtrasBuilder {
             if (AccountMasterSeed.ACC_PURCHASES.equals(code)) {
                 int m = e.getTransactionDate().getMonthValue() - 1;
                 purchases[m] = purchases[m].add(deductible);
+                partner(purchasePartners, e.getCounterparty(), "（仕入先未登録）").add(deductible, deductible);
             }
             Map<String, PayeeRow> target = null;
             if (AccountMasterSeed.ACC_RENT.equals(code)) {
@@ -252,13 +387,59 @@ class TaxReturnExtrasBuilder {
             }
         }
         for (int i = 0; i < 12; i++) {
-            x.getMonthlySalesPurchases().add(new MonthRow(i + 1, sales[i], purchases[i]));
+            x.getMonthlySalesPurchases().add(new MonthRow(i + 1, sales[i], purchases[i], household[i]));
             x.setSalesTotal(x.getSalesTotal().add(sales[i]));
             x.setPurchaseTotal(x.getPurchaseTotal().add(purchases[i]));
         }
         x.getRentRows().addAll(rent.values());
         x.getInterestRows().addAll(interest.values());
         x.getFeeRows().addAll(fees.values());
+        x.setSalesPartnerOther(topPartners(salesPartners, x.getSalesPartnerRows()));
+        x.setPurchasePartnerOther(topPartners(purchasePartners, x.getPurchasePartnerRows()));
+        BigDecimal salaryDetailTotal = BigDecimal.ZERO;
+        BigDecimal dedicatedSalaryDetailTotal = BigDecimal.ZERO;
+        for (EmployeeSalaryDetail detail : employeeSalaryDetailRepository
+                .findByFiscalYearIdOrderBySalaryKindAscPersonNameAscIdAsc(c.year().getId())) {
+            x.getEmployeeSalaryRows().add(new EmployeeSalaryRow(detail.getId(), detail.getSalaryKind(),
+                    detail.getPersonName(), detail.getJobDescription(), detail.getWorkPeriodStart().toString(),
+                    detail.getWorkPeriodEnd().toString(), detail.getPaymentPeriod(), detail.getAmount(), !c.closed()));
+            if ("DEDICATED_SALARY".equals(detail.getSalaryKind())) {
+                dedicatedSalaryDetailTotal = dedicatedSalaryDetailTotal.add(detail.getAmount());
+            } else {
+                salaryDetailTotal = salaryDetailTotal.add(detail.getAmount());
+            }
+        }
+        boolean salaryDetailMatch = x.getEmployeeSalaryRows().isEmpty()
+                ? x.getSalaries().signum() == 0 && x.getDedicatedSalary().signum() == 0
+                : salaryDetailTotal.compareTo(x.getSalaries()) == 0
+                        && dedicatedSalaryDetailTotal.compareTo(x.getDedicatedSalary()) == 0;
+        if (!salaryDetailMatch) {
+            warnings.add("給料賃金・専従者給与の個人別明細合計と会計データの決算書金額が一致しません。登録内容と給与仕訳を確認してください。");
+        }
+        checks.add(new CheckItem("check-salary-details", "給与の個人別内訳", salaryDetailMatch,
+                salaryDetailMatch ? "会計データと一致" : "個人別内訳合計と会計データが一致しません"));
+    }
+
+    private static PayeeRow partner(Map<String, PayeeRow> partners, org.example.entity.Counterparty counterparty,
+            String unknownLabel) {
+        String name = counterparty == null ? unknownLabel : counterparty.getCounterpartyName();
+        String address = counterparty == null ? null : counterparty.getAddress();
+        return partners.computeIfAbsent(name, k -> new PayeeRow(name, address, null));
+    }
+
+    /** 金額の大きい順に上位 {@link #PARTNER_ROWS} 件を明細へ入れ、残りの合計（上記以外）を返す。 */
+    private static BigDecimal topPartners(Map<String, PayeeRow> partners, List<PayeeRow> target) {
+        List<PayeeRow> sorted = new java.util.ArrayList<>(partners.values());
+        sorted.sort(java.util.Comparator.comparing(PayeeRow::getAmount).reversed().thenComparing(PayeeRow::getName));
+        BigDecimal other = BigDecimal.ZERO;
+        for (int i = 0; i < sorted.size(); i++) {
+            if (i < PARTNER_ROWS) {
+                target.add(sorted.get(i));
+            } else {
+                other = other.add(sorted.get(i).getAmount());
+            }
+        }
+        return other;
     }
 
     private void balanceChecks(Context c, List<String> warnings, List<String> errors) {
@@ -328,6 +509,17 @@ class TaxReturnExtrasBuilder {
             x.setTaxUnsupportedReason(year.getTaxYear() + "年分の税額計算ルールは未登録です（対応年分：2024〜2026年分）。");
             warnings.add(x.getTaxUnsupportedReason());
             checks.add(new CheckItem("check-income-tax", "所得控除・税額", false, "対象外の年分です"));
+            return;
+        }
+        boolean hasCapitalAssetSale = fixedAssetEventRepository
+                .findByBusinessProfileIdOrderByEffectiveDateAscIdAsc(c.profile().getId()).stream()
+                .anyMatch(e -> FixedAssetEvent.SALE.equals(e.getEventType())
+                        && e.getEffectiveDate().getYear() == year.getTaxYear()
+                        && !DepreciationRules.retainsBalanceAfterDisposal(e.getFixedAsset()));
+        if (hasCapitalAssetSale) {
+            x.setTaxUnsupportedReason("固定資産売却の譲渡所得等は未対応のため、この年分の所得税額は表示しません。別途申告内容を確認してください。");
+            warnings.add(x.getTaxUnsupportedReason());
+            checks.add(new CheckItem("check-income-tax", "所得控除・税額", false, "固定資産の譲渡所得等を別途確認してください"));
             return;
         }
         IncomeTaxCalculator.Result tax = IncomeTaxCalculator.calculate(new IncomeTaxCalculator.Input(rules,

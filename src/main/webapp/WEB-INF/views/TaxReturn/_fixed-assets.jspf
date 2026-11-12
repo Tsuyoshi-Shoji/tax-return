@@ -2,14 +2,51 @@
 <c:set var="x" value="${page.extras}" />
 <section id="section-fixed-assets" class="profit-loss-card tr-section" aria-labelledby="heading-fixed-assets">
     <h2 id="heading-fixed-assets">固定資産台帳・減価償却</h2>
-    <p class="tr-desc">事業で使用する固定資産を登録すると、減価償却費（定額法・少額減価償却資産の特例・一括償却資産）を自動で計算し、決算整理仕訳と貸借対照表に反映します。</p>
+    <p class="tr-desc">事業で使用する固定資産を登録すると、減価償却費（定額法・200％／250％定率法・旧定額法・旧定率法・少額特例・一括償却）を計算し、決算整理仕訳と貸借対照表に反映します。耐用年数2〜50年の登録可能な資産科目が対象です。</p>
+    <h3>年分別の償却要件・届出確認</h3>
+    <p class="tr-desc">対応年分：2024〜2026年分。ルール版：<c:out value="${x.depreciationRuleVersion}" default="未対応" />。
+        2026年3月31日以前取得の少額特例は10万円以上30万円未満、4月1日以後取得は10万円以上40万円未満です。年300万円の上限は開廃業年の事業月数で按分します（1月未満の端数は1月）。
+        アプリは日付・金額等を検証しますが、青色申告承認・中小事業者等の対象者要件・届出／承認の有効性を保証しません。</p>
+    <p class="tr-desc">確認資料（2026-11-12確認）：
+        <a href="https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/2100.htm" target="_blank" rel="noopener noreferrer">国税庁 No.2100</a>、
+        <a href="https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/2106.htm" target="_blank" rel="noopener noreferrer">償却方法・月割り</a>、
+        <a href="https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/2105.htm" target="_blank" rel="noopener noreferrer">旧方式</a>、
+        <a href="https://www.nta.go.jp/taxes/shiraberu/taxanswer/shotoku/2108.htm" target="_blank" rel="noopener noreferrer">中古・私用転用</a>、
+        <a href="https://www.nta.go.jp/taxes/tetsuzuki/shinsei/annai/shinkoku/annai/18.htm" target="_blank" rel="noopener noreferrer">選定届出</a>、
+        <a href="https://www.nta.go.jp/taxes/tetsuzuki/shinsei/annai/shinkoku/annai/21.htm" target="_blank" rel="noopener noreferrer">変更承認</a>。
+        選定届出は原則として事由の生じた年分の確定申告期限まで、変更承認申請は変更年の3月15日まで（休日繰延あり）。選定の引継ぎ・みなし選定も確認してください。</p>
+    <p class="tr-desc">確認状態：<c:choose><c:when test="${x.depreciationRules.scopeConfirmed}">利用者確認済み（法的適格性の証明ではありません）</c:when><c:otherwise>未確認・変更後の再確認待ち</c:otherwise></c:choose>。
+        最終確認日時：<c:out value="${x.depreciationConfirmedAt}" default="未確認" />。
+        固定資産・イベントの追加／削除後は影響する未確定年分の再確認が必要です。</p>
+    <c:if test="${not page.closed}">
+        <form id="depreciation-rules-form" method="post" action="${ctx}/tax-return/assets/rules?year=${page.selectedYear}" novalidate>
+            <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
+            <div class="tr-settlement">
+                <label class="tr-field"><span>償却方法の適用根拠（資産の種類別に確認）</span><select name="methodBasis">
+                    <option value="UNCONFIRMED">未選択</option>
+                    <option value="STATUTORY" ${x.depreciationRules.methodBasis == 'STATUTORY' ? 'selected' : ''}>法定償却方法</option>
+                    <option value="NOTIFIED" ${x.depreciationRules.methodBasis == 'NOTIFIED' ? 'selected' : ''}>期限内の選定届出・みなし選定</option>
+                    <option value="APPROVED" ${x.depreciationRules.methodBasis == 'APPROVED' ? 'selected' : ''}>変更承認済み</option>
+                    <option value="MIXED" ${x.depreciationRules.methodBasis == 'MIXED' ? 'selected' : ''}>資産種類ごとに異なる（根拠欄に内訳）</option>
+                </select></label>
+                <label class="tr-field"><span>この年に事業を営んでいた月数（1〜12）</span><input name="businessMonths" inputmode="numeric" value="<c:out value='${x.depreciationRules.businessMonths}' />" /></label>
+                <label class="tr-field"><span>確認根拠（資産種類、対象年の要件、届出日・承認日・参照先等。秘密情報・個人情報は記入しない）</span><input name="evidence" maxlength="500" value="<c:out value='${x.depreciationRules.evidence}' />" /></label>
+            </div>
+            <label><input type="checkbox" name="scopeConfirmed" value="true" ${x.depreciationRules.scopeConfirmed ? 'checked' : ''} />
+                対象年の耐用年数・税込／税抜経理・償却方法・期限内選定届出・みなし選定等を確認した。登録条件による過年度償却の再計算が実際の履歴と一致し、相続贈与・方法変更の簿価と確認根拠、資本的支出の別資産登録、廃業後残高の処理を確認した。一括償却には業務上基本的に重要な資産を含まず、貸付用は主要業務の貸付けに限ることを確認した。</label>
+            <label><input type="checkbox" name="specialConfirmed" value="true" ${x.depreciationRules.specialConfirmed ? 'checked' : ''} />
+                少額特例を適用する場合、当該年・取得時点の青色申告・中小事業者・従業員数等の対象者要件、取得／供用期限、貸付制限、他特例との重複排除、必要経費算入・明細添付等を公式資料で確認した。</label>
+            <p class="tr-desc">対象範囲のチェックを外して保存すると確認を取り消します。未確認・対象外・特例上限超過時は帳簿CSV出力を止めます。確認根拠は自己申告であり、証明書の検証・税務署への届出は行いません。</p>
+            <div class="tr-actions"><button type="submit" class="tr-btn tr-btn-primary">年分の確認状態を保存</button></div>
+        </form>
+    </c:if>
     <div class="tr-table-scroll">
         <table id="table-fixed-assets" class="tr-table tr-statement">
             <thead><tr><th scope="col">資産の名称</th><th scope="col">科目</th><th scope="col">取得年月日</th><th scope="col" class="num">取得価額</th><th scope="col">償却方法</th><th scope="col" class="num">耐用年数</th><th scope="col" class="num">償却率</th><th scope="col" class="num">償却期間</th><th scope="col" class="num">期首残高</th><th scope="col" class="num">本年分の償却費</th><th scope="col" class="num">事業専用割合</th><th scope="col" class="num">必要経費算入額</th><th scope="col" class="num">期末残高</th><th scope="col"><span class="visually-hidden">操作</span></th></tr></thead>
             <tbody>
                 <c:forEach var="a" items="${x.assets}">
                     <tr>
-                        <th scope="row"><c:out value="${a.name}" /></th>
+                        <th scope="row"><c:out value="${a.name}" /><details><summary>計算根拠</summary><c:out value="${a.calculationDetails}" /></details></th>
                         <td><c:out value="${a.accountName}" /></td>
                         <td><c:out value="${a.acquired}" /></td>
                         <td class="num"><fmt:formatNumber value="${a.cost}" pattern="#,##0" /></td>
@@ -51,20 +88,91 @@
                     <label class="tr-field"><span>取得価額（円）</span><input name="acquisitionCost" inputmode="numeric" autocomplete="off" required /></label>
                     <label class="tr-field"><span>償却方法</span><select name="depreciationMethod">
                         <option value="STRAIGHT_LINE">定額法</option>
-                        <option value="SMALL_AMOUNT_SPECIAL">少額減価償却資産の特例（30万円未満）</option>
+                        <option value="DECLINING_200">200％定率法（2012年4月以後取得）</option>
+                        <option value="DECLINING_250">250％定率法（2007年4月〜2012年3月取得等）</option>
+                        <option value="OLD_STRAIGHT_LINE">旧定額法（2007年3月以前取得）</option>
+                        <option value="OLD_DECLINING">旧定率法（2007年3月以前取得）</option>
+                        <option value="SMALL_AMOUNT_SPECIAL">少額特例（取得日により30万円／40万円未満）</option>
                         <option value="LUMP_SUM_3Y">一括償却資産（10万円以上20万円未満）</option>
                     </select></label>
-                    <label class="tr-field"><span>耐用年数（年）</span><input name="usefulLife" inputmode="numeric" autocomplete="off" placeholder="例：4（パソコン）" /></label>
+                    <label class="tr-field"><span>法定耐用年数（年・2〜50）</span><input name="usefulLife" inputmode="numeric" autocomplete="off" placeholder="例：4（パソコン）" /></label>
+                    <label class="tr-field"><span>耐用年数の根拠</span><select name="lifeBasis"><option value="STATUTORY">法定耐用年数</option><option value="USED_SIMPLIFIED">中古資産の簡便法（有形資産）</option></select></label>
+                    <label class="tr-field"><span>中古取得時の経過月数（簡便法のみ・0〜2400）</span><input name="usedElapsedMonths" inputmode="numeric" placeholder="取得後の私用期間を含めない" /></label>
                     <label class="tr-field"><span>事業専用割合（%）</span><input name="businessRatio" inputmode="numeric" autocomplete="off" value="100" /></label>
                     <label class="tr-field"><span>取得時の支払</span><select name="acquisitionFunding">
                         <option value="EXPENSE_ENTRY">支出登録（固定資産購入）で記帳済み</option>
                         <option value="OWNER_FUNDS">私的資金で購入（事業主借）</option>
                     </select></label>
+                    <label class="tr-field"><span>取得区分</span><select name="assetOrigin">
+                        <option value="ACQUISITION">通常の取得</option>
+                        <option value="CAPITAL_IMPROVEMENT">資本的支出（別資産として登録）</option>
+                    </select></label>
+                    <label class="tr-field"><span>資本的支出の対象資産（該当時）</span><select name="parentAssetId">
+                        <option value="">選択してください</option>
+                        <c:forEach var="parent" items="${x.assets}"><option value="${parent.id}"><c:out value="${parent.name}" /></option></c:forEach>
+                    </select></label>
+                    <label class="tr-field"><span>取得形態（相続・贈与の場合）</span><select name="ownershipTransferType">
+                        <option value="">通常取得</option><option value="INHERITANCE">相続</option><option value="GIFT">贈与</option>
+                    </select></label>
+                    <label class="tr-field"><span>相続・贈与日（該当時）</span><input type="date" name="ownershipTransferDate" /></label>
+                    <label class="tr-field"><span>相続・贈与時の引継ぎ簿価（円）</span><input name="ownershipOpeningBookValue" inputmode="numeric" /></label>
+                    <label class="tr-field"><span>相続・贈与の確認根拠（該当時）</span><input name="ownershipEvidence" maxlength="255" /></label>
                     <label class="tr-field"><span>摘要</span><input name="notes" maxlength="255" autocomplete="off" /></label>
                 </div>
-                <p class="tr-desc">定額法は使用開始月からの月割りで計算し、未償却残高が1円（備忘価額）になるまで償却します。前年以前に取得した資産は、取得日・取得価額を登録すると期首の未償却残高を自動計算します。資産の売却・除却には対応していません。</p>
+                <label><input type="checkbox" name="usedRequirementsConfirmed" value="true" />中古簡便法の対象資産で、使用可能期間の合理的な見積りが困難であり、取得・供用時の適用要件を確認した。供用のための資本的支出はない（50％超は簡便法不可。本アプリは50％以下を含む資本的支出処理も未対応）。</label>
+                <label><input type="checkbox" name="privateUseConversion" value="true" />非業務用からの転用。取得日は私用取得日、供用開始日は実際の転用日、支払は「事業主借」とする。私用期間の減価を控除した簿価を転用日に計上する。</label>
+                <label><input type="checkbox" name="rateTransitionConfirmed" value="true" />2012年4月〜12月取得で250％定率法を継続する経過措置の要件を確認した（該当する場合だけ）。</label>
+                <label><input type="checkbox" name="ownershipHistoryConfirmed" value="true" />相続・贈与の場合、元の取得日・取得価額・方法・承継時簿価と過年度償却履歴を確認した。</label>
+                <p class="tr-desc">新旧方式・率区分は転用日ではなく取得日で判定します。定率法は償却保証額未満になると改定取得価額・改定償却率へ切替えます。旧方式は95％到達の翌年以後（2008年分以後）5年均等で1円まで償却します。有形資産は1円、ソフトウェアは0円まで。ソフトウェア、2016年4月以後取得の建物附属設備の定率法は選べません。</p>
+                <p class="tr-desc">中古簡便法は取得時までの経過月数から年数を計算し、年未満切捨て・最低2年とします。私用転用は新品の法定年数×1.5（年未満切捨て）の旧定額率で私用減価を計算し、私用期間の6か月以上を1年・未満を切捨て、95％を上限とします。相続・贈与は元の取得日・取得価額・償却方法を引き継ぎ、移転時簿価と過年度履歴の確認が必要です。方法変更は年初適用・承認根拠・期首簿価を必須とし、定額法・200％定率法・250％定率法間に限定します。資本的支出は2007年4月以後の通常資産に限り、同種・同耐用年数の別資産として登録します。廃業は日付を含む月まで償却し、残存簿価の私用転用・譲渡処理は警告して自動判定しません。</p>
                 <div class="tr-actions"><button type="submit" class="tr-btn tr-btn-primary">登録する</button></div>
             </form>
         </details>
+    </c:if>
+    <h3>固定資産イベント</h3>
+    <p class="tr-desc">事業専用割合変更は年度初日限定です。定額法・定率法・旧方式は売却・除却月を含めて月割りし、除却損は事業分だけを必要経費にします。一括償却資産は売却・除却後も3年間の均等償却を継続し、処分時の残高を経費にしません。
+        一括償却資産の売却代金は雑収入に計上します（業務上基本的に重要な資産等は対象外）。その他の売却は事業損益に含めず事業主勘定で分離します。譲渡所得等は未対応のため、該当年の所得税額は表示しません。</p>
+    <div class="tr-table-scroll">
+        <table id="table-fixed-asset-events" class="tr-table tr-statement">
+            <thead><tr><th>資産</th><th>イベント</th><th>適用日</th><th class="num">事業専用割合（%）</th><th class="num">売却価額（円）</th><th>変更後方法</th><th class="num">引継ぎ・変更時簿価</th><th><span class="visually-hidden">操作</span></th></tr></thead>
+            <tbody>
+                <c:forEach var="e" items="${x.fixedAssetEvents}">
+                    <tr><th><c:out value="${e.assetName}" /></th><td><c:out value="${e.eventTypeLabel}" /></td><td><c:out value="${e.effectiveDate}" /></td>
+                        <td class="num"><c:if test="${not empty e.businessRatio}"><fmt:formatNumber value="${e.businessRatio}" pattern="0.##" /></c:if></td>
+                        <td class="num"><c:if test="${not empty e.proceeds}"><fmt:formatNumber value="${e.proceeds}" pattern="#,##0" /></c:if></td>
+                        <td><c:out value="${e.newDepreciationMethod}" /></td>
+                        <td class="num"><c:if test="${not empty e.openingBookValue}"><fmt:formatNumber value="${e.openingBookValue}" pattern="#,##0" /></c:if></td>
+                        <td><c:if test="${e.deletable}"><form method="post" action="${ctx}/tax-return/assets/events/delete?year=${page.selectedYear}" class="tr-inline-form" data-confirm="この固定資産イベントを削除しますか？関連仕訳も再計算されます。">
+                            <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" /><input type="hidden" name="id" value="${e.id}" />
+                            <button type="submit" class="tr-btn tr-btn-soft tr-btn-small">削除</button>
+                        </form></c:if></td>
+                    </tr>
+                </c:forEach>
+                <c:if test="${empty x.fixedAssetEvents}"><tr><td colspan="8" class="empty">固定資産イベントはありません。</td></tr></c:if>
+            </tbody>
+        </table>
+    </div>
+    <c:if test="${not page.closed and not empty x.assets}">
+        <form id="fixed-asset-event-form" method="post" action="${ctx}/tax-return/assets/events?year=${page.selectedYear}" novalidate>
+            <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
+            <div class="tr-settlement">
+                <label class="tr-field"><span>固定資産</span><select name="assetId"><c:forEach var="a" items="${x.assets}"><option value="${a.id}"><c:out value="${a.name}" /></option></c:forEach></select></label>
+                <label class="tr-field"><span>イベント</span><select name="eventType">
+                    <option value="BUSINESS_RATIO_CHANGE">事業専用割合変更</option><option value="SALE">売却</option><option value="DISPOSAL">除却</option>
+                    <option value="METHOD_CHANGE">償却方法変更</option><option value="BUSINESS_CESSATION">廃業</option>
+                </select></label>
+                <label class="tr-field"><span>適用日（方法変更は年初）</span><input type="date" name="effectiveDate" required /></label>
+                <label class="tr-field"><span>変更後の事業専用割合（%）</span><input name="businessRatio" inputmode="decimal" placeholder="割合変更時のみ" /></label>
+                <label class="tr-field"><span>売却価額（円）</span><input name="proceeds" inputmode="numeric" placeholder="売却時のみ" /></label>
+                <label class="tr-field"><span>引継ぎ・変更時の期首簿価（円）</span><input name="openingBookValue" inputmode="numeric" placeholder="相続・贈与・方法変更時のみ" /></label>
+                <label class="tr-field"><span>変更後の償却方法</span><select name="newDepreciationMethod">
+                    <option value="">選択してください</option><option value="STRAIGHT_LINE">定額法</option>
+                    <option value="DECLINING_200">200％定率法</option><option value="DECLINING_250">250％定率法</option>
+                </select></label>
+                <label class="tr-field"><span>摘要</span><input name="notes" maxlength="255" /></label>
+            </div>
+            <label><input type="checkbox" name="historyConfirmed" value="true" />移転・変更日現在の簿価、過年度償却履歴および承認等の根拠を確認した（法的適格性の証明ではありません）。</label>
+            <div class="tr-actions"><button type="submit" class="tr-btn tr-btn-primary">イベントを登録</button></div>
+        </form>
     </c:if>
 </section>

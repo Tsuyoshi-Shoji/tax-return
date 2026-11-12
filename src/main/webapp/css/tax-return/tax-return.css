@@ -1,6 +1,15 @@
 .tax-return-page .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .tr-title-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .tr-controls { display: flex; align-items: flex-end; flex-wrap: wrap; gap: 12px; }
+.tr-deduction-fields { display: grid; gap: 10px; margin: 0; padding: 0; border: 0; }
+.tr-deduction-fields .tr-field { max-width: 560px; }
+.tr-deduction-confirm { display: flex; align-items: flex-start; gap: 8px; margin: 8px 0; font-size: 13px; color: #10225f; }
+.tr-deduction-confirm input { flex: none; margin-top: 2px; }
+.tr-deduction-verification { margin: 12px 0; padding: 12px 14px; border: 1px solid #d3def1; border-radius: 6px; background: #f5f9ff; font-size: 13px; color: #4b5d85; }
+.tr-deduction-verification p { margin: 4px 0 0; }
+.tr-retention-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+.tr-retention-basis { grid-column: 1 / -1; }
+.tr-retention-form .tr-field input { width: 100%; }
 .tr-control { display: flex; flex-direction: column; gap: 2px; margin: 0; }
 .tr-control label { font-size: 11px; font-weight: 700; color: #10225f; }
 .tr-control select { height: 38px; min-width: 150px; padding: 0 10px; border: 1px solid #d3def1; border-radius: 6px; background: #fff; font-size: 14px; color: #0f1f58; font-family: inherit; }
@@ -134,6 +143,7 @@
 .tr-sheet-table .is-total th, .tr-sheet-table .is-total td { font-weight: 800; }
 .tr-sheet-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
 .tr-sheet-note { font-size: 10px; color: #4b5d85; }
+.tr-blank { color: #6b7280; font-size: 10px; background: #f8fafc; }
 
 .tr-tab,
 .tr-card-label,
@@ -161,6 +171,9 @@
 }
 
 @media (max-width: 760px) {
+    .tr-retention-form { grid-template-columns: 1fr; }
+    .tr-retention-basis { grid-column: auto; }
+
     .tr-tabs {
         flex-wrap: nowrap;
         overflow-x: auto;
@@ -294,3 +307,29 @@
     body.tr-printing .tr-form-sheet.tr-section { break-inside: auto; }
     body.tr-printing .tr-sheet-grid { grid-template-columns: 1fr 1fr; }
 }
+.tr-filing-requirements { margin-top: 16px; }
+.tr-filing-requirements tr[data-status="MISSING"] strong { color: #b42318; }
+.tr-filing-requirements tr[data-status="USER_CHECK"] strong { color: #9a6700; }
+.tr-evidence-drive { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin: 12px 0; padding: 12px 14px; border: 1px solid #dfe3ea; border-radius: 6px; font-size: 13px; }
+.tr-evidence-drive p { margin: 0; flex: 1 1 320px; }
+.tr-retention-search { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 10px 14px; align-items: end; margin: 16px 0 8px; }
+.tr-retention-consumption { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+.tr-retention-form .tr-retention-consumption input { width: auto; }
+.tr-retention-hold { display: flex; flex-direction: column; gap: 6px; margin-bottom: 6px; }
+.tr-retention-hold input { max-width: 220px; font-size: 12px; }
+.tr-evidence-upload { display: flex; flex-direction: column; gap: 6px; }
+.tr-evidence-upload input[type="file"] { max-width: 220px; font-size: 12px; }
+.tr-btn-danger { background: #b42318; color: #fff; }
+.tr-retention-expired { color: #9a6700; font-size: 12px; font-weight: 600; }
+.tr-retention-alert { color: #b42318; }
+@media (max-width: 760px) {
+    .tr-retention-search { grid-template-columns: 1fr; }
+}
+.tr-closing-status { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; margin: 12px 0; padding: 10px 14px; border: 1px solid #dfe3ea; border-left-width: 4px; border-radius: 6px; font-size: 13px; }
+.tr-closing-status.is-closed { border-left-color: #1a7f37; }
+.tr-closing-status.is-open { border-left-color: #9a6700; }
+.tr-closing-status small { color: #57606a; }
+.tr-closing-form { display: flex; flex-wrap: wrap; align-items: end; gap: 10px 14px; margin: 8px 0 16px; }
+.tr-closing-form .tr-field input { min-width: 320px; }
+.tr-check-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+@media print { #section-closing { display: none; } }

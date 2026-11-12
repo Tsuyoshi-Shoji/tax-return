@@ -1,6 +1,8 @@
 package org.example.features.taxreturn.service.impl;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -11,6 +13,8 @@ import java.util.Set;
 
 import org.example.entity.FiscalYear;
 import org.example.entity.FixedAsset;
+import org.example.entity.FixedAssetEvent;
+import org.example.entity.HouseholdConsumption;
 import org.example.entity.JournalEntry;
 import org.example.entity.JournalLine;
 import org.example.entity.SettlementAdjustment;
@@ -19,10 +23,13 @@ import org.example.features.accounting.AccountMapping.AccountRef;
 import org.example.features.accounting.AccountMasterSeed;
 import org.example.features.accounting.service.AccountMappingService;
 import org.example.features.taxreturn.asset.DepreciationCalculator;
+import org.example.features.taxreturn.asset.DepreciationRules;
 import org.example.features.taxreturn.balance.BalanceSheetService;
 import org.example.features.taxreturn.service.ClosingJournalService;
 import org.example.repository.FiscalYearRepository;
 import org.example.repository.FixedAssetRepository;
+import org.example.repository.FixedAssetEventRepository;
+import org.example.repository.HouseholdConsumptionRepository;
 import org.example.repository.JournalEntryRepository;
 import org.example.repository.SettlementAdjustmentRepository;
 import org.springframework.stereotype.Service;
@@ -33,6 +40,8 @@ public class ClosingJournalServiceImpl implements ClosingJournalService {
     public static final String SOURCE_SETTLEMENT = "SETTLEMENT_ADJUSTMENT";
     public static final String SOURCE_DEPRECIATION = "DEPRECIATION";
     public static final String SOURCE_ASSET_ACQUISITION = "FIXED_ASSET_ACQUISITION";
+    public static final String SOURCE_HOUSEHOLD_CONSUMPTION = "HOUSEHOLD_CONSUMPTION";
+    public static final String SOURCE_FIXED_ASSET_EVENT = "FIXED_ASSET_EVENT";
     private static final String CLOSED = "closed";
     private static final String DRAFT = "draft";
 
@@ -40,6 +49,8 @@ public class ClosingJournalServiceImpl implements ClosingJournalService {
     private final SettlementAdjustmentRepository settlementRepository;
     private final JournalEntryRepository journalEntryRepository;
     private final FixedAssetRepository fixedAssetRepository;
+    private final HouseholdConsumptionRepository householdConsumptionRepository;
+    private final FixedAssetEventRepository fixedAssetEventRepository;
     private final AccountMappingService accountMappingService;
     private final BalanceSheetService balanceSheetService;
 
@@ -48,12 +59,16 @@ public class ClosingJournalServiceImpl implements ClosingJournalService {
             SettlementAdjustmentRepository settlementRepository,
             JournalEntryRepository journalEntryRepository,
             FixedAssetRepository fixedAssetRepository,
+            HouseholdConsumptionRepository householdConsumptionRepository,
+            FixedAssetEventRepository fixedAssetEventRepository,
             AccountMappingService accountMappingService,
             BalanceSheetService balanceSheetService) {
         this.fiscalYearRepository = fiscalYearRepository;
         this.settlementRepository = settlementRepository;
         this.journalEntryRepository = journalEntryRepository;
         this.fixedAssetRepository = fixedAssetRepository;
+        this.householdConsumptionRepository = householdConsumptionRepository;
+        this.fixedAssetEventRepository = fixedAssetEventRepository;
         this.accountMappingService = accountMappingService;
         this.balanceSheetService = balanceSheetService;
     }
@@ -80,29 +95,74 @@ public class ClosingJournalServiceImpl implements ClosingJournalService {
         years.sort(Comparator.comparing(FiscalYear::getTaxYear));
         AccountMapping mapping = accountMappingService.snapshot();
         List<FixedAsset> assets = fixedAssetRepository.findByBusinessProfileIdOrderByAcquisitionDateAscIdAsc(businessProfileId);
+        List<FixedAssetEvent> events = fixedAssetEventRepository.findByBusinessProfileIdOrderByEffectiveDateAscIdAsc(businessProfileId);
         for (FiscalYear year : years) {
             if (year.getTaxYear() < fromYear || CLOSED.equals(year.getStatus())) {
                 continue;
             }
-            rebuildAcquisitions(year, assets, mapping);
-            rebuildDepreciation(year, assets, mapping);
+            rebuildAcquisitions(year, assets, events, mapping);
+            rebuildDepreciation(year, assets, events, mapping);
+            journalEntryRepository.flush();
+            rebuildFixedAssetEvents(year, assets, events, mapping);
+            journalEntryRepository.flush();
+            rebuildHouseholdConsumption(year, mapping);
             journalEntryRepository.flush();
             rebuildSettlement(year, mapping);
             journalEntryRepository.flush();
         }
     }
 
-    private void rebuildAcquisitions(FiscalYear year, List<FixedAsset> assets, AccountMapping mapping) {
+    private void rebuildHouseholdConsumption(FiscalYear year, AccountMapping mapping) {
+        Set<Long> keep = new HashSet<>();
+        for (HouseholdConsumption consumption : householdConsumptionRepository
+                .findByFiscalYearIdOrderByTransactionDateAscIdAsc(year.getId())) {
+            keep.add(consumption.getId());
+            JournalEntry entry = journalEntryRepository
+                    .findBySourceTypeAndSourceId(SOURCE_HOUSEHOLD_CONSUMPTION, consumption.getId())
+                    .orElseGet(JournalEntry::new);
+            fill(entry, year, SOURCE_HOUSEHOLD_CONSUMPTION, consumption.getId(),
+                    consumption.getTransactionDate(), "家事消費等：" + consumption.getDetails());
+            replaceLines(entry, List.of(
+                    line(mapping, 1, "D", AccountMasterSeed.ACC_OWNER_DRAW, "事業主貸",
+                            consumption.getAmount(), consumption.getDetails()),
+                    line(mapping, 2, "C", AccountMasterSeed.ACC_SALES, "売上高",
+                            consumption.getAmount(), consumption.getDetails())));
+        }
+        for (JournalEntry stale : journalEntryRepository.findByFiscalYearIdAndSourceType(
+                year.getId(), SOURCE_HOUSEHOLD_CONSUMPTION)) {
+            if (!keep.contains(stale.getSourceId())) {
+                journalEntryRepository.delete(stale);
+            }
+        }
+    }
+
+    private void rebuildAcquisitions(FiscalYear year, List<FixedAsset> assets, List<FixedAssetEvent> events,
+            AccountMapping mapping) {
         Set<Long> keep = new HashSet<>();
         for (FixedAsset asset : assets) {
-            if (asset.getAcquisitionDate().isBefore(year.getPeriodStart()) || asset.getAcquisitionDate().isAfter(year.getPeriodEnd())) {
+            LocalDate recognitionDate = DepreciationRules.recognitionDate(asset, events);
+            if (recognitionDate.isBefore(year.getPeriodStart()) || recognitionDate.isAfter(year.getPeriodEnd())) {
                 continue;
             }
+            FixedAssetEvent transfer = events.stream()
+                    .filter(e -> asset.getId().equals(e.getFixedAsset().getId()))
+                    .filter(e -> FixedAssetEvent.INHERITANCE.equals(e.getEventType())
+                            || FixedAssetEvent.GIFT.equals(e.getEventType()))
+                    .findFirst().orElse(null);
+            boolean transferred = transfer != null && recognitionDate.equals(transfer.getEffectiveDate());
+            BigDecimal acquisitionValue = transferred ? transfer.getOpeningBookValue()
+                    : DepreciationCalculator.initialBookValue(asset);
             List<JournalLine> lines = new ArrayList<>();
             String assetName = mapping.byCode(asset.getAccountCode()).map(AccountRef::name).orElse(asset.getAccountCode());
-            if ("OWNER_FUNDS".equals(asset.getAcquisitionFunding())) {
-                lines.add(line(mapping, 1, "D", asset.getAccountCode(), assetName, asset.getAcquisitionCost(), asset.getAssetName()));
-                lines.add(line(mapping, 2, "C", AccountMasterSeed.ACC_OWNER_CONTRIBUTION, "事業主借", asset.getAcquisitionCost(), "私的資金で取得"));
+            if (transferred) {
+                lines.add(line(mapping, 1, "D", asset.getAccountCode(), assetName, acquisitionValue, asset.getAssetName()));
+                lines.add(line(mapping, 2, "C", AccountMasterSeed.ACC_OWNER_CONTRIBUTION, "事業主借", acquisitionValue,
+                        FixedAssetEvent.INHERITANCE.equals(transfer.getEventType()) ? "相続による資産引継ぎ" : "贈与による資産引継ぎ"));
+            } else if ("OWNER_FUNDS".equals(asset.getAcquisitionFunding())) {
+                lines.add(line(mapping, 1, "D", asset.getAccountCode(), assetName, acquisitionValue, asset.getAssetName()));
+                lines.add(line(mapping, 2, "C", AccountMasterSeed.ACC_OWNER_CONTRIBUTION, "事業主借", acquisitionValue,
+                        asset.isPrivateUseConversion() ? "非業務用から転用（転用前減価控除後）"
+                                : "CAPITAL_IMPROVEMENT".equals(asset.getAssetOrigin()) ? "資本的支出（別資産）" : "私的資金で取得"));
             } else if (!AccountMasterSeed.ACC_TOOLS_EQUIPMENT.equals(asset.getAccountCode())) {
                 // 支出登録の「固定資産購入」は工具器具備品で仕訳されるため、台帳の資産科目へ振り替える。
                 lines.add(line(mapping, 1, "D", asset.getAccountCode(), assetName, asset.getAcquisitionCost(), asset.getAssetName()));
@@ -114,7 +174,9 @@ public class ClosingJournalServiceImpl implements ClosingJournalService {
             keep.add(asset.getId());
             JournalEntry entry = journalEntryRepository.findBySourceTypeAndSourceId(SOURCE_ASSET_ACQUISITION, asset.getId())
                     .orElseGet(JournalEntry::new);
-            fill(entry, year, SOURCE_ASSET_ACQUISITION, asset.getId(), asset.getAcquisitionDate(), "固定資産の取得：" + asset.getAssetName());
+            fill(entry, year, SOURCE_ASSET_ACQUISITION, asset.getId(), recognitionDate,
+                    (transferred ? "固定資産の相続・贈与引継ぎ："
+                            : asset.isPrivateUseConversion() ? "固定資産の転用：" : "固定資産の取得：") + asset.getAssetName());
             replaceLines(entry, lines);
         }
         for (JournalEntry stale : journalEntryRepository.findByFiscalYearIdAndSourceType(year.getId(), SOURCE_ASSET_ACQUISITION)) {
@@ -124,15 +186,17 @@ public class ClosingJournalServiceImpl implements ClosingJournalService {
         }
     }
 
-    private void rebuildDepreciation(FiscalYear year, List<FixedAsset> assets, AccountMapping mapping) {
+    private void rebuildDepreciation(FiscalYear year, List<FixedAsset> assets, List<FixedAssetEvent> events,
+            AccountMapping mapping) {
         BigDecimal business = BigDecimal.ZERO;
         BigDecimal privatePortion = BigDecimal.ZERO;
         Map<String, BigDecimal> credits = new LinkedHashMap<>();
         for (FixedAsset asset : assets) {
-            if (asset.getAcquisitionDate().isAfter(year.getPeriodEnd())) {
+            if (DepreciationRules.recognitionDate(asset, events).isAfter(year.getPeriodEnd())) {
                 continue;
             }
-            DepreciationCalculator.YearResult r = DepreciationCalculator.forYear(asset, year.getTaxYear());
+            DepreciationCalculator.YearResult r = DepreciationCalculator.forYear(
+                    asset, year.getTaxYear(), ratioForYear(asset, events, year.getPeriodStart()), events, assets);
             if (r.depreciation().signum() <= 0) {
                 continue;
             }
@@ -163,6 +227,90 @@ public class ClosingJournalServiceImpl implements ClosingJournalService {
         fill(entry, year, SOURCE_DEPRECIATION, year.getId(), year.getPeriodEnd(), "減価償却費の計上");
         replaceLines(entry, lines);
     }
+
+    private void rebuildFixedAssetEvents(FiscalYear year, List<FixedAsset> assets, List<FixedAssetEvent> events,
+            AccountMapping mapping) {
+        Map<Long, FixedAsset> assetsById = new LinkedHashMap<>();
+        assets.forEach(asset -> assetsById.put(asset.getId(), asset));
+        Set<Long> keep = new HashSet<>();
+        for (FixedAssetEvent event : events) {
+            if (!FixedAssetEvent.SALE.equals(event.getEventType()) && !FixedAssetEvent.DISPOSAL.equals(event.getEventType())) {
+                continue;
+            }
+            FixedAsset asset = assetsById.get(event.getFixedAsset().getId());
+            if (asset == null || event.getEffectiveDate().isBefore(year.getPeriodStart())
+                    || event.getEffectiveDate().isAfter(year.getPeriodEnd())) {
+                continue;
+            }
+            BigDecimal ratio = ratioForYear(asset, events, year.getPeriodStart());
+            boolean lump = DepreciationCalculator.LUMP_SUM_3Y.equals(asset.getDepreciationMethod());
+            DepreciationCalculator.YearResult result = DepreciationCalculator.forYear(asset, year.getTaxYear(), ratio, events, assets);
+            BigDecimal bookValue = lump ? BigDecimal.ZERO
+                    : result.closing();
+            BigDecimal proceeds = FixedAssetEvent.SALE.equals(event.getEventType()) ? safe(event.getProceeds()) : BigDecimal.ZERO;
+            List<JournalLine> lines = new ArrayList<>();
+            int no = 1;
+            BigDecimal businessProceeds = lump ? proceeds.multiply(ratio)
+                    .divide(new BigDecimal("100"), 0, RoundingMode.DOWN) : proceeds;
+            BigDecimal difference = businessProceeds.subtract(bookValue);
+            if (proceeds.signum() > 0) {
+                lines.add(line(mapping, no++, "D", AccountMasterSeed.ACC_BANK_DEPOSIT, "普通預金",
+                        proceeds, "固定資産売却代金"));
+            }
+            if (FixedAssetEvent.SALE.equals(event.getEventType())) {
+                if (lump && proceeds.compareTo(businessProceeds) > 0) {
+                    lines.add(line(mapping, no++, "C", AccountMasterSeed.ACC_OWNER_CONTRIBUTION, "事業主借",
+                            proceeds.subtract(businessProceeds), "一括償却資産売却の家事分"));
+                }
+                if (difference.signum() > 0) {
+                    lines.add(line(mapping, no++, "C", lump ? AccountMasterSeed.ACC_MISC_INCOME : AccountMasterSeed.ACC_OWNER_CONTRIBUTION,
+                            lump ? "雑収入" : "事業主借", difference,
+                            lump ? "一括償却資産の売却収入" : "譲渡所得等は別途確認（事業損益に含めない）"));
+                } else if (difference.signum() < 0) {
+                    lines.add(line(mapping, no++, "D", AccountMasterSeed.ACC_OWNER_DRAW, "事業主貸",
+                            difference.abs(), "譲渡所得等は別途確認（事業損益に含めない）"));
+                }
+            } else if (bookValue.signum() > 0) {
+                BigDecimal loss = bookValue.multiply(ratio).divide(new BigDecimal("100"), 0, RoundingMode.DOWN);
+                if (loss.signum() > 0) {
+                    lines.add(line(mapping, no++, "D", AccountMasterSeed.ACC_MISC_EXPENSE, "雑費", loss, "除却損（事業分）"));
+                }
+                if (bookValue.compareTo(loss) > 0) {
+                    lines.add(line(mapping, no++, "D", AccountMasterSeed.ACC_OWNER_DRAW, "事業主貸",
+                            bookValue.subtract(loss), "除却損（家事分）"));
+                }
+            }
+            if (bookValue.signum() > 0) {
+                String name = mapping.byCode(asset.getAccountCode()).map(AccountRef::name).orElse(asset.getAccountCode());
+                lines.add(line(mapping, no, "C", asset.getAccountCode(), name, bookValue, "固定資産の帳簿価額"));
+            }
+            if (lines.isEmpty()) {
+                continue;
+            }
+            keep.add(event.getId());
+            JournalEntry entry = journalEntryRepository.findBySourceTypeAndSourceId(SOURCE_FIXED_ASSET_EVENT, event.getId())
+                    .orElseGet(JournalEntry::new);
+            String summary = FixedAssetEvent.SALE.equals(event.getEventType()) ? "固定資産売却" : "固定資産除却";
+            fill(entry, year, SOURCE_FIXED_ASSET_EVENT, event.getId(), event.getEffectiveDate(), summary + "：" + asset.getAssetName());
+            replaceLines(entry, lines);
+        }
+        for (JournalEntry stale : journalEntryRepository.findByFiscalYearIdAndSourceType(year.getId(), SOURCE_FIXED_ASSET_EVENT)) {
+            if (!keep.contains(stale.getSourceId())) {
+                journalEntryRepository.delete(stale);
+            }
+        }
+    }
+
+    public static BigDecimal ratioForYear(FixedAsset asset, List<FixedAssetEvent> events, java.time.LocalDate periodStart) {
+        return events.stream()
+                .filter(e -> asset.getId().equals(e.getFixedAsset().getId()))
+                .filter(e -> FixedAssetEvent.BUSINESS_RATIO_CHANGE.equals(e.getEventType()))
+                .filter(e -> !e.getEffectiveDate().isAfter(periodStart))
+                .max(Comparator.comparing(FixedAssetEvent::getEffectiveDate))
+                .map(FixedAssetEvent::getBusinessRatio)
+                .orElse(asset.getBusinessRatio());
+    }
+
 
     private void rebuildSettlement(FiscalYear year, AccountMapping mapping) {
         SettlementAdjustment settlement = settlementRepository.findByFiscalYearId(year.getId()).orElse(null);

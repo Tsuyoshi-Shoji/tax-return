@@ -21,4 +21,4 @@
 | 9 | created_at | 作成日時 | TIMESTAMP | CURRENT_TIMESTAMP | 非許容 | |
 | 10 | updated_at | 更新日時 | TIMESTAMP | CURRENT_TIMESTAMP | 非許容 | |
 
-
+現行実装の帳票出力（PDF・ZIP・CSV）の生成記録は本テーブルではなく `report_output_record` に記録する。

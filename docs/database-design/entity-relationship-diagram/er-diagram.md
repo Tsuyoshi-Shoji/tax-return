@@ -27,14 +27,23 @@
 | `statement_line` | 決算書様式欄 | 様式コード、欄番号、欄名、欄種別、適用年度 |
 | `account_statement_mapping` | 科目→様式欄対応 | 勘定科目、様式欄（任意記載欄を含む）、適用年度 |
 | `ui_item_account_mapping` | 画面品目→科目対応 | 収益/支出の区分・項目コード、勘定科目、要確認フラグ、適用期間 |
-| `fixed_asset` | 固定資産台帳 | 取得日、取得価額、耐用年数、償却方法、事業専用割合 |
+| `fixed_asset` | 固定資産台帳 | 取得日、取得価額、耐用年数、償却方法、事業専用割合、資本的支出の親資産 |
+| `fixed_asset_event` | 固定資産イベント | 割合変更、売却・除却、相続・贈与、方法変更、廃業、適用日、簿価 |
 | `tax_return_input` | 年分別の申告情報 | 給与・雑所得、本人・配偶者の状況、予定納税額、基準期間の課税売上高 |
 | `tax_dependent` | 扶養親族（年分別） | 氏名、続柄、生年月日、所得、同居、障害者区分 |
 | `counterparty` | 取引先 | 顧客、仕入先、金融機関、メモ |
 | `classification_rule` | 自動仕分け規則 | キーワード、取引先、勘定科目割当 |
 | `accounting_transaction` | 取引ヘッダ | 日付、摘要、金額、入力元、状態 |
 | `accounting_transaction_line` | 仕訳明細 | 借方貸方、勘定科目、金額、税区分 |
+| `journal_entry` | 実仕訳ヘッダ | 年度、入力元、仕訳日、摘要、状態 |
 | `transaction_attachment` | 証憑 | 画像、PDF、保存先、ハッシュ値 |
+| `retention_record` | 年分別保存管理台帳 | 記録区分、関連仕訳、保存起算日・期限、根拠 |
+| `evidence_file` | 台帳の証憑ファイル | Drive ファイルID、MIME、サイズ、SHA-256、検証状態 |
+| `fiscal_year_closing_event` | 年度締め・取消の訂正履歴 | 種別、締め版、理由、集計値、データ指紋、計算ルール版、様式参照版 |
+| `report_output_record` | 帳票の出力記録 | 帳票種別、ファイルSHA-256、データ指紋、年度状態、締め版、生成日時、記録状態 |
+| `evidence_drive_connection` | 利用者の Google Drive 連携 | 暗号化更新トークン、保管フォルダー、付与スコープ |
+| `household_consumption` | 家事消費等の年分別明細 | 対象年度、取引日、内容、金額 |
+| `employee_salary_detail` | 給与の個人別年分内訳 | 区分、氏名、職務、従事期間、支給期、支給額 |
 | `tax_return_case` | 申告ドラフト | 年度、青色申告区分、集計結果、前年比、確定状態 |
 | `tax_return_item` | 申告項目 | 画面表示用の項目値、順序、算定根拠 |
 | `generated_document` | 帳票出力 | 申告書、決算書、レポート、出力ファイル |
@@ -72,6 +81,10 @@ erDiagram
     fiscal_year ||--o{ income_entry : contains
     fiscal_year ||--o{ expense_entry : contains
     fiscal_year ||--o{ accounting_transaction : contains
+    fiscal_year ||--o{ journal_entry : contains
+    fiscal_year ||--o{ retention_record : retains
+    fiscal_year ||--o{ household_consumption : records
+    fiscal_year ||--o{ employee_salary_detail : records
     fiscal_year ||--o{ tax_return_case : summarizes
 
     income_item ||--o{ income_entry : classifies
@@ -86,11 +99,19 @@ erDiagram
     statement_line ||--o{ account_statement_mapping : aggregates
     ledger_account ||--o{ ui_item_account_mapping : assigned_by
     business_profile ||--o{ fixed_asset : owns
+    fixed_asset ||--o{ fixed_asset_event : records
     fiscal_year ||--o| tax_return_input : has
     fiscal_year ||--o{ tax_dependent : lists
     counterparty ||--o{ income_entry : pays
     counterparty ||--o{ expense_entry : receives
     accounting_transaction ||--o{ transaction_attachment : evidence
+    journal_entry ||--o{ retention_record : references
+    retention_record ||--o| evidence_file : stores
+    app_user ||--o| evidence_drive_connection : connects
+    fiscal_year ||--o{ fiscal_year_closing_event : closes
+    app_user ||--o{ fiscal_year_closing_event : performs
+    fiscal_year ||--o{ report_output_record : outputs
+    app_user ||--o{ report_output_record : downloads
 
     income_entry ||--o| accounting_transaction : posted_to
     expense_entry ||--o| accounting_transaction : posted_to
@@ -100,6 +121,94 @@ erDiagram
 
     ai_conversation ||--o{ ai_message : has
     ai_message ||--o| ai_feedback : evaluated_by
+
+    journal_entry {
+        BIGINT id PK
+        BIGINT fiscal_year_id FK
+    }
+
+    retention_record {
+        BIGINT id PK
+        BIGINT fiscal_year_id FK
+        BIGINT journal_entry_id FK
+        VARCHAR record_kind
+        DATE retention_start_date
+        DATE retention_deadline
+        VARCHAR legal_basis
+        VARCHAR retention_rule_code
+        DATE document_date
+        BOOLEAN legal_hold
+    }
+
+    evidence_file {
+        BIGINT id PK
+        BIGINT retention_record_id FK
+        VARCHAR external_file_id
+        VARCHAR mime_type
+        BIGINT file_size
+        VARCHAR sha256
+        VARCHAR verification_status
+    }
+
+    evidence_drive_connection {
+        BIGINT id PK
+        BIGINT app_user_id FK
+        VARCHAR encrypted_refresh_token
+        VARCHAR folder_id
+    }
+
+    fiscal_year_closing_event {
+        BIGINT id PK
+        BIGINT fiscal_year_id FK
+        BIGINT app_user_id FK
+        VARCHAR event_type
+        INT close_version
+        VARCHAR data_fingerprint
+        VARCHAR calc_rule_version
+        VARCHAR form_edition
+    }
+
+    report_output_record {
+        BIGINT id PK
+        BIGINT fiscal_year_id FK
+        BIGINT app_user_id FK
+        VARCHAR output_type
+        VARCHAR file_sha256
+        VARCHAR data_fingerprint
+        VARCHAR record_status
+        DATETIME generated_at
+    }
+
+    household_consumption {
+        BIGINT id PK
+        BIGINT fiscal_year_id FK
+        DATE transaction_date
+        VARCHAR details
+        DECIMAL amount
+    }
+
+    employee_salary_detail {
+        BIGINT id PK
+        BIGINT fiscal_year_id FK
+        VARCHAR salary_kind
+        VARCHAR person_name
+        DATE work_period_start
+        DATE work_period_end
+        VARCHAR payment_period
+        DECIMAL amount
+    }
+
+    fixed_asset_event {
+        BIGINT id PK
+        BIGINT fixed_asset_id FK
+        VARCHAR event_type
+        DATE effective_date
+        DECIMAL business_ratio
+        DECIMAL proceeds
+        DECIMAL opening_book_value
+        VARCHAR new_depreciation_method
+        BOOLEAN history_confirmed
+    }
 ```
 
 ## 主要テーブル設計

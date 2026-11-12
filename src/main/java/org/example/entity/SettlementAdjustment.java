@@ -56,6 +56,12 @@ public class SettlementAdjustment {
     @Column(name = "blue_deduction", nullable = false)
     private int blueDeduction = 65;
 
+    @Column(name = "blue_deduction_requirements_confirmed", nullable = false)
+    private boolean blueDeductionRequirementsConfirmed;
+
+    @Column(name = "blue_deduction_65_method", nullable = false, length = 30)
+    private String blueDeduction65Method = "UNCONFIRMED";
+
     /** 決算整理（期末残高）を利用者が保存したか。青色申告特別控除の変更だけで作成された行は false。 */
     @Column(name = "balances_confirmed", nullable = false)
     private boolean balancesConfirmed;
@@ -116,6 +122,10 @@ public class SettlementAdjustment {
     public void setClosingCash(BigDecimal v) { this.closingCash = v; }
     public int getBlueDeduction() { return blueDeduction; }
     public void setBlueDeduction(int blueDeduction) { this.blueDeduction = blueDeduction; }
+    public boolean isBlueDeductionRequirementsConfirmed() { return blueDeductionRequirementsConfirmed; }
+    public void setBlueDeductionRequirementsConfirmed(boolean confirmed) { this.blueDeductionRequirementsConfirmed = confirmed; }
+    public String getBlueDeduction65Method() { return blueDeduction65Method; }
+    public void setBlueDeduction65Method(String method) { this.blueDeduction65Method = method; }
     public String getSettlementStatus() { return settlementStatus; }
     public void setSettlementStatus(String settlementStatus) { this.settlementStatus = settlementStatus; }
     public Long getVersion() { return version; }
