@@ -12,6 +12,21 @@ import org.springframework.data.repository.query.Param;
 import jakarta.persistence.LockModeType;
 
 public interface FiscalYearRepository extends JpaRepository<FiscalYear, Long> {
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select fy from FiscalYear fy
+            where fy.taxYear = :year and fy.businessProfile.appUser.id = :userId
+            """)
+    Optional<FiscalYear> findOwnedByTaxYearForUpdate(@Param("year") int year, @Param("userId") Long userId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+            select fy from FiscalYear fy
+            where fy.id = :id and fy.businessProfile.id = :profileId
+              and fy.status = 'open' and fy.closedAt is null
+            """)
+    Optional<FiscalYear> findOpenForRebuild(@Param("id") Long id, @Param("profileId") Long profileId);
+
     List<FiscalYear> findByBusinessProfileIdOrderByTaxYearDesc(Long businessProfileId);
 
     Optional<FiscalYear> findByIdAndBusinessProfileId(Long id, Long businessProfileId);

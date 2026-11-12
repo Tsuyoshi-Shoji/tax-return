@@ -20,6 +20,13 @@ public interface AccountingTransactionRepository extends JpaRepository<Accountin
 
     long countByFiscalYearIdAndStatus(Long fiscalYearId, String status);
 
+    @Query("""
+            select count(tx) from AccountingTransaction tx
+            where tx.fiscalYear.id = :yearId and tx.status = 'draft'
+              and not exists (select e.id from JournalEntry e where e.accountingTransaction = tx)
+            """)
+    long countDraftsWithoutJournal(@Param("yearId") Long yearId);
+
     List<AccountingTransaction> findByFiscalYearIdAndSettlementStatus(Long fiscalYearId, String settlementStatus);
 
     List<AccountingTransaction> findByFiscalYearIdAndSettlementStatusInOrderByTransactionDateAscIdAsc(

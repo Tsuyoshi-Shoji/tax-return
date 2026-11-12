@@ -86,7 +86,7 @@
             <a id="link-privacy" href="#" data-unavailable-message="プライバシーポリシーは現在準備中です。">プライバシーポリシー</a>
             <a id="link-contact" href="#" data-unavailable-message="お問い合わせ窓口は現在準備中です。">お問い合わせ</a>
         </nav>
-        <p class="auth-footer-copy">© 2024 マネタックス　確定申告・資産管理</p>
+        <p class="auth-footer-copy">© 2026 マネタックス　確定申告・資産管理</p>
     </footer>
 
     <div id="auth-inline-notice" class="auth-inline-notice" role="status" aria-live="polite" hidden></div>

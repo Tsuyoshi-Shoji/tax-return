@@ -649,6 +649,7 @@
             <section id="section-journal" class="profit-loss-card tr-section print-section" data-print-groups="journal" aria-labelledby="heading-journal">
                 <h2 id="heading-journal">仕訳帳</h2>
                 <p id="text-journal-description" class="tr-desc"><c:out value="${page.yearLabel}" />の仕訳帳の一部を表示しています。</p>
+                <p class="screen-only"><a id="button-journal-review" class="tr-btn tr-btn-primary" href="${ctx}/tax-return/journal?year=${page.selectedYear}">仕訳帳の全件表示・確認</a></p>
                 <div class="tr-table-scroll">
                     <table id="table-journal" class="tr-table tr-journal">
                         <thead><tr><th scope="col">日付</th><th scope="col">摘要</th><th scope="col">借方科目</th><th scope="col" class="num">借方金額（円）</th><th scope="col">貸方科目</th><th scope="col" class="num">貸方金額（円）</th></tr></thead>
@@ -873,6 +874,7 @@
         <h3 class="is-warn">警告</h3>
         <ul><c:forEach var="m" items="${page.warnings}"><li><c:out value="${m}" /></li></c:forEach></ul>
     </c:if>
+    <p><a class="tr-btn tr-btn-outline" href="${ctx}/tax-return/journal?year=${page.selectedYear}&amp;status=draft">未確認の仕訳を確認する</a></p>
     <form method="dialog"><button class="tr-btn tr-btn-primary" type="submit">閉じる</button></form>
 </dialog>
 <dialog id="dialog-alert" class="tr-dialog" aria-labelledby="dialog-alert-title">
