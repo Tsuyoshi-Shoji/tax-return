@@ -10,6 +10,7 @@ import org.example.features.setting.form.BusinessUseRatioForm;
 import org.example.features.setting.form.PasswordForm;
 import org.example.features.setting.form.ProfileForm;
 import org.example.features.setting.form.TaxBasicInfoForm;
+import org.example.features.setting.form.TaxReturnSectionForm;
 import org.example.features.setting.service.SettingService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
@@ -58,6 +59,11 @@ public class SettingController {
         binder.setAllowedFields("businessName", "industry", "phone", "address",
                 "nameKana", "birthDate", "taxOffice", "householdHeadName", "householdHeadRelation",
                 "consumptionTaxStatus", "simplifiedBusinessType", "csrfToken");
+    }
+
+    @InitBinder("taxReturnSectionForm")
+    void bindTaxReturnSections(WebDataBinder binder) {
+        binder.setAllowedFields("visibleSections", "csrfToken");
     }
 
     @InitBinder({"disableForm", "deleteForm"})
@@ -135,6 +141,21 @@ public class SettingController {
         return render(request, response, model, "ratio", result);
     }
 
+    @PostMapping("/settings/tax-return-sections")
+    public String taxReturnSections(
+            @ModelAttribute("taxReturnSectionForm") TaxReturnSectionForm form,
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Model model,
+            RedirectAttributes redirectAttributes) {
+        AuthUserContext context = authorize(request, form.getCsrfToken());
+        SettingOperationResult result = call(() -> settingService.updateTaxReturnSections(context.getUserId(), form));
+        if (result.isSuccess()) {
+            return success(redirectAttributes, result);
+        }
+        return render(request, response, model, "taxReturnSections", result);
+    }
+
     @PostMapping("/settings/disable")
     public String disable(
             @ModelAttribute("disableForm") AccountActionForm form,
@@ -205,6 +226,8 @@ public class SettingController {
             ratioForm.setRatio(view.getApportionmentRate().toPlainString());
             model.addAttribute("ratioForm", ratioForm);
         }
+        model.addAttribute("taxReturnSections",
+                call(() -> settingService.loadTaxReturnSectionOptions(context.getUserId())));
         if (!model.containsAttribute("disableForm")) {
             model.addAttribute("disableForm", new AccountActionForm());
         }

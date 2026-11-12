@@ -5,20 +5,25 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.example.entity.AppUser;
 import org.example.entity.BusinessProfile;
 import org.example.entity.UserSetting;
 import org.example.features.entry.EntryNotFoundException;
+import org.example.features.setting.TaxReturnSection;
 import org.example.features.setting.dto.SettingOperationResult;
 import org.example.features.setting.dto.SettingView;
+import org.example.features.setting.dto.TaxReturnSectionOption;
 import org.example.features.setting.form.AccountActionForm;
 import org.example.features.setting.form.BusinessUseRatioForm;
 import org.example.features.setting.form.PasswordForm;
 import org.example.features.setting.form.ProfileForm;
 import org.example.features.setting.form.TaxBasicInfoForm;
+import org.example.features.setting.form.TaxReturnSectionForm;
 import org.example.features.setting.service.SettingService;
 import org.example.repository.AppUserRepository;
 import org.example.repository.BusinessProfileRepository;
@@ -85,6 +90,58 @@ public class SettingServiceImpl implements SettingService {
                 profile.getHouseholdHeadRelation(),
                 profile.getConsumptionTaxStatus(),
                 profile.getSimplifiedBusinessType());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Set<TaxReturnSection> loadHiddenTaxReturnSections(Long appUserId) {
+        return userSettingRepository.findByAppUserId(appUserId)
+                .map(setting -> TaxReturnSection.parseHidden(setting.getHiddenTaxReturnSections()))
+                .orElseGet(() -> EnumSet.noneOf(TaxReturnSection.class));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<TaxReturnSectionOption> loadTaxReturnSectionOptions(Long appUserId) {
+        Set<TaxReturnSection> hidden = loadHiddenTaxReturnSections(appUserId);
+        return java.util.Arrays.stream(TaxReturnSection.values())
+                .map(section -> new TaxReturnSectionOption(section, !hidden.contains(section)))
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public SettingOperationResult updateTaxReturnSections(Long appUserId, TaxReturnSectionForm form) {
+        List<String> submitted = form == null || form.getVisibleSections() == null ? List.of() : form.getVisibleSections();
+        if (submitted.size() > TaxReturnSection.values().length) {
+            return SettingOperationResult.invalid(List.of("表示するセクションの指定が正しくありません。"));
+        }
+        Set<TaxReturnSection> visible = EnumSet.noneOf(TaxReturnSection.class);
+        for (String code : submitted) {
+            var section = TaxReturnSection.fromCode(code == null ? "" : code.strip());
+            if (section.isEmpty()) {
+                return SettingOperationResult.invalid(List.of("表示するセクションの指定が正しくありません。"));
+            }
+            visible.add(section.get());
+        }
+        // 必須セクションはチェックの有無にかかわらず表示する（画面では非活性のため送信されない）。
+        Set<TaxReturnSection> hidden = EnumSet.noneOf(TaxReturnSection.class);
+        for (TaxReturnSection section : TaxReturnSection.values()) {
+            if (!section.isRequired() && !visible.contains(section)) {
+                hidden.add(section);
+            }
+        }
+        AppUser user = findActiveUser(appUserId);
+        UserSetting setting = userSettingRepository.findByAppUserId(appUserId).orElseGet(() -> {
+            UserSetting created = new UserSetting();
+            created.setAppUser(user);
+            created.setHomeApportionmentRate(BigDecimal.ZERO.setScale(2));
+            return created;
+        });
+        setting.setHiddenTaxReturnSections(TaxReturnSection.formatHidden(hidden));
+        userSettingRepository.save(setting);
+        log.info("Tax return section visibility updated. userId={}, hiddenCount={}", appUserId, hidden.size());
+        return SettingOperationResult.success("確定申告画面の表示設定を保存しました。");
     }
 
     @Override

@@ -1195,6 +1195,15 @@ public final class AccountMappingHarness {
         require(taxReturnService.load(userId, YEAR, null).getExtras().getTax().getMedical() == 0, "未確認の控除が反映されています");
         require(inputService.updateDeductionStatus(userId, YEAR, medicalId, "VERIFIED").isEmpty(), "控除の確認に失敗しました");
         require(taxReturnService.load(userId, YEAR, null).getExtras().getTax().getMedical() == 141997, "医療費控除額が不正です");
+        var deductionRepository = context.getBean(org.example.repository.TaxDeductionRecordRepository.class);
+        require(inputService.updateDeductionStatus(userId, YEAR, medicalId, "CANDIDATE").isEmpty(), "確認済みを未確認に戻せません");
+        require(taxReturnService.load(userId, YEAR, null).getExtras().getTax().getMedical() == 0, "未確認に戻した控除が反映されています");
+        require(tx.execute(s -> deductionRepository.findById(medicalId).orElseThrow().getReviewedAt()) == null, "未確認に戻すと確認日時を消すこと");
+        require(inputService.updateDeductionStatus(userId, YEAR, medicalId, "INELIGIBLE").isEmpty()
+                && inputService.updateDeductionStatus(userId, YEAR, medicalId, "CANDIDATE").isEmpty()
+                && "CANDIDATE".equals(tx.execute(s -> deductionRepository.findById(medicalId).orElseThrow().getStatus())),
+                "対象外を未確認に戻せません");
+        require(inputService.updateDeductionStatus(userId, YEAR, medicalId, "VERIFIED").isEmpty(), "控除の再確認に失敗しました");
 
         ConsumptionTaxCalculator.Result ct = page.getExtras().getConsumption();
         require(ct != null && ct.getTaxableBase().compareTo(new BigDecimal("909000")) == 0

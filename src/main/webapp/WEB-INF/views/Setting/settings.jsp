@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css?v=20261016a">
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/home/home.css?v=20261011c">
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/profit-loss/profit-loss.css?v=20261011d">
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/setting/settings.css?v=20261101a">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/setting/settings.css?v=20261108a">
     <script src="${pageContext.request.contextPath}/css/setting/settings.js?v=20261101a" defer></script>
 </head>
 <body class="home-page profit-loss-page settings-page">
@@ -168,6 +168,44 @@
                         <small id="text-consumption-tax-note" class="settings-hint">※ 本則課税・2割特例には対応していません。簡易課税を選ぶ場合は、所轄税務署へ「消費税簡易課税制度選択届出書」を提出済みである必要があります。</small>
                     </fieldset>
                     <div class="settings-actions"><button id="button-save-tax-basic-info" type="submit" class="btn-primary">基本情報を保存</button></div>
+                </form>
+            </section>
+
+            <section id="tax-return-sections" class="profit-loss-card settings-card" aria-labelledby="heading-tax-return-sections">
+                <h2 id="heading-tax-return-sections">確定申告画面の表示セクション</h2>
+                <p class="settings-desc">確定申告画面に表示するセクションを選択します。「必須」のセクションは申告書の作成に必要なため非表示にできません。</p>
+                <c:if test="${failedSection eq 'taxReturnSections' and not empty formErrors}">
+                    <div class="settings-errors" role="alert" aria-live="polite">
+                        <ul>
+                            <c:forEach var="message" items="${formErrors}">
+                                <li><c:out value="${message}" /></li>
+                            </c:forEach>
+                        </ul>
+                    </div>
+                </c:if>
+                <form id="tax-return-sections-form" method="post" action="${pageContext.request.contextPath}/settings/tax-return-sections" novalidate>
+                    <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
+                    <fieldset class="settings-section-list">
+                        <legend class="visually-hidden">表示するセクション</legend>
+                        <c:forEach var="option" items="${taxReturnSections}">
+                            <label class="settings-section-option${option.required ? ' is-required' : ''}" for="section-visible-${option.code}">
+                                <c:choose>
+                                    <c:when test="${option.required}">
+                                        <input id="section-visible-${option.code}" type="checkbox" checked disabled aria-describedby="section-hint-${option.code}" />
+                                    </c:when>
+                                    <c:otherwise>
+                                        <input id="section-visible-${option.code}" type="checkbox" name="visibleSections" value="<c:out value='${option.code}' />" aria-describedby="section-hint-${option.code}" <c:if test="${option.visible}">checked</c:if> />
+                                    </c:otherwise>
+                                </c:choose>
+                                <span class="settings-section-text">
+                                    <span class="settings-section-label"><c:out value="${option.label}" /><c:if test="${option.required}"><span class="settings-required-badge">必須</span></c:if></span>
+                                    <small id="section-hint-${option.code}" class="settings-hint"><c:out value="${option.description}" /></small>
+                                </span>
+                            </label>
+                        </c:forEach>
+                    </fieldset>
+                    <small class="settings-hint">※ 非表示にしたセクションでも、その年分に登録データがある場合は記載漏れ防止のため確定申告画面に表示されます。PDF・CSVの出力内容は変わりません。</small>
+                    <div class="settings-actions"><button id="button-save-tax-return-sections" type="submit" class="btn-primary">表示設定を保存</button></div>
                 </form>
             </section>
 

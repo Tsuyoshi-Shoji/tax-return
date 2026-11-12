@@ -2,6 +2,7 @@
 <c:set var="x" value="${page.extras}" />
 <section id="section-fixed-assets" class="profit-loss-card tr-section" aria-labelledby="heading-fixed-assets">
     <h2 id="heading-fixed-assets">固定資産台帳・減価償却</h2>
+    <c:if test="${sections.forced['fixed-assets']}"><p class="tr-section-forced" role="note">設定で非表示にしていますが、この年分に登録データがあるため表示しています。</p></c:if>
     <p class="tr-desc">事業で使用する固定資産を登録すると、減価償却費（定額法・200％／250％定率法・旧定額法・旧定率法・少額特例・一括償却）を計算し、決算整理仕訳と貸借対照表に反映します。耐用年数2〜50年の登録可能な資産科目が対象です。</p>
     <h3>年分別の償却要件・届出確認</h3>
     <p class="tr-desc">対応年分：2024〜2026年分。ルール版：<c:out value="${x.depreciationRuleVersion}" default="未対応" />。

@@ -33,7 +33,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 /**
- * 本番起動の再現（H2 MySQLモード）。本番用マイグレーション（V1〜V16）を適用し、Hibernate の validate と
+ * 本番起動の再現（H2 MySQLモード）。本番用マイグレーション（V1〜V17）を適用し、Hibernate の validate と
  * 起動時初期化処理（AccountMasterInitializer）を、旧形式の決算整理仕訳がある状態で実行する。
  * H2 は MySQL の「ALTER TABLE ... ADD ..., ADD ...」を解釈できないため、句ごとに分割して適用する。
  */
@@ -165,7 +165,8 @@ public final class ProductionBootstrapHarness {
             }
             s.execute("DELETE FROM fiscal_year_closing_event");
         }
-        System.out.println("Migrations applied up to V16");
+        applyMigrations(url, 17, 17);
+        System.out.println("Migrations applied up to V17");
 
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext(Config.class)) {
             System.out.println("Context started: " + context.getBeanDefinitionCount() + " beans");
@@ -173,7 +174,7 @@ public final class ProductionBootstrapHarness {
         System.out.println("Production bootstrap harness passed");
     }
 
-    private static void applyMigrations(String url, int from, int to) throws Exception {
+    static void applyMigrations(String url, int from, int to) throws Exception {
         try (Connection c = DriverManager.getConnection(url, "sa", ""); Statement s = c.createStatement()) {
             for (int v = from; v <= to; v++) {
                 String prefix = "V" + v + "__";

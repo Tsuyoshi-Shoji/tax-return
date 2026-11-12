@@ -119,6 +119,13 @@
                                     <button type="submit" class="tr-btn tr-btn-soft tr-btn-small">対象外</button>
                                 </form>
                             </c:if>
+                            <c:if test="${d.status != 'CANDIDATE'}">
+                                <form method="post" action="${ctx}/tax-return/deductions/status?year=${page.selectedYear}" class="tr-inline-form" data-confirm="この控除を未確認に戻しますか？未確認の控除は税額計算に反映されません。" data-confirm-label="未確認に戻す">
+                                    <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
+                                    <input type="hidden" name="id" value="${d.id}" /><input type="hidden" name="status" value="CANDIDATE" />
+                                    <button type="submit" class="tr-btn tr-btn-soft tr-btn-small">未確認に戻す</button>
+                                </form>
+                            </c:if>
                             <c:if test="${not d.fromTransaction}">
                                 <form method="post" action="${ctx}/tax-return/deductions/delete?year=${page.selectedYear}" class="tr-inline-form" data-confirm="この控除を削除しますか？">
                                     <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
