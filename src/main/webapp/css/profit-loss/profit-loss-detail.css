@@ -4,7 +4,7 @@
 .detail-list { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 10px 16px; align-items: center; margin: 16px 0 0; }
 .detail-list dt { font-size: 15px; font-weight: 700; color: #10225f; }
 .detail-list dd { margin: 0; }
-.detail-field { display: block; box-sizing: border-box; min-height: 38px; padding: 8px 14px; border: 1px solid #dfe6f0; border-radius: 4px; background: #f1f3f6; color: #4a5775; font-size: 15px; }
+.detail-field { display: block; box-sizing: border-box; min-width: 0; min-height: 38px; padding: 8px 14px; border: 1px solid #dfe6f0; border-radius: 4px; background: #f1f3f6; color: #4a5775; font-size: 15px; overflow-wrap: anywhere; }
 .detail-text { min-height: 56px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .detail-amount-row { display: flex; }
 .detail-amount-row .detail-field { flex: 1; border-top-right-radius: 0; border-bottom-right-radius: 0; }
@@ -17,7 +17,7 @@
 .detail-sub-row { display: grid; grid-template-columns: 150px minmax(0, 1fr) auto; gap: 12px; align-items: center; margin-top: 8px; }
 .detail-sub-label { font-size: 15px; font-weight: 700; color: #10225f; }
 .detail-list-details { padding-top: 6px; }
-.detail-actions { display: flex; justify-content: flex-end; align-items: center; gap: 16px; margin-top: 18px; padding-top: 16px; border-top: 1px solid #e3e8f0; }
+.detail-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 16px; margin-top: 18px; padding-top: 16px; border-top: 1px solid #e3e8f0; }
 .detail-actions form { margin: 0; }
 .detail-back { margin-right: auto; color: #2f7df0; font-size: 14px; }
 .btn-primary, .btn-danger { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-width: 200px; height: 46px; padding: 0 20px; border-radius: 5px; font-size: 16px; font-weight: 700; font-family: inherit; cursor: pointer; text-decoration: none; }

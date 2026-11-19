@@ -9,7 +9,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ホーム | マネタックス</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css?v=20261009a">
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/home/home.css?v=20261009a">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/home/home.css?v=20261120b">
 </head>
 <body class="home-page">
 <jsp:include page="/WEB-INF/views/Header/header.jsp" />

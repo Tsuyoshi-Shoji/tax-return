@@ -52,8 +52,8 @@
 
 ### 5.1 画面配置
 
-- 確定申告画面 (`/tax-return`) の「仕訳帳」セクション配下に「カード引き落とし」サブセクションを追加する。
-- 一覧・登録UIが複雑になる場合は専用画面 `/tax-return/card-settlement` へ分離する。
+- 仕訳画面 (`/tax-return/journal`) に「カード引き落とし」の候補一覧・登録フォーム・登録済み一覧・支払日修正を集約する。
+- 確定申告画面 (`/tax-return`) には選択年度を維持する遷移導線のみを残す。出力機能の配置は変更しない。
 
 ### 5.2 入力項目
 
@@ -75,14 +75,17 @@
 
 | API | 用途 |
 |---|---|
-| `GET /tax-return/card-settlement` | 未決済クレカ取引一覧の表示 |
-| `POST /tax-return/card-settlement` | 引き落とし登録（仕訳生成・消込更新） |
+| `GET /tax-return/journal` | 仕訳一覧と未決済クレカ取引・登録済み引き落としの表示 |
+| `POST /tax-return/journal/card-settlement` | 引き落とし登録（仕訳生成・消込更新） |
+| `POST /tax-return/journal/card-settlement/date` | 登録済み引き落としの支払日修正 |
 
 ### 6.1 POST リクエスト仕様
 
-- 未知パラメータ拒否
-- `rows` は1件以上
-- `rows[*]` の `sourceTransactionId` は所有者・年度一致を必須検証
+- 現行フォームは `sourceTransactionIds` で複数選択し、選択した取引の未決済残高を全額消し込む。
+- `year/status/page/settlementDate/accountCode/sourceTransactionIds/feeAmount/memo/idempotencyKey/csrfToken` のみ許可し、未知パラメータと `sourceTransactionIds` 以外の重複を拒否する。
+- `sourceTransactionIds` は1件以上。各取引の所有者・年度一致を必須検証する。
+- CSRFスコープは `journal-review`。ログイン・MFA完了済みの利用者からのみ受け付け、所有者は認証コンテキストから取得する。
+- 成功時は年度・確認状態・ページを維持して仕訳画面へ戻す。入力エラー時は400で仕訳画面を再表示する。
 
 ### 6.2 POST 成功時処理
 
@@ -93,8 +96,8 @@
 
 ### 6.3 引き落とし日（支払日）の修正（2026-11-20）
 
-- `POST /tax-return/card-settlement/date?year=`：`settlementTransactionId`、`currentDate`（表示時の引き落とし日）、`settlementDate`（修正後）、`csrfToken`。ログイン済み所有者のみ、CSRF必須。
-- 確定申告画面の「登録済みの引き落とし（支払日の修正）」一覧から実行する。締め済み年度は表示のみで修正不可。
+- `POST /tax-return/journal/card-settlement/date`：`year/status/page`、`settlementTransactionId`、`currentDate`（表示時の引き落とし日）、`settlementDate`（修正後）、`csrfToken`のみ。ログイン・MFA完了済みの所有者のみ、仕訳画面のCSRF必須。未知項目・重複パラメータを拒否する。
+- 仕訳画面の「登録済みの引き落とし（支払日の修正）」一覧から実行する。締め済み年度は表示のみで修正不可。成功時・入力エラー時とも確定申告画面には戻さず仕訳画面で処理する。
 - 年度→引き落とし取引の順にロックし、所有者・年度・`CARD_SETTLEMENT`仕訳との対応を検証する。対象なしは404。
 - 修正後の日付は対象年度内のみ。`currentDate`が現在値と異なる場合は他操作による変更とみなし拒否する。同日への変更は何もしない。
 - 引き落とし取引の`transaction_date`と仕訳の`entry_date`を同時に更新し、仕訳を`draft`（未確認）へ戻す。金額・対象取引・消込イベントは変更しない（誤りは元の収支を修正する）。
@@ -156,7 +159,7 @@
 
 | 種別 | クラス案 | 役割 |
 |---|---|---|
-| Controller | `CardSettlementController` | 画面表示/登録受け付け |
+| Controller | `JournalReviewController` | 仕訳画面の表示・引き落とし登録・支払日修正受け付け |
 | Service | `CardSettlementService` | 引き落とし登録と仕訳生成 |
 | Entity | `TransactionSettlementEvent` | 引き落としイベント |
 | Repository | `TransactionSettlementEventRepository` | 永続化 |

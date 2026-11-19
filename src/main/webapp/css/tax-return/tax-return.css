@@ -171,6 +171,28 @@
 
 .print-only { display: none; }
 
+@media screen {
+    .tr-section, .tr-section-head > *, .tr-settlement, .tr-field { min-width: 0; }
+    .tax-return-page .tr-desc { margin: 4px 0 12px 15px; }
+    .tr-section-head { flex-wrap: wrap; }
+    .tr-info-grid, .tr-settlement { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .tr-info > div { grid-template-columns: 130px minmax(0, 1fr); }
+    .tr-two-col { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
+    .tr-statement-grid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+    .tr-bs { grid-template-columns: repeat(2, minmax(0, 1fr)) 190px; overflow-x: auto; }
+    .tr-field { grid-template-columns: 110px minmax(0, 1fr); }
+    .tr-field input:not([type="checkbox"]) { width: 100%; }
+    .tr-card > div:last-child { min-width: 0; flex: 1; }
+    .tr-card-value { max-width: 100%; overflow-x: auto; white-space: nowrap; }
+    .tr-card-label, .tr-diff { white-space: normal; overflow-wrap: anywhere; }
+    .tr-table-scroll, .tr-table-wrap { position: relative; min-width: 0; max-width: 100%; overflow-x: auto; }
+    .tr-output > .tr-field { flex: 1 1 280px; margin: 0; }
+    .tr-table .num { white-space: nowrap; }
+    .tr-dialog { margin: auto; max-width: min(520px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow: auto; }
+    .tr-settlement-date { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .tr-settlement-date label { margin: 0; }
+}
+
 @media (max-width: 1100px) {
     .tr-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .tr-two-col, .tr-bs, .tr-info-grid, .tr-statement-grid, .tr-sheet-grid { grid-template-columns: 1fr; }
@@ -186,9 +208,10 @@
         overflow-x: auto;
     }
 
+    .tr-tab { flex-shrink: 0; }
+
     .tr-section {
         padding: 16px 14px;
-        overflow-x: hidden;
         max-width: 100%;
     }
 
@@ -216,8 +239,10 @@
         display: flex;
         flex-wrap: nowrap;
         gap: 10px;
-        width: max-content;
-        min-width: 100%;
+        width: 100%;
+        min-width: 0;
+        max-width: 100%;
+        overflow-x: auto;
     }
 
     .tr-settlement .tr-field {
@@ -228,8 +253,8 @@
         display: flex;
         flex-wrap: nowrap;
         gap: 12px;
-        width: max-content;
-        min-width: 100%;
+        width: 100%;
+        min-width: 0;
     }
 
     .tr-bs > table {
@@ -244,8 +269,8 @@
         display: flex;
         flex-wrap: nowrap;
         gap: 10px;
-        width: max-content;
-        min-width: 100%;
+        width: 100%;
+        min-width: 0;
     }
 
     .tr-check {
@@ -259,6 +284,8 @@
     .tr-output > .tr-btn {
         flex: 0 0 auto;
     }
+
+    .tr-output > .tr-field { flex: 0 0 280px; }
 
     .tr-cards {
         display: flex;
@@ -280,6 +307,10 @@
     .tr-table {
         min-width: 640px;
     }
+
+    .tr-btn { max-width: 100%; height: auto; min-height: 38px; padding-block: 8px; white-space: normal; text-align: center; }
+    .tr-btn-small { min-height: 28px; padding-block: 4px; }
+    .tr-row-actions .tr-btn { white-space: nowrap; }
 }
 
 @media print {
@@ -338,6 +369,7 @@
 .tr-closing-status.is-open { border-left-color: #9a6700; }
 .tr-closing-status small { color: #57606a; }
 .tr-closing-form { display: flex; flex-wrap: wrap; align-items: end; gap: 10px 14px; margin: 8px 0 16px; }
-.tr-closing-form .tr-field input { min-width: 320px; }
+.tr-closing-form .tr-field { flex: 1 1 440px; max-width: 100%; }
+.tr-closing-form .tr-field input { min-width: 0; }
 .tr-check-inline { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
 @media print { #section-closing { display: none; } }

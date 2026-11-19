@@ -45,6 +45,12 @@
 .settings-section-label { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; color: #10225f; }
 .settings-section-option .settings-hint { margin-top: 2px; }
 .settings-required-badge { padding: 1px 8px; border-radius: 10px; background: #e3e8f0; color: #4a5775; font-size: 11px; font-weight: 700; }
+.settings-page .settings-desc { margin: 4px 0 12px; }
+.settings-page .danger-box .settings-desc { margin: 0 0 6px; }
+.settings-subgroup, .settings-field, .settings-section-option > span { min-width: 0; }
+.settings-hint, .settings-section-label { overflow-wrap: anywhere; }
+.settings-actions { flex-wrap: wrap; gap: 10px; }
+.settings-page .btn-primary, .settings-page .btn-outline, .settings-page .btn-warning, .settings-page .btn-danger { max-width: 100%; height: auto; min-height: 40px; padding-block: 8px; text-align: center; }
 @media (max-width: 900px) {
     .settings-grid-3, .settings-grid-pw, .settings-grid-ratio, .settings-grid-2, .settings-section-list { grid-template-columns: 1fr; }
 }

@@ -10,9 +10,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>損益詳細 | マネタックス</title>
     <link rel="stylesheet" href="${pageContext.request.contextPath}/css/style.css?v=20261011c">
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/home/home.css?v=20261011c">
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/profit-loss/profit-loss.css?v=20261011d">
-    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/profit-loss/profit-loss-detail.css?v=20261011c">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/home/home.css?v=20261120b">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/profit-loss/profit-loss.css?v=20261120b">
+    <link rel="stylesheet" href="${pageContext.request.contextPath}/css/profit-loss/profit-loss-detail.css?v=20261120b">
     <script src="${pageContext.request.contextPath}/css/profit-loss/profit-loss-detail.js?v=20261011c" defer></script>
 </head>
 <body class="home-page profit-loss-page">

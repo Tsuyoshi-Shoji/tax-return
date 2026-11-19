@@ -97,6 +97,35 @@
     display: none;
 }
 
+.auth-main-mfa {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 24px 16px;
+}
+
+.auth-card-mfa {
+    max-width: 540px;
+    padding: 24px 20px;
+}
+
+.auth-card-header-mfa {
+    margin-bottom: 16px;
+    overflow-wrap: anywhere;
+}
+
+.auth-mfa-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.auth-card-mfa .auth-help-text {
+    margin-top: 16px;
+}
+
 .auth-hero,
 .auth-card,
 .auth-site-footer,

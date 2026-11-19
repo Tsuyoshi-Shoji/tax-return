@@ -15,14 +15,19 @@ import org.example.features.entry.EntryConflictException;
 import org.example.features.entry.EntryNotFoundException;
 import org.example.features.entry.service.EntryService;
 import org.example.features.taxreturn.dto.JournalReviewPage;
+import org.example.features.taxreturn.form.CardSettlementForm;
+import org.example.features.taxreturn.service.CardSettlementService;
 import org.example.features.taxreturn.service.JournalReviewService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.web.bind.WebDataBinder;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.InitBinder;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
@@ -42,16 +47,29 @@ public class JournalReviewController {
     private static final Set<String> BULK_FIELDS = Set.of("year", "status", "page", "ids", "csrfToken",
             "reviewToken", "confirmed");
     private static final Set<String> GENERATE_FIELDS = Set.of("year", "status", "page", "transactionId", "csrfToken");
+    private static final Set<String> SETTLEMENT_FIELDS = Set.of("year", "status", "page", "settlementDate",
+            "accountCode", "sourceTransactionIds", "feeAmount", "memo", "idempotencyKey", "csrfToken");
+    private static final Set<String> SETTLEMENT_DATE_FIELDS = Set.of("year", "status", "page",
+            "settlementTransactionId", "currentDate", "settlementDate", "csrfToken");
     private static final int MAX_BULK = 20;
     private static final Logger AUDIT = LoggerFactory.getLogger("audit.journal-review");
     private final JournalReviewService service;
     private final EntryService entries;
+    private final CardSettlementService settlements;
     private final FormCsrfTokenManager csrf;
 
-    public JournalReviewController(JournalReviewService service, EntryService entries, FormCsrfTokenManager csrf) {
+    public JournalReviewController(JournalReviewService service, EntryService entries,
+            CardSettlementService settlements, FormCsrfTokenManager csrf) {
         this.service = service;
         this.entries = entries;
+        this.settlements = settlements;
         this.csrf = csrf;
+    }
+
+    @InitBinder("cardSettlementForm")
+    void bindCardSettlement(WebDataBinder binder) {
+        binder.setAllowedFields("settlementDate", "accountCode", "sourceTransactionIds",
+                "feeAmount", "memo", "idempotencyKey", "csrfToken");
     }
 
     @GetMapping("/tax-return/journal")
@@ -170,6 +188,64 @@ public class JournalReviewController {
         return "redirect:/tax-return/journal?year=" + year + "&status=draft&page=0";
     }
 
+    @PostMapping("/tax-return/journal/card-settlement")
+    public String saveCardSettlement(@RequestParam("year") int year,
+            @RequestParam(value = "status", defaultValue = "all") String status,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @ModelAttribute("cardSettlementForm") CardSettlementForm form,
+            HttpServletRequest request, HttpServletResponse response, Model model, RedirectAttributes redirect) {
+        AuthUserContext user = authorizeSettlement(request, form.getCsrfToken(), SETTLEMENT_FIELDS, status, page);
+        List<String> errors = settlements.save(user.getUserId(), year, form);
+        AUDIT.info("card-settlement userId={} year={} result={}", user.getUserId(), year,
+                errors.isEmpty() ? "saved" : "rejected");
+        if (!errors.isEmpty()) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            model.addAttribute("settlementErrors", errors);
+            return render(user, year, status, page, request, response, model);
+        }
+        redirect.addFlashAttribute("reviewMessage", "カード引き落としを登録しました。仕訳の内容を確認してください。");
+        return "redirect:/tax-return/journal?year=" + year + "&status=" + status + "&page=" + page
+                + "#section-card-settlement";
+    }
+
+    @PostMapping("/tax-return/journal/card-settlement/date")
+    public String updateCardSettlementDate(@RequestParam("year") int year,
+            @RequestParam(value = "status", defaultValue = "all") String status,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "settlementTransactionId", required = false) Long settlementTransactionId,
+            @RequestParam(value = "currentDate", required = false) String currentDate,
+            @RequestParam(value = "settlementDate", required = false) String settlementDate,
+            @RequestParam(value = "csrfToken", required = false) String csrfToken,
+            HttpServletRequest request, HttpServletResponse response, Model model, RedirectAttributes redirect) {
+        AuthUserContext user = authorizeSettlement(request, csrfToken, SETTLEMENT_DATE_FIELDS, status, page);
+        List<String> errors = settlements.updateSettlementDate(user.getUserId(), year,
+                settlementTransactionId, currentDate, settlementDate);
+        if (!errors.isEmpty()) {
+            response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+            model.addAttribute("settlementErrors", errors);
+            return render(user, year, status, page, request, response, model);
+        }
+        redirect.addFlashAttribute("reviewMessage",
+                "引き落とし日を修正しました。該当の仕訳は未確認に戻ります。仕訳一覧で再確認してください。");
+        return "redirect:/tax-return/journal?year=" + year + "&status=" + status + "&page=" + page
+                + "#heading-card-settlement-registered";
+    }
+
+    private AuthUserContext authorizeSettlement(HttpServletRequest request, String csrfToken,
+            Set<String> fields, String status, int page) {
+        AuthUserContext user = currentUser(request);
+        if (!csrf.isValid(request.getSession(), SCOPE, csrfToken)) {
+            AUDIT.info("card-settlement userId={} result=csrf-rejected", user.getUserId());
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        }
+        if (!validConditions(status, page) || request.getParameterMap().entrySet().stream()
+                .anyMatch(e -> !fields.contains(e.getKey())
+                        || (!"sourceTransactionIds".equals(e.getKey()) && e.getValue().length != 1))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        }
+        return user;
+    }
+
     private static boolean validConditions(String status, int page) {
         return Set.of("all", "draft", "reviewed").contains(status) && page >= 0 && page <= 100000;
     }
@@ -183,6 +259,7 @@ public class JournalReviewController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid display conditions");
         }
         model.addAttribute("review", data);
+        model.addAttribute("cardSettlement", settlements.load(user.getUserId(), data.getYear()));
         model.addAttribute("reviewToken", issue(request.getSession(), user.getUserId(), data));
         model.addAttribute("csrfToken", csrf.issue(request.getSession(), SCOPE));
         model.addAttribute("activeMenu", "tax-return");
