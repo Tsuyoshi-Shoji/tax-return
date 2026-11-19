@@ -165,8 +165,8 @@ public final class ProductionBootstrapHarness {
             }
             s.execute("DELETE FROM fiscal_year_closing_event");
         }
-        applyMigrations(url, 17, 17);
-        System.out.println("Migrations applied up to V17");
+        applyMigrations(url, 17, 19);
+        System.out.println("Migrations applied up to V19");
 
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext(Config.class)) {
             System.out.println("Context started: " + context.getBeanDefinitionCount() + " beans");

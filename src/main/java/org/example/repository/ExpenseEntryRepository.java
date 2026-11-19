@@ -3,6 +3,7 @@ package org.example.repository;
 import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.example.entity.ExpenseEntry;
@@ -135,4 +136,6 @@ public interface ExpenseEntryRepository extends JpaRepository<ExpenseEntry, Long
     Optional<ExpenseEntry> findOwnedCardByAccountingTransactionId(
             @Param("transactionId") Long transactionId,
             @Param("appUserId") Long appUserId);
+
+    List<ExpenseEntry> findByAccountingTransactionIdInAndDeletedFalse(Collection<Long> transactionIds);
 }

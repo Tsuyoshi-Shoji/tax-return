@@ -520,6 +520,50 @@ public class EntryServiceImpl implements EntryService {
         return result;
     }
 
+    @Override
+    @Transactional
+    public void generateMissingJournal(Long appUserId, int year, Long transactionId) {
+        FiscalYear fiscalYear = fiscalYearRepository.findOwnedByTaxYearForUpdate(year, appUserId)
+                .orElseThrow(() -> new EntryNotFoundException("Fiscal year not found"));
+        ensureOpenFiscalYear(fiscalYear);
+        AccountingTransaction transaction = accountingTransactionRepository
+                .findOwnedByIdForUpdate(transactionId, appUserId)
+                .filter(t -> t.getFiscalYear() != null && Objects.equals(t.getFiscalYear().getId(), fiscalYear.getId()))
+                .orElseThrow(() -> new EntryNotFoundException("Transaction not found"));
+        if (!STATUS_DRAFT.equalsIgnoreCase(transaction.getStatus())) {
+            throw new EntryConflictException("確定済みデータは更新できません。");
+        }
+        if (journalEntryRepository.findByAccountingTransactionId(transactionId).isPresent()) {
+            throw new EntryConflictException("この取引の仕訳は既に生成されています。最新の内容を確認してください。");
+        }
+        List<IncomeEntry> incomes = incomeEntryRepository.findByAccountingTransactionIdInAndDeletedFalse(List.of(transactionId));
+        List<ExpenseEntry> expenses = expenseEntryRepository.findByAccountingTransactionIdInAndDeletedFalse(List.of(transactionId));
+        if (incomes.size() + expenses.size() != 1) {
+            throw new EntryConflictException("元になる収益・支出データを特定できないため仕訳を生成できません。");
+        }
+        if (incomes.size() == 1) {
+            IncomeEntry entry = incomes.get(0);
+            ensureSourceMatches(fiscalYear, transaction, entry.getFiscalYear(), entry.getTransactionDate(), entry.getAmount());
+            syncIncomeJournalEntry(entry, transaction);
+        } else {
+            ExpenseEntry entry = expenses.get(0);
+            ensureSourceMatches(fiscalYear, transaction, entry.getFiscalYear(), entry.getTransactionDate(), entry.getAmount());
+            syncExpenseJournalEntry(entry, transaction);
+        }
+        closingJournalService.rebuild(fiscalYear.getId());
+    }
+
+    private void ensureSourceMatches(FiscalYear fiscalYear, AccountingTransaction transaction, FiscalYear entryYear,
+            LocalDate entryDate, BigDecimal entryAmount) {
+        if (entryYear == null || !Objects.equals(entryYear.getId(), fiscalYear.getId())
+                || entryDate == null || !isWithinFiscalYear(entryDate, fiscalYear)
+                || !Objects.equals(entryDate, transaction.getTransactionDate())
+                || entryAmount == null || transaction.getTotalAmount() == null
+                || entryAmount.compareTo(transaction.getTotalAmount()) != 0) {
+            throw new EntryConflictException("収支データと取引の日付・金額が一致しません。収支の編集画面で内容を確認して保存してください。");
+        }
+    }
+
     private EntrySaveResult saveMonthlyExpense(ValidatedEntryCommand command, Set<Long> touchedFiscalYearIds) {
         if (!command.getKind().isExpense()) {
             throw new EntryConflictException("月間登録モードは支出のみ利用できます。");

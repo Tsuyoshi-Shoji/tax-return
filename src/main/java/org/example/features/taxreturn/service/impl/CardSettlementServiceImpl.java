@@ -30,11 +30,14 @@ import org.example.repository.FiscalYearRepository;
 import org.example.repository.JournalEntryRepository;
 import org.example.repository.TransactionSettlementEventRepository;
 import org.example.repository.TransactionSettlementRepository;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class CardSettlementServiceImpl implements CardSettlementService {
+    private static final Logger AUDIT = LoggerFactory.getLogger("audit.card-settlement");
     private static final BigDecimal MAX_AMOUNT = new BigDecimal("9999999999");
     private static final String CLOSED = "closed";
     private static final String STATUS_DRAFT = "draft";
@@ -85,7 +88,68 @@ public class CardSettlementServiceImpl implements CardSettlementService {
                 loadCandidates(fiscalYear.getId()),
                 accountOptions,
                 LocalDate.now().toString(),
-                UUID.randomUUID().toString().replace("-", ""));
+                UUID.randomUUID().toString().replace("-", ""),
+                loadRegistered(fiscalYear.getId()));
+    }
+
+    @Override
+    @Transactional
+    public List<String> updateSettlementDate(Long appUserId, Integer year, Long settlementTransactionId,
+            String currentDate, String settlementDate) {
+        FiscalYear resolved = loadOwnedFiscalYear(appUserId, year);
+        FiscalYear fiscalYear = fiscalYears.findOwnedByIdForUpdate(resolved.getId(), appUserId)
+                .orElseThrow(() -> new EntryNotFoundException("Fiscal year not found"));
+        if (CLOSED.equals(fiscalYear.getStatus()) || fiscalYear.getClosedAt() != null) {
+            return List.of("締め済み年度は修正できません。");
+        }
+        if (settlementTransactionId == null || settlementTransactionId <= 0) {
+            throw new EntryNotFoundException("Settlement not found");
+        }
+        AccountingTransaction settlementTx = transactions.findOwnedByIdForUpdate(settlementTransactionId, appUserId)
+                .filter(tx -> tx.getFiscalYear() != null && fiscalYear.getId().equals(tx.getFiscalYear().getId()))
+                .orElseThrow(() -> new EntryNotFoundException("Settlement not found"));
+        JournalEntry journal = journals.findBySourceTypeAndSourceId(SOURCE_TYPE_CARD_SETTLEMENT, settlementTx.getId())
+                .filter(j -> j.getAccountingTransaction() != null
+                        && settlementTx.getId().equals(j.getAccountingTransaction().getId()))
+                .orElseThrow(() -> new EntryNotFoundException("Settlement journal not found"));
+        List<String> errors = new ArrayList<>();
+        LocalDate newDate = parseDate(settlementDate, fiscalYear, errors);
+        if (!errors.isEmpty()) {
+            return errors;
+        }
+        if (settlementTx.getTransactionDate() == null
+                || !settlementTx.getTransactionDate().toString().equals(text(currentDate, 20))) {
+            return List.of("表示後に引き落とし内容が変更されました。最新の内容を確認してから修正してください。");
+        }
+        if (newDate.equals(settlementTx.getTransactionDate())) {
+            return List.of();
+        }
+        settlementTx.setTransactionDate(newDate);
+        journal.setEntryDate(newDate);
+        // 日付を変えた仕訳は再確認が必要なため未確認に戻す。
+        journal.setStatus(STATUS_DRAFT);
+        transactions.save(settlementTx);
+        journals.save(journal);
+        AUDIT.info("card-settlement-date userId={} year={} settlementTransactionId={} result=updated",
+                appUserId, fiscalYear.getTaxYear(), settlementTx.getId());
+        return List.of();
+    }
+
+    private List<CardSettlementPageData.Registered> loadRegistered(Long fiscalYearId) {
+        return journals.findByFiscalYearIdAndSourceType(fiscalYearId, SOURCE_TYPE_CARD_SETTLEMENT).stream()
+                .filter(j -> j.getAccountingTransaction() != null)
+                .sorted(Comparator.comparing(JournalEntry::getEntryDate, Comparator.nullsLast(Comparator.naturalOrder()))
+                        .reversed().thenComparing(JournalEntry::getId, Comparator.reverseOrder()))
+                .map(j -> {
+                    AccountingTransaction tx = j.getAccountingTransaction();
+                    return new CardSettlementPageData.Registered(
+                            tx.getId(),
+                            tx.getTransactionDate() == null ? "" : tx.getTransactionDate().toString(),
+                            tx.getSummary(),
+                            safe(tx.getTotalAmount()),
+                            "reviewed".equals(j.getStatus()) || "finalized".equals(j.getStatus()));
+                })
+                .toList();
     }
 
     @Override

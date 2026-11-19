@@ -3,6 +3,7 @@ package org.example.repository;
 import jakarta.persistence.LockModeType;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.example.entity.IncomeEntry;
@@ -105,4 +106,6 @@ public interface IncomeEntryRepository extends JpaRepository<IncomeEntry, Long> 
     List<IncomeEntry> findAllOwnedByFiscalYear(
             @Param("fiscalYearId") Long fiscalYearId,
             @Param("appUserId") Long appUserId);
+
+    List<IncomeEntry> findByAccountingTransactionIdInAndDeletedFalse(Collection<Long> transactionIds);
 }
