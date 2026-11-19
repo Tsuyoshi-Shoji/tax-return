@@ -50,7 +50,7 @@
                 <p class="tr-desc">「確認済み」は内容の確認記録であり、年度の締めや申告の提出ではありません。収支を修正すると該当の仕訳は未確認に戻ります。決算整理・固定資産などの自動生成仕訳も、再計算で内容が変わると再確認が必要です。</p>
                 <c:if test="${review.closed}"><p class="journal-error">締め済み年度のため閲覧のみです。変更する場合は確定申告画面から理由を付けて締めを取消してください。</p></c:if>
                 <c:if test="${review.missingCount > 0}"><p class="journal-error" role="alert">仕訳が未生成の未確認取引が<c:out value="${review.missingCount}" />件あります。これらも確定申告画面の未確認件数に含まれます。収支の元データを確認・修正してください。</p></c:if>
-                <div class="tr-table-scroll">
+                <div class="tr-table-scroll journal-review-scroll">
                     <table class="tr-table journal-review-table">
                         <thead><tr><th scope="col">日付・摘要</th><th scope="col">借貸</th><th scope="col">科目</th><th scope="col" class="num">金額（円）</th><th scope="col">明細摘要</th><th scope="col">状態・操作</th></tr></thead>
                         <c:forEach var="entry" items="${review.entries}">

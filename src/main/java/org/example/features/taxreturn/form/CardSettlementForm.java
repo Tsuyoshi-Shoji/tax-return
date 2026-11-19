@@ -1,10 +1,12 @@
 package org.example.features.taxreturn.form;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class CardSettlementForm {
     private String settlementDate;
     private String accountCode = "BANK_DEPOSIT";
-    private String sourceTransactionId;
-    private String settledAmount;
+    private List<String> sourceTransactionIds = new ArrayList<>();
     private String feeAmount = "0";
     private String memo;
     private String idempotencyKey;
@@ -26,20 +28,12 @@ public class CardSettlementForm {
         this.accountCode = accountCode;
     }
 
-    public String getSourceTransactionId() {
-        return sourceTransactionId;
+    public List<String> getSourceTransactionIds() {
+        return sourceTransactionIds;
     }
 
-    public void setSourceTransactionId(String sourceTransactionId) {
-        this.sourceTransactionId = sourceTransactionId;
-    }
-
-    public String getSettledAmount() {
-        return settledAmount;
-    }
-
-    public void setSettledAmount(String settledAmount) {
-        this.settledAmount = settledAmount;
+    public void setSourceTransactionIds(List<String> sourceTransactionIds) {
+        this.sourceTransactionIds = sourceTransactionIds == null ? new ArrayList<>() : sourceTransactionIds;
     }
 
     public String getFeeAmount() {

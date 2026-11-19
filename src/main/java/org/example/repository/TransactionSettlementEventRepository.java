@@ -1,7 +1,7 @@
 package org.example.repository;
 
 import java.math.BigDecimal;
-import java.util.Optional;
+import java.util.List;
 
 import org.example.entity.TransactionSettlementEvent;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -9,7 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface TransactionSettlementEventRepository extends JpaRepository<TransactionSettlementEvent, Long> {
-    Optional<TransactionSettlementEvent> findByFiscalYearIdAndIdempotencyKey(Long fiscalYearId, String idempotencyKey);
+    List<TransactionSettlementEvent> findByFiscalYearIdAndIdempotencyKey(Long fiscalYearId, String idempotencyKey);
 
     @Query("""
             select coalesce(sum(e.settledAmount), 0)

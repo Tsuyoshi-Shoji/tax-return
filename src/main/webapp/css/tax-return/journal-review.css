@@ -16,6 +16,11 @@
     min-width: 760px;
 }
 
+.journal-review-page .journal-review-scroll {
+    max-height: 520px;
+    overflow-y: auto;
+}
+
 .journal-review-page .journal-heading > th,
 .journal-review-page .journal-heading > td {
     border-top: 2px solid #dce2e8;

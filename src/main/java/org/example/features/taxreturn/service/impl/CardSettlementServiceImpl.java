@@ -6,8 +6,8 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.UUID;
 
 import org.example.entity.AccountingTransaction;
@@ -97,9 +97,8 @@ public class CardSettlementServiceImpl implements CardSettlementService {
         }
 
         List<String> errors = new ArrayList<>();
-        Long sourceTransactionId = parseId(form.getSourceTransactionId(), "対象取引", errors);
+        List<Long> sourceTransactionIds = parseIds(form.getSourceTransactionIds(), errors);
         LocalDate settlementDate = parseDate(form.getSettlementDate(), fiscalYear, errors);
-        BigDecimal settledAmount = parseAmount(form.getSettledAmount(), "消込金額", true, errors);
         BigDecimal feeAmount = parseAmount(form.getFeeAmount(), "手数料", false, errors);
         String accountCode = text(form.getAccountCode(), 50);
         String memo = text(form.getMemo(), 255);
@@ -115,39 +114,10 @@ public class CardSettlementServiceImpl implements CardSettlementService {
             return errors;
         }
 
-        Optional<TransactionSettlementEvent> existingEvent = settlementEvents
+        List<TransactionSettlementEvent> existingEvents = settlementEvents
                 .findByFiscalYearIdAndIdempotencyKey(fiscalYear.getId(), idempotencyKey);
-        if (existingEvent.isPresent()) {
-            TransactionSettlementEvent event = existingEvent.get();
-            boolean sameRequest = Objects.equals(event.getSourceTransaction().getId(), sourceTransactionId)
-                    && event.getSettledAmount().compareTo(settledAmount) == 0
-                    && event.getFeeAmount().compareTo(feeAmount) == 0
-                    && Objects.equals(event.getSettlementTransaction().getTransactionDate(), settlementDate);
-            if (sameRequest) {
-                return List.of();
-            }
-            return List.of("同一送信キーが既に使用されています。画面を再読み込みして再実行してください。");
-        }
-
-        AccountingTransaction source = transactions.findOwnedByIdForUpdate(sourceTransactionId, appUserId)
-                .orElseThrow(() -> new EntryNotFoundException("Source transaction not found"));
-        if (!Objects.equals(source.getFiscalYear().getId(), fiscalYear.getId())) {
-            return List.of("対象年度外の取引は登録できません。");
-        }
-        ExpenseEntry sourceExpense = expenseEntries.findOwnedCardByAccountingTransactionId(sourceTransactionId, appUserId)
-                .orElseThrow(() -> new EntryNotFoundException("Card expense not found"));
-        if (sourceExpense.getAccountingTransaction() == null
-                || !Objects.equals(sourceExpense.getAccountingTransaction().getId(), sourceTransactionId)) {
-            return List.of("対象取引の整合性に問題があります。");
-        }
-
-        BigDecimal settledTotalBefore = settledTotal(sourceTransactionId);
-        BigDecimal outstanding = safe(source.getTotalAmount()).subtract(settledTotalBefore);
-        if (outstanding.signum() <= 0) {
-            return List.of("選択した取引は既に消込済みです。");
-        }
-        if (settledAmount.compareTo(outstanding) > 0) {
-            return List.of("消込金額が未決済残高を超えています。");
+        if (!existingEvents.isEmpty()) {
+            return List.of();
         }
 
         AccountMapping mapping = accountMappingService.snapshot();
@@ -156,16 +126,42 @@ public class CardSettlementServiceImpl implements CardSettlementService {
             return List.of("引き落とし口座が不正です。");
         }
 
-        BigDecimal settlementTotal = settledAmount.add(feeAmount);
+        List<AccountingTransaction> sources = new ArrayList<>();
+        List<BigDecimal> sourceOutstanding = new ArrayList<>();
+        BigDecimal settlementTotal = BigDecimal.ZERO;
+        for (Long sourceTransactionId : sourceTransactionIds) {
+            AccountingTransaction source = transactions.findOwnedByIdForUpdate(sourceTransactionId, appUserId)
+                    .orElseThrow(() -> new EntryNotFoundException("Source transaction not found"));
+            if (!source.getFiscalYear().getId().equals(fiscalYear.getId())) {
+                return List.of("対象年度外の取引は登録できません。");
+            }
+            ExpenseEntry sourceExpense = expenseEntries.findOwnedCardByAccountingTransactionId(sourceTransactionId, appUserId)
+                    .orElseThrow(() -> new EntryNotFoundException("Card expense not found"));
+            if (sourceExpense.getAccountingTransaction() == null
+                    || !sourceExpense.getAccountingTransaction().getId().equals(sourceTransactionId)) {
+                return List.of("対象取引の整合性に問題があります。");
+            }
+
+            BigDecimal settledTotalBefore = settledTotal(sourceTransactionId);
+            BigDecimal outstanding = safe(source.getTotalAmount()).subtract(settledTotalBefore);
+            if (outstanding.signum() <= 0) {
+                return List.of("選択した取引に消込済みのものが含まれています。最新状態で再選択してください。");
+            }
+            sources.add(source);
+            sourceOutstanding.add(outstanding);
+            settlementTotal = settlementTotal.add(outstanding);
+        }
+        settlementTotal = settlementTotal.add(feeAmount);
+
         AccountingTransaction settlementTx = new AccountingTransaction();
         settlementTx.setFiscalYear(fiscalYear);
         settlementTx.setTransactionDate(settlementDate);
         settlementTx.setTransactionType(TX_TYPE_TRANSFER);
-        settlementTx.setSummary(buildSummary(source, memo));
+        settlementTx.setSummary(buildSummary(sources, memo));
         settlementTx.setTotalAmount(settlementTotal);
         settlementTx.setStatus(STATUS_DRAFT);
         settlementTx.setSettlementStatus(SETTLEMENT_STATUS_SETTLED);
-        settlementTx.setSettlementReferenceId(sourceTransactionId);
+        settlementTx.setSettlementReferenceId(sourceTransactionIds.get(0));
         settlementTx = transactions.save(settlementTx);
 
         JournalEntry journalEntry = new JournalEntry();
@@ -178,32 +174,33 @@ public class CardSettlementServiceImpl implements CardSettlementService {
         journalEntry.setStatus(STATUS_DRAFT);
         List<JournalLine> lines = new ArrayList<>();
         int lineNo = 1;
-        lines.add(line(mapping, lineNo++, "D", "未払金", settledAmount, source.getSummary()));
+        for (int i = 0; i < sources.size(); i++) {
+            AccountingTransaction source = sources.get(i);
+            BigDecimal outstanding = sourceOutstanding.get(i);
+            lines.add(line(mapping, lineNo++, "D", "未払金", outstanding, source.getSummary()));
+        }
         if (feeAmount.signum() > 0) {
             lines.add(line(mapping, lineNo++, "D", "支払手数料", feeAmount, "カード引き落とし手数料"));
         }
-        lines.add(line(mapping, lineNo, "C", creditAccount.name(), settlementTotal, source.getSummary()));
+        lines.add(line(mapping, lineNo, "C", creditAccount.name(), settlementTotal, settlementTx.getSummary()));
         journalEntry.setLines(lines);
         journals.save(journalEntry);
 
-        TransactionSettlementEvent event = new TransactionSettlementEvent();
-        event.setFiscalYear(fiscalYear);
-        event.setSourceTransaction(source);
-        event.setSettlementTransaction(settlementTx);
-        event.setSettledAmount(settledAmount);
-        event.setFeeAmount(feeAmount);
-        event.setIdempotencyKey(idempotencyKey);
-        settlementEvents.save(event);
-
-        BigDecimal settledTotalAfter = settledTotal(sourceTransactionId);
-        BigDecimal remaining = safe(source.getTotalAmount()).subtract(settledTotalAfter);
-        if (remaining.signum() <= 0) {
+        for (int i = 0; i < sources.size(); i++) {
+            AccountingTransaction source = sources.get(i);
+            BigDecimal outstanding = sourceOutstanding.get(i);
+            TransactionSettlementEvent event = new TransactionSettlementEvent();
+            event.setFiscalYear(fiscalYear);
+            event.setSourceTransaction(source);
+            event.setSettlementTransaction(settlementTx);
+            event.setSettledAmount(outstanding);
+            event.setFeeAmount(BigDecimal.ZERO);
+            event.setIdempotencyKey(idempotencyKey);
+            settlementEvents.save(event);
             source.setSettlementStatus(SETTLEMENT_STATUS_SETTLED);
-        } else {
-            source.setSettlementStatus(SETTLEMENT_STATUS_PARTIALLY_SETTLED);
+            source.setSettlementReferenceId(settlementTx.getId());
+            transactions.save(source);
         }
-        source.setSettlementReferenceId(settlementTx.getId());
-        transactions.save(source);
 
         return List.of();
     }
@@ -273,13 +270,25 @@ public class CardSettlementServiceImpl implements CardSettlementService {
         }
     }
 
-    private static Long parseId(String raw, String label, List<String> errors) {
-        String value = text(raw, 30);
-        if (value == null || value.isBlank() || !value.matches("\\d+")) {
-            errors.add(label + "を選択してください。");
-            return null;
+    private static List<Long> parseIds(List<String> rawValues, List<String> errors) {
+        if (rawValues == null || rawValues.isEmpty()) {
+            errors.add("登録対象を1件以上選択してください。");
+            return List.of();
         }
-        return Long.valueOf(value);
+        LinkedHashSet<Long> ids = new LinkedHashSet<>();
+        for (String raw : rawValues) {
+            String value = text(raw, 30);
+            if (value == null || value.isBlank() || !value.matches("\\d+")) {
+                errors.add("登録対象に不正な値が含まれています。");
+                return List.of();
+            }
+            ids.add(Long.valueOf(value));
+        }
+        if (ids.isEmpty()) {
+            errors.add("登録対象を1件以上選択してください。");
+            return List.of();
+        }
+        return new ArrayList<>(ids);
     }
 
     private static BigDecimal parseAmount(String raw, String label, boolean required, List<String> errors) {
@@ -310,18 +319,22 @@ public class CardSettlementServiceImpl implements CardSettlementService {
         return parsed;
     }
 
-    private static String buildSummary(AccountingTransaction source, String memo) {
-        String base = source.getSummary() == null || source.getSummary().isBlank()
+    private static String buildSummary(List<AccountingTransaction> sources, String memo) {
+        String first = sources.isEmpty() || sources.get(0).getSummary() == null || sources.get(0).getSummary().isBlank()
                 ? "クレジットカード利用分"
-                : source.getSummary().trim();
-        if (base.length() > 180) {
-            base = base.substring(0, 180);
+                : sources.get(0).getSummary().trim();
+        if (first.length() > 120) {
+            first = first.substring(0, 120);
+        }
+        String base = "カード引き落とし(" + sources.size() + "件): " + first;
+        if (sources.size() > 1) {
+            base = base + " ほか";
         }
         String summary;
         if (memo == null || memo.isBlank()) {
-            summary = "カード引き落とし: " + base;
+            summary = base;
         } else {
-            summary = "カード引き落とし: " + base + " / " + memo;
+            summary = base + " / " + memo;
         }
         return summary.length() > 255 ? summary.substring(0, 255) : summary;
     }
