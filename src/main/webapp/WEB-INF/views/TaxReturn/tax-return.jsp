@@ -10,9 +10,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>確定申告 | マネタックス</title>
     <link rel="stylesheet" href="${ctx}/css/style.css?v=20261016a">
-    <link rel="stylesheet" href="${ctx}/css/home/home.css?v=20261011c">
-    <link rel="stylesheet" href="${ctx}/css/profit-loss/profit-loss.css?v=20261011d">
-    <link rel="stylesheet" href="${ctx}/css/tax-return/tax-return.css?v=20261108a">
+    <link rel="stylesheet" href="${ctx}/css/home/home.css?v=20261120b">
+    <link rel="stylesheet" href="${ctx}/css/profit-loss/profit-loss.css?v=20261120b">
+    <link rel="stylesheet" href="${ctx}/css/tax-return/tax-return.css?v=20261120b">
     <script src="${ctx}/css/tax-return/tax-return.js?v=20261101b" defer></script>
 </head>
 <body class="home-page profit-loss-page tax-return-page">
@@ -646,98 +646,16 @@
                 </div>
             </section>
 
-            <section id="section-journal" class="profit-loss-card tr-section print-section" data-print-groups="journal" aria-labelledby="heading-journal">
+            <section id="section-journal" class="profit-loss-card tr-section screen-only" aria-labelledby="heading-journal">
                 <h2 id="heading-journal">仕訳帳</h2>
-                <p id="text-journal-description" class="tr-desc"><c:out value="${page.yearLabel}" />の仕訳帳の一部を表示しています。</p>
-                <p class="screen-only"><a id="button-journal-review" class="tr-btn tr-btn-primary" href="${ctx}/tax-return/journal?year=${page.selectedYear}">仕訳帳の全件表示・確認</a></p>
-                <div class="screen-only">
-                    <h3>クレジットカード引き落とし登録</h3>
-                    <p class="tr-desc">クレジットカード利用で計上された未払金を、引き落とし時点で消し込む仕訳を登録します。</p>
-                    <c:if test="${page.closed}">
-                        <p class="tr-desc">締め済み年度のため登録できません。</p>
-                    </c:if>
-                    <c:if test="${empty cardSettlement.candidates}">
-                        <p class="tr-desc">未消込のクレジットカード取引はありません。</p>
-                    </c:if>
-                    <c:if test="${not page.closed and not empty cardSettlement.candidates}">
-                        <form id="card-settlement-form" method="post" action="${ctx}/tax-return/card-settlement?year=${page.selectedYear}" novalidate>
-                            <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
-                            <input type="hidden" name="idempotencyKey" value="<c:out value='${cardSettlement.idempotencyKey}' />" />
-                            <div class="tr-settlement">
-                                <label class="tr-field"><span>引き落とし日</span><input type="date" name="settlementDate" value="<c:out value='${cardSettlement.defaultSettlementDate}' />" required /></label>
-                                <label class="tr-field"><span>引き落とし口座</span>
-                                    <select name="accountCode" required>
-                                        <c:forEach var="account" items="${cardSettlement.accountOptions}">
-                                            <option value="<c:out value='${account.code}' />"><c:out value="${account.name}" />（<c:out value="${account.code}" />）</option>
-                                        </c:forEach>
-                                    </select>
-                                </label>
-                                <label class="tr-field"><span>手数料（円）</span><input name="feeAmount" inputmode="decimal" value="0" /></label>
-                                <label class="tr-field"><span>メモ</span><input name="memo" maxlength="255" /></label>
-                            </div>
-                            <div class="tr-table-scroll">
-                                <table class="tr-table">
-                                    <thead><tr><th scope="col">登録対象</th><th scope="col">取引日</th><th scope="col">摘要</th><th scope="col" class="num">取引金額（円）</th><th scope="col" class="num">消込済（円）</th><th scope="col" class="num">未決済残高（円）</th></tr></thead>
-                                    <tbody>
-                                        <c:forEach var="candidate" items="${cardSettlement.candidates}">
-                                            <tr>
-                                                <td><label><input type="checkbox" name="sourceTransactionIds" value="${candidate.transactionId}" />選択</label></td>
-                                                <td><c:out value="${candidate.transactionDate}" /></td>
-                                                <td><c:out value="${candidate.summary}" /></td>
-                                                <td class="num"><fmt:formatNumber value="${candidate.totalAmount}" pattern="#,##0.##" /></td>
-                                                <td class="num"><fmt:formatNumber value="${candidate.settledAmount}" pattern="#,##0.##" /></td>
-                                                <td class="num"><fmt:formatNumber value="${candidate.outstandingAmount}" pattern="#,##0.##" /></td>
-                                            </tr>
-                                        </c:forEach>
-                                    </tbody>
-                                </table>
-                            </div>
-                            <div class="tr-actions"><button type="submit" class="tr-btn tr-btn-primary">選択した取引を一括で引き落とし登録</button></div>
-                        </form>
-                    </c:if>
-                    <c:if test="${not empty cardSettlement.registered}">
-                        <h3 id="heading-card-settlement-registered">登録済みの引き落とし（支払日の修正）</h3>
-                        <p class="tr-desc">引き落とし日を誤って登録した場合は修正できます。修正した引き落とし仕訳は未確認に戻るため、仕訳帳の確認画面で再確認してください。金額・対象取引を誤った場合は、該当の収支を修正してください。</p>
-                        <div class="tr-table-scroll">
-                            <table class="tr-table" aria-labelledby="heading-card-settlement-registered">
-                                <thead><tr><th scope="col">引き落とし日</th><th scope="col">摘要</th><th scope="col" class="num">金額（円）</th><th scope="col">仕訳の状態</th><th scope="col">支払日の修正</th></tr></thead>
-                                <tbody>
-                                    <c:forEach var="settled" items="${cardSettlement.registered}">
-                                        <tr id="card-settlement-${settled.transactionId}">
-                                            <td><c:out value="${settled.settlementDate}" /></td>
-                                            <td><c:out value="${settled.summary}" /></td>
-                                            <td class="num"><fmt:formatNumber value="${settled.amount}" pattern="#,##0.##" /></td>
-                                            <td><c:out value="${settled.reviewed ? '確認済み' : '未確認'}" /></td>
-                                            <td>
-                                                <c:choose>
-                                                    <c:when test="${page.closed}">締め済みのため修正不可</c:when>
-                                                    <c:otherwise>
-                                                        <form method="post" action="${ctx}/tax-return/card-settlement/date?year=${page.selectedYear}" class="tr-settlement-date">
-                                                            <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
-                                                            <input type="hidden" name="settlementTransactionId" value="${settled.transactionId}" />
-                                                            <input type="hidden" name="currentDate" value="<c:out value='${settled.settlementDate}' />" />
-                                                            <label><span class="visually-hidden">新しい引き落とし日</span><input type="date" name="settlementDate" value="<c:out value='${settled.settlementDate}' />" min="${page.selectedYear}-01-01" max="${page.selectedYear}-12-31" required /></label>
-                                                            <button type="submit" class="tr-btn tr-btn-outline">修正</button>
-                                                        </form>
-                                                    </c:otherwise>
-                                                </c:choose>
-                                            </td>
-                                        </tr>
-                                    </c:forEach>
-                                </tbody>
-                            </table>
-                        </div>
-                    </c:if>
-                </div>
+                <p id="text-journal-description" class="tr-desc screen-only">仕訳の一覧・確認・生成、カード引き落としの登録・支払日の修正は仕訳画面で行います。</p>
+                <p class="screen-only"><a id="button-journal-review" class="tr-btn tr-btn-primary" href="${ctx}/tax-return/journal?year=${page.selectedYear}">仕訳画面を開く</a></p>
+            </section>
+            <section id="section-journal-print" class="profit-loss-card tr-section print-section print-only" data-print-groups="journal" aria-label="仕訳帳">
+                <h2>仕訳帳</h2>
                 <div class="tr-table-scroll tr-journal-scroll">
                     <table id="table-journal" class="tr-table tr-journal">
                         <thead><tr><th scope="col">日付</th><th scope="col">摘要</th><th scope="col">借方科目</th><th scope="col" class="num">借方金額（円）</th><th scope="col">貸方科目</th><th scope="col" class="num">貸方金額（円）</th></tr></thead>
-                        <tbody class="screen-only">
-                            <c:forEach var="j" items="${page.journalPreview}">
-                                <tr class="${j.continuation ? 'is-continuation' : ''}"><td><c:if test="${not j.continuation}"><c:out value="${j.date}" /></c:if></td><td><c:if test="${not j.continuation}"><c:out value="${j.summary}" /></c:if></td><td><c:out value="${j.debitAccount}" /></td><td class="num"><fmt:formatNumber value="${j.debitAmount}" pattern="#,##0" /></td><td><c:out value="${j.creditAccount}" /></td><td class="num"><c:if test="${j.creditAmount != null}"><fmt:formatNumber value="${j.creditAmount}" pattern="#,##0" /></c:if></td></tr>
-                            </c:forEach>
-                            <c:if test="${empty page.journalPreview}"><tr><td colspan="6" class="empty">対象年度の仕訳はありません。</td></tr></c:if>
-                        </tbody>
                         <tbody class="print-only">
                             <c:forEach var="j" items="${page.journalAll}">
                                 <tr class="${j.continuation ? 'is-continuation' : ''}"><td><c:if test="${not j.continuation}"><c:out value="${j.date}" /></c:if></td><td><c:if test="${not j.continuation}"><c:out value="${j.summary}" /></c:if></td><td><c:out value="${j.debitAccount}" /></td><td class="num"><fmt:formatNumber value="${j.debitAmount}" pattern="#,##0" /></td><td><c:out value="${j.creditAccount}" /></td><td class="num"><c:if test="${j.creditAmount != null}"><fmt:formatNumber value="${j.creditAmount}" pattern="#,##0" /></c:if></td></tr>

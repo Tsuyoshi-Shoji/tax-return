@@ -76,3 +76,34 @@
     display: inline-block;
     margin: 4px 0 0 8px;
 }
+
+.journal-review-page .journal-bulk > *,
+.journal-review-page .journal-filters > * {
+    min-width: 0;
+    max-width: 100%;
+}
+
+.journal-review-page .journal-bulk label {
+    margin: 0;
+}
+
+.journal-review-page .journal-review-table th:nth-child(2),
+.journal-review-page .journal-review-table td:nth-child(2),
+.journal-review-page .journal-review-table .num {
+    white-space: nowrap;
+}
+
+.journal-review-page #section-card-settlement .tr-table {
+    min-width: 760px;
+}
+
+.journal-review-page #section-card-settlement .num,
+.journal-review-page #card-settlement-form td:nth-child(-n+2),
+.journal-review-page #section-card-settlement table[aria-labelledby] td:first-child {
+    white-space: nowrap;
+}
+
+.journal-review-page #heading-card-settlement-registered {
+    margin-top: 24px;
+    scroll-margin-top: 80px;
+}

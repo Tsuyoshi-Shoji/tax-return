@@ -83,7 +83,7 @@
 .home-error { display: flex; align-items: center; gap: 12px; color: #a02b3a; background: #fff0f2; border: 1px solid #f3cbd1; }
 .home-notice { color: #675020; background: #fff8e7; }
 .home-card { background: #fff; border-radius: 8px; box-shadow: 0 4px 20px #42699503; min-width: 0; }
-.summary-grid { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 16px; margin-bottom: 22px; }
+.summary-grid { display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 16px; margin-bottom: 22px; overflow-x: auto; }
 .metric-card { display: flex; align-items: flex-start; gap: 16px; min-height: 223px; padding: 18px 20px; }
 .metric-icon { width: 55px; height: 55px; flex: 0 0 55px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
 .metric-icon .ui-icon { width: 30px; height: 30px; }

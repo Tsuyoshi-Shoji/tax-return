@@ -34,6 +34,8 @@ import org.example.features.entry.EntryNotFoundException;
 import org.example.features.entry.form.EntryForm;
 import org.example.features.entry.service.EntryService;
 import org.example.features.taxreturn.dto.JournalReviewPage;
+import org.example.features.taxreturn.dto.CardSettlementPageData;
+import org.example.features.taxreturn.form.CardSettlementForm;
 import org.example.features.taxreturn.service.CardSettlementService;
 import org.example.features.taxreturn.service.ClosingJournalService;
 import org.example.features.taxreturn.service.JournalReviewService;
@@ -45,6 +47,7 @@ import org.example.repository.ExpenseEntryRepository;
 import org.example.repository.FiscalYearRepository;
 import org.example.repository.HouseholdConsumptionRepository;
 import org.example.repository.JournalEntryRepository;
+import org.example.repository.PaymentMethodRepository;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -94,6 +97,7 @@ public final class JournalReviewHarness {
             verifyEditedEntry();
             verifyMissingJournalGeneration();
             verifySettlementDateCorrection();
+            verifySettlementScreen();
             verifyGeneratedEntry();
             verifyClosedYear();
         }
@@ -460,8 +464,26 @@ public final class JournalReviewHarness {
                 "Out-of-year settlement date must be rejected");
         require(!settlements.updateSettlementDate(userId, YEAR, settlementTxId, "2025-04-26", "2025-04-28").isEmpty(),
                 "Stale settlement date must be rejected");
-        require(settlements.updateSettlementDate(userId, YEAR, settlementTxId, "2025-04-27", "2025-04-28").isEmpty(),
-                "Settlement date correction failed");
+        Fixture fixture = new Fixture(context.getBean(JournalReviewController.class), userId);
+        fixture.show();
+        fixture.correctDate(settlementTxId, "2025-04-27", "2026-01-05");
+        require(fixture.status == 400 && "TaxReturn/journal-review".equals(fixture.result)
+                && fixture.model.containsAttribute("settlementErrors")
+                && fixture.model.containsAttribute("cardSettlement"),
+                "Date errors must render the journal screen with settlement data");
+        String validCsrf = fixture.csrf;
+        fixture.csrf = "invalid";
+        expectStatus(HttpStatus.FORBIDDEN,
+                () -> fixture.correctDate(settlementTxId, "2025-04-27", "2025-04-28"));
+        fixture.csrf = validCsrf;
+        fixture.extraField = true;
+        expectStatus(HttpStatus.BAD_REQUEST,
+                () -> fixture.correctDate(settlementTxId, "2025-04-27", "2025-04-28"));
+        fixture.extraField = false;
+        fixture.correctDate(settlementTxId, "2025-04-27", "2025-04-28");
+        require(fixture.result.equals("redirect:/tax-return/journal?year=2025&status=reviewed&page=1"
+                + "#heading-card-settlement-registered"),
+                "Date correction must stay on the journal screen and preserve display conditions");
         tx.executeWithoutResult(s -> {
             JournalEntry journal = journals.findBySourceTypeAndSourceId("CARD_SETTLEMENT", settlementTxId).orElseThrow();
             require(LocalDate.of(YEAR, 4, 28).equals(journal.getEntryDate())
@@ -487,6 +509,71 @@ public final class JournalReviewHarness {
         var corrected = service.load(userId, YEAR, "draft", 0).getEntries().stream()
                 .filter(e -> "CARD_SETTLEMENT".equals(e.sourceType())).findFirst().orElseThrow();
         service.confirm(userId, YEAR, corrected.id(), corrected.fingerprint());
+    }
+
+    private void verifySettlementScreen() {
+        Long owner = tx.execute(s -> seedYear("settlement-screen").getBusinessProfile().getAppUser().getId());
+        EntryService entries = context.getBean(EntryService.class);
+        var expensePage = entries.loadPage(EntryKind.EXPENSE, owner, null);
+        String methodId = context.getBean(PaymentMethodRepository.class).findAll().stream()
+                .filter(p -> "card".equals(p.getMethodCode())).findFirst().orElseThrow().getId().toString();
+        EntryForm expense = new EntryForm();
+        expense.setExpenseType("expense");
+        expense.setCategory(expensePage.getItems().stream().filter(i -> "expense".equals(i.getGroup()))
+                .findFirst().orElseThrow().getId());
+        expense.setDate("2025-03-02");
+        expense.setAmount("500");
+        expense.setPaymentMethodId(methodId);
+        expense.setDetails("Synthetic card purchase");
+        var prepared = entries.prepareSubmission(EntryKind.EXPENSE, owner, expense);
+        require(prepared.getValidatedEntry() != null, "Card purchase seed rejected");
+        entries.save(prepared.getValidatedEntry());
+
+        Fixture fixture = new Fixture(context.getBean(JournalReviewController.class), owner);
+        fixture.show();
+        CardSettlementPageData data = (CardSettlementPageData) fixture.model.get("cardSettlement");
+        require(data.getCandidates().size() == 1 && data.getRegistered().isEmpty(),
+                "Journal screen must load its own settlement candidates");
+        CardSettlementForm form = new CardSettlementForm();
+        form.setIdempotencyKey(data.getIdempotencyKey());
+        form.setSettlementDate("2025-04-27");
+        fixture.saveSettlement(form);
+        require(fixture.status == 400 && "TaxReturn/journal-review".equals(fixture.result)
+                && fixture.model.containsAttribute("settlementErrors"),
+                "Registration errors must stay on the journal screen");
+        form.setSourceTransactionIds(List.of(data.getCandidates().get(0).getTransactionId().toString()));
+        String validCsrf = fixture.csrf;
+        fixture.csrf = "invalid";
+        expectStatus(HttpStatus.FORBIDDEN, () -> fixture.saveSettlement(form));
+        fixture.csrf = validCsrf;
+        fixture.extraField = true;
+        expectStatus(HttpStatus.BAD_REQUEST, () -> fixture.saveSettlement(form));
+        fixture.extraField = false;
+        Fixture foreign = new Fixture(context.getBean(JournalReviewController.class), otherUserId);
+        foreign.show();
+        require(((CardSettlementPageData) foreign.model.get("cardSettlement")).getCandidates().isEmpty(),
+                "Journal screen must not show another owner's settlement candidates");
+        expect(EntryNotFoundException.class, () -> foreign.saveSettlement(form));
+        fixture.saveSettlement(form);
+        require(fixture.result.equals("redirect:/tax-return/journal?year=2025&status=all&page=0"
+                + "#section-card-settlement"), "Registration must return to the journal screen");
+        fixture.saveSettlement(form);
+        fixture.show();
+        data = (CardSettlementPageData) fixture.model.get("cardSettlement");
+        require(data.getCandidates().isEmpty() && data.getRegistered().size() == 1,
+                "Registration must persist exactly once and refresh the journal screen");
+        Long settlementId = data.getRegistered().get(0).transactionId();
+        expect(EntryNotFoundException.class,
+                () -> foreign.correctDate(settlementId, "2025-04-27", "2025-04-28"));
+        tx.executeWithoutResult(s -> years.findOwnedByTaxYearForUpdate(YEAR, owner).orElseThrow().setStatus("closed"));
+        fixture.correctDate(settlementId, "2025-04-27", "2025-04-28");
+        require(fixture.status == 400 && "TaxReturn/journal-review".equals(fixture.result)
+                && ((JournalReviewPage) fixture.model.get("review")).isClosed(),
+                "Closed year rejection must stay on the read-only journal screen");
+        fixture.saveSettlement(form);
+        require(fixture.status == 400, "Closed year registration must remain blocked");
+        fixture.attributes.remove(AuthSessionAttributes.CURRENT_USER);
+        expectStatus(HttpStatus.UNAUTHORIZED, () -> fixture.saveSettlement(form));
     }
 
     private void verifyGeneratedEntry() {
@@ -632,6 +719,7 @@ public final class JournalReviewHarness {
             csrf = (String) model.get("csrfToken");
             reviewToken = (String) model.get("reviewToken");
             require(headers.get("Cache-Control").contains("no-store"), "Confidential page must not be cached");
+            require(model.containsAttribute("cardSettlement"), "Settlement operations must be on the journal screen");
         }
 
         private void post(Long id, String confirmed) {
@@ -659,6 +747,27 @@ public final class JournalReviewHarness {
             parameters.put("transactionId", new String[] {transactionId.toString()});
             result = controller.generate(YEAR, transactionId, "all", 0, csrf, request, response, model,
                     new RedirectAttributesModelMap());
+        }
+
+        private void saveSettlement(CardSettlementForm form) {
+            status = 200;
+            parameters = new HashMap<>();
+            if (extraField) {
+                parameters.put("userId", new String[] {"2"});
+            }
+            form.setCsrfToken(csrf);
+            result = controller.saveCardSettlement(YEAR, "all", 0, form, request, response, model,
+                    new RedirectAttributesModelMap());
+        }
+
+        private void correctDate(Long id, String current, String updated) {
+            status = 200;
+            parameters = new HashMap<>();
+            if (extraField) {
+                parameters.put("userId", new String[] {"2"});
+            }
+            result = controller.updateCardSettlementDate(YEAR, "reviewed", 1, id, current, updated, csrf,
+                    request, response, model, new RedirectAttributesModelMap());
         }
     }
 
