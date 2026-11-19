@@ -78,6 +78,7 @@ import org.example.repository.IncomeEntryRepository;
 import org.example.repository.JournalEntryRepository;
 import org.example.repository.SettlementAdjustmentRepository;
 import org.example.repository.TransactionSettlementRepository;
+import org.example.repository.TransactionSettlementEventRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -116,6 +117,7 @@ public class TaxReturnServiceImpl implements TaxReturnService {
     private final SettlementAdjustmentRepository settlementRepository;
     private final JournalEntryRepository journalEntryRepository;
     private final TransactionSettlementRepository transactionSettlementRepository;
+    private final TransactionSettlementEventRepository transactionSettlementEventRepository;
     private final AccountMappingService accountMappingService;
     private final BalanceSheetService balanceSheetService;
     private final ClosingJournalService closingJournalService;
@@ -137,6 +139,7 @@ public class TaxReturnServiceImpl implements TaxReturnService {
             SettlementAdjustmentRepository settlementRepository,
             JournalEntryRepository journalEntryRepository,
             TransactionSettlementRepository transactionSettlementRepository,
+            TransactionSettlementEventRepository transactionSettlementEventRepository,
             AccountMappingService accountMappingService,
             BalanceSheetService balanceSheetService,
             ClosingJournalService closingJournalService,
@@ -166,6 +169,7 @@ public class TaxReturnServiceImpl implements TaxReturnService {
         this.settlementRepository = settlementRepository;
         this.journalEntryRepository = journalEntryRepository;
         this.transactionSettlementRepository = transactionSettlementRepository;
+        this.transactionSettlementEventRepository = transactionSettlementEventRepository;
         this.accountMappingService = accountMappingService;
     }
 
@@ -993,7 +997,7 @@ public class TaxReturnServiceImpl implements TaxReturnService {
         Map<Long, BigDecimal> outstandingById = new LinkedHashMap<>();
         for (org.example.entity.AccountingTransaction transaction : candidates) {
             BigDecimal total = safeAmount(transaction.getTotalAmount());
-            BigDecimal settled = safeAmount(transactionSettlementRepository.sumSettledAmountBySourceTransactionId(transaction.getId()));
+            BigDecimal settled = settledAmount(transaction.getId());
             BigDecimal outstanding = total.subtract(settled);
             if (outstanding.signum() < 0) {
                 outstanding = BigDecimal.ZERO;
@@ -1039,7 +1043,7 @@ public class TaxReturnServiceImpl implements TaxReturnService {
                 .findByFiscalYearIdOrderByTransactionDateAscIdAsc(fiscalYearId);
         for (org.example.entity.AccountingTransaction transaction : transactions) {
             BigDecimal total = safeAmount(transaction.getTotalAmount());
-            BigDecimal settled = safeAmount(transactionSettlementRepository.sumSettledAmountBySourceTransactionId(transaction.getId()));
+            BigDecimal settled = settledAmount(transaction.getId());
             if (settled.signum() <= 0) {
                 if (transaction.getSettlementStatus() == null || transaction.getSettlementStatus().isBlank()) {
                     transaction.setSettlementStatus(SETTLEMENT_STATUS_UNSETTLED);
@@ -1053,10 +1057,28 @@ public class TaxReturnServiceImpl implements TaxReturnService {
             } else {
                 transaction.setSettlementStatus(SETTLEMENT_STATUS_PARTIALLY_SETTLED);
             }
-            transaction.setSettlementReferenceId(
-                    transactionSettlementRepository.findLatestSettlementAdjustmentIdBySourceTransactionId(transaction.getId()));
+            Long latestAdjustmentRef = transactionSettlementRepository
+                    .findLatestSettlementAdjustmentIdBySourceTransactionId(transaction.getId());
+            Long latestEventRef = transactionSettlementEventRepository
+                    .findLatestSettlementTransactionIdBySourceTransactionId(transaction.getId());
+            transaction.setSettlementReferenceId(latestSettlementRef(latestAdjustmentRef, latestEventRef));
             transactionRepository.save(transaction);
         }
+    }
+
+    private BigDecimal settledAmount(Long transactionId) {
+        return safeAmount(transactionSettlementRepository.sumSettledAmountBySourceTransactionId(transactionId))
+                .add(safeAmount(transactionSettlementEventRepository.sumSettledAmountBySourceTransactionId(transactionId)));
+    }
+
+    private static Long latestSettlementRef(Long latestAdjustmentRef, Long latestEventRef) {
+        if (latestAdjustmentRef == null) {
+            return latestEventRef;
+        }
+        if (latestEventRef == null) {
+            return latestAdjustmentRef;
+        }
+        return Math.max(latestAdjustmentRef, latestEventRef);
     }
 
     private List<JournalLine> buildJournalFromPersistedEntries(Long fiscalYearId) {

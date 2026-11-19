@@ -31,6 +31,7 @@ import org.example.features.setting.TaxReturnSectionVisibility;
 import org.example.features.setting.service.SettingService;
 import org.example.features.taxreturn.export.EtaxAssistCsv;
 import org.example.features.taxreturn.form.SettlementForm;
+import org.example.features.taxreturn.form.CardSettlementForm;
 import org.example.features.taxreturn.form.TaxReturnForms.DeductionForm;
 import org.example.features.taxreturn.form.TaxReturnForms.DependentForm;
 import org.example.features.taxreturn.form.TaxReturnForms.FixedAssetForm;
@@ -56,6 +57,7 @@ import org.springframework.web.multipart.MultipartException;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.support.RequestContextUtils;
 import org.example.features.taxreturn.service.TaxReturnService;
+import org.example.features.taxreturn.service.CardSettlementService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.ExtendedModelMap;
@@ -96,6 +98,7 @@ public class TaxReturnController {
             new PdfReport("consumption", "消費税計算書（簡易課税）", "consumption"));
 
     private final TaxReturnService taxReturnService;
+    private final CardSettlementService cardSettlementService;
     private final FormCsrfTokenManager csrfTokenManager;
     private final TaxReturnInputService inputService;
     private final RetentionService retentionService;
@@ -104,11 +107,13 @@ public class TaxReturnController {
     private final SettingService settingService;
     private final TaxReturnPdfRenderer pdfRenderer = new TaxReturnPdfRenderer();
 
-    public TaxReturnController(TaxReturnService taxReturnService, FormCsrfTokenManager csrfTokenManager,
+    public TaxReturnController(TaxReturnService taxReturnService, CardSettlementService cardSettlementService,
+            FormCsrfTokenManager csrfTokenManager,
             TaxReturnInputService inputService, RetentionService retentionService,
             EvidenceFileService evidenceFileService, YearClosingService yearClosingService,
             SettingService settingService) {
         this.taxReturnService = taxReturnService;
+        this.cardSettlementService = cardSettlementService;
         this.csrfTokenManager = csrfTokenManager;
         this.inputService = inputService;
         this.retentionService = retentionService;
@@ -121,6 +126,12 @@ public class TaxReturnController {
     void bindSettlement(WebDataBinder binder) {
         binder.setAllowedFields("openingInventory", "closingInventory", "accountsReceivable",
                 "accountsPayable", "unpaidExpenses", "unreceivedIncome", "openingBalance", "closingCash", "csrfToken");
+    }
+
+    @InitBinder("cardSettlementForm")
+    void bindCardSettlement(WebDataBinder binder) {
+        binder.setAllowedFields("settlementDate", "accountCode", "sourceTransactionId", "settledAmount",
+                "feeAmount", "memo", "idempotencyKey", "csrfToken");
     }
 
     @InitBinder("fixedAssetForm")
@@ -615,6 +626,24 @@ public class TaxReturnController {
         return render(request, response, model, year, form, errors);
     }
 
+    @PostMapping("/tax-return/card-settlement")
+    public String saveCardSettlement(
+            @RequestParam(value = "year", required = false) Integer year,
+            @ModelAttribute("cardSettlementForm") CardSettlementForm form,
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Model model,
+            RedirectAttributes redirectAttributes) {
+        AuthUserContext context = authorize(request, form.getCsrfToken());
+        List<String> errors = call(() -> cardSettlementService.save(context.getUserId(), year, form));
+        if (errors.isEmpty()) {
+            redirectAttributes.addFlashAttribute("flashMessage", "カード引き落としを登録しました。");
+            return redirect(year) + "#section-journal";
+        }
+        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        return render(request, response, model, year, null, errors);
+    }
+
     @PostMapping("/tax-return/filing-type")
     public String updateDeduction(
             @RequestParam(value = "year", required = false) Integer year,
@@ -879,6 +908,8 @@ public class TaxReturnController {
         AuthUserContext context = currentUser(request);
         TaxReturnPageData page = call(() -> taxReturnService.load(context.getUserId(), year, overrideForm));
         model.addAttribute("page", page);
+        model.addAttribute("cardSettlement",
+                call(() -> cardSettlementService.load(context.getUserId(), page.getSelectedYear())));
         model.addAttribute("bookAccountOptions", taxReturnService.availableBookAccounts());
         RetentionSearch retentionSearch = new RetentionSearch(request.getParameter("rq"),
                 request.getParameter("rkind"), request.getParameter("rstatus"));
