@@ -71,7 +71,7 @@
                                         <td class="num"><fmt:formatNumber value="${missing.amount}" pattern="#,##0.##" /></td>
                                         <td>
                                             <c:choose>
-                                                <c:when test="${missing.generatable}">
+                                                <c:when test="${missing.isGeneratable()}">
                                                     <a class="tr-btn tr-btn-outline" href="${ctx}/${missing.kind}?editId=${missing.entryId}">元データを編集</a>
                                                     <c:if test="${not review.closed}">
                                                         <form method="post" action="${ctx}/tax-return/journal/generate" class="journal-generate">
@@ -125,7 +125,7 @@
                                         </c:choose>
                                         <c:if test="${not empty entry.error}"><p class="journal-error"><c:out value="${entry.error}" /></p></c:if>
                                         <c:if test="${entry.sourceType == 'CARD_SETTLEMENT' and not review.closed}"><p><a href="#heading-card-settlement-registered">引き落とし日を修正</a></p></c:if>
-                                        <c:if test="${not review.closed and entry.confirmable}">
+                                        <c:if test="${not review.closed and entry.isConfirmable()}">
                                             <label class="journal-select-label"><input type="checkbox" name="ids" value="${entry.id}" form="journal-bulk-form" class="journal-select">一括確認に含める</label>
                                         </c:if>
                                         <c:if test="${not review.closed and not entry.reviewed and empty entry.error}">

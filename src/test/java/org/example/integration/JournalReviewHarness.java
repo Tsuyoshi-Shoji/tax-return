@@ -3,6 +3,8 @@ package org.example.integration;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
 import java.math.BigDecimal;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -16,6 +18,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.regex.Pattern;
 
 import org.example.controller.JournalReviewController;
 import org.example.entity.AccountingTransaction;
@@ -56,6 +59,7 @@ import org.springframework.ui.ExtendedModelMap;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributesModelMap;
 
+import jakarta.el.ELProcessor;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -78,6 +82,7 @@ public final class JournalReviewHarness {
     }
 
     private void run() throws Exception {
+        verifyViewConditions();
         String url = "jdbc:h2:mem:journal-review;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=10000";
         ProductionBootstrapHarness.applyMigrations(url, 1, 19);
         System.setProperty("bootstrap.url", url);
@@ -102,6 +107,41 @@ public final class JournalReviewHarness {
             verifyClosedYear();
         }
         System.out.println("Journal review harness passed");
+    }
+
+    private void verifyViewConditions() throws Exception {
+        String jsp = Files.readString(Path.of("src", "main", "webapp", "WEB-INF", "views", "TaxReturn",
+                "journal-review.jsp"));
+        String generation = viewCondition(jsp, "missing\\.[^\"}]+");
+        String confirmation = viewCondition(jsp, "not review.closed and entry\\.[^\"}]+");
+        ELProcessor el = new ELProcessor();
+        for (String kind : new String[] { "income", "expense", null }) {
+            el.defineBean("missing", new JournalReviewPage.MissingTransaction(1L, LocalDate.of(YEAR, 3, 1),
+                    "Synthetic missing journal", BigDecimal.TEN, kind, kind == null ? null : 2L));
+            require(Boolean.valueOf(kind != null).equals(el.eval(generation)),
+                    "The JSP must offer generation only when source data exists");
+        }
+        for (boolean closed : new boolean[] { false, true }) {
+            el.defineBean("review", new JournalReviewPage(YEAR, List.of(), closed, "all", 0, 1, 1, 1, 0,
+                    List.of(), List.of()));
+            for (boolean reviewed : new boolean[] { false, true }) {
+                for (String error : new String[] { null, "Synthetic invalid entry" }) {
+                    el.defineBean("entry", new JournalReviewPage.Entry(1L, LocalDate.of(YEAR, 3, 1),
+                            "Synthetic entry", reviewed, "synthetic-fingerprint", List.of(), error,
+                            "ACCOUNTING_TRANSACTION"));
+                    require(Boolean.valueOf(!closed && !reviewed && error == null).equals(el.eval(confirmation)),
+                            "The JSP must offer bulk selection only for valid, unreviewed entries in an open year");
+                }
+            }
+        }
+    }
+
+    private static String viewCondition(String jsp, String expressionPattern) {
+        var matcher = Pattern.compile("test=\"\\$\\{(" + expressionPattern + ")}\"").matcher(jsp);
+        require(matcher.find(), "Missing JSP condition: " + expressionPattern);
+        String expression = matcher.group(1);
+        require(!matcher.find(), "Ambiguous JSP condition: " + expressionPattern);
+        return expression;
     }
 
     private void seed() {
