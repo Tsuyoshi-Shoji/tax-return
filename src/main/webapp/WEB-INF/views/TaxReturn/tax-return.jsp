@@ -650,6 +650,64 @@
                 <h2 id="heading-journal">仕訳帳</h2>
                 <p id="text-journal-description" class="tr-desc"><c:out value="${page.yearLabel}" />の仕訳帳の一部を表示しています。</p>
                 <p class="screen-only"><a id="button-journal-review" class="tr-btn tr-btn-primary" href="${ctx}/tax-return/journal?year=${page.selectedYear}">仕訳帳の全件表示・確認</a></p>
+                <div class="screen-only">
+                    <h3>クレジットカード引き落とし登録</h3>
+                    <p class="tr-desc">クレジットカード利用で計上された未払金を、引き落とし時点で消し込む仕訳を登録します。</p>
+                    <c:if test="${page.closed}">
+                        <p class="tr-desc">締め済み年度のため登録できません。</p>
+                    </c:if>
+                    <c:if test="${empty cardSettlement.candidates}">
+                        <p class="tr-desc">未消込のクレジットカード取引はありません。</p>
+                    </c:if>
+                    <c:if test="${not page.closed and not empty cardSettlement.candidates}">
+                        <form id="card-settlement-form" method="post" action="${ctx}/tax-return/card-settlement?year=${page.selectedYear}" novalidate>
+                            <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
+                            <input type="hidden" name="idempotencyKey" value="<c:out value='${cardSettlement.idempotencyKey}' />" />
+                            <div class="tr-settlement">
+                                <label class="tr-field"><span>引き落とし日</span><input type="date" name="settlementDate" value="<c:out value='${cardSettlement.defaultSettlementDate}' />" required /></label>
+                                <label class="tr-field"><span>引き落とし口座</span>
+                                    <select name="accountCode" required>
+                                        <c:forEach var="account" items="${cardSettlement.accountOptions}">
+                                            <option value="<c:out value='${account.code}' />"><c:out value="${account.name}" />（<c:out value="${account.code}" />）</option>
+                                        </c:forEach>
+                                    </select>
+                                </label>
+                                <label class="tr-field"><span>対象取引</span>
+                                    <select name="sourceTransactionId" required>
+                                        <option value="">選択してください</option>
+                                        <c:forEach var="candidate" items="${cardSettlement.candidates}">
+                                            <option value="${candidate.transactionId}">
+                                                <c:out value="${candidate.transactionDate}" /> / <c:out value="${candidate.summary}" /> / 残高 <fmt:formatNumber value="${candidate.outstandingAmount}" pattern="#,##0.##" />円
+                                            </option>
+                                        </c:forEach>
+                                    </select>
+                                </label>
+                                <label class="tr-field"><span>消込金額（円）</span><input name="settledAmount" inputmode="decimal" required /></label>
+                                <label class="tr-field"><span>手数料（円）</span><input name="feeAmount" inputmode="decimal" value="0" /></label>
+                                <label class="tr-field"><span>メモ</span><input name="memo" maxlength="255" /></label>
+                            </div>
+                            <div class="tr-actions"><button type="submit" class="tr-btn tr-btn-primary">引き落としを登録</button></div>
+                        </form>
+                    </c:if>
+                    <c:if test="${not empty cardSettlement.candidates}">
+                        <div class="tr-table-scroll">
+                            <table class="tr-table">
+                                <thead><tr><th scope="col">取引日</th><th scope="col">摘要</th><th scope="col" class="num">取引金額（円）</th><th scope="col" class="num">消込済（円）</th><th scope="col" class="num">未決済残高（円）</th></tr></thead>
+                                <tbody>
+                                    <c:forEach var="candidate" items="${cardSettlement.candidates}">
+                                        <tr>
+                                            <td><c:out value="${candidate.transactionDate}" /></td>
+                                            <td><c:out value="${candidate.summary}" /></td>
+                                            <td class="num"><fmt:formatNumber value="${candidate.totalAmount}" pattern="#,##0.##" /></td>
+                                            <td class="num"><fmt:formatNumber value="${candidate.settledAmount}" pattern="#,##0.##" /></td>
+                                            <td class="num"><fmt:formatNumber value="${candidate.outstandingAmount}" pattern="#,##0.##" /></td>
+                                        </tr>
+                                    </c:forEach>
+                                </tbody>
+                            </table>
+                        </div>
+                    </c:if>
+                </div>
                 <div class="tr-table-scroll">
                     <table id="table-journal" class="tr-table tr-journal">
                         <thead><tr><th scope="col">日付</th><th scope="col">摘要</th><th scope="col">借方科目</th><th scope="col" class="num">借方金額（円）</th><th scope="col">貸方科目</th><th scope="col" class="num">貸方金額（円）</th></tr></thead>

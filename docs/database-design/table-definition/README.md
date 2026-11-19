@@ -27,6 +27,7 @@
 - `accounting_transaction.md`
 - `accounting_transaction_line.md`
 - `journal_entry.md`
+- `transaction_settlement_event.md`
 - `transaction_attachment.md`
 - `retention_record.md`
 - `evidence_file.md`

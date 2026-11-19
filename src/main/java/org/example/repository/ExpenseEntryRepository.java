@@ -105,4 +105,34 @@ public interface ExpenseEntryRepository extends JpaRepository<ExpenseEntry, Long
     List<ExpenseEntry> findAllOwnedByFiscalYear(
             @Param("fiscalYearId") Long fiscalYearId,
             @Param("appUserId") Long appUserId);
+
+    @Query("""
+            select e
+            from ExpenseEntry e
+            join fetch e.accountingTransaction tx
+            join fetch e.paymentMethod method
+            where e.fiscalYear.id = :fiscalYearId
+              and e.deleted = false
+              and method.methodCode = 'card'
+              and tx.settlementStatus in ('UNSETTLED', 'PARTIALLY_SETTLED')
+            order by tx.transactionDate asc, tx.id asc
+            """)
+    List<ExpenseEntry> findCardSettlementCandidatesByFiscalYearId(@Param("fiscalYearId") Long fiscalYearId);
+
+    @Query("""
+            select e
+            from ExpenseEntry e
+            join fetch e.accountingTransaction tx
+            join fetch e.paymentMethod method
+            join tx.fiscalYear fy
+            join fy.businessProfile bp
+            join bp.appUser appUser
+            where tx.id = :transactionId
+              and appUser.id = :appUserId
+              and e.deleted = false
+              and method.methodCode = 'card'
+            """)
+    Optional<ExpenseEntry> findOwnedCardByAccountingTransactionId(
+            @Param("transactionId") Long transactionId,
+            @Param("appUserId") Long appUserId);
 }
