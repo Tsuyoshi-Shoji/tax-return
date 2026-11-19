@@ -17,4 +17,10 @@ public interface EntryService {
     ExpenseCsvImportPreparation prepareExpenseCsvImport(Long appUserId, List<ExpenseCsvRow> rows);
 
     EntrySaveResult save(ValidatedEntryCommand command);
+
+    /**
+     * 仕訳が未生成の未確認取引について、元の収益・支出データから仕訳（未確認）を生成する。
+     * 元データがない・取引と一致しない場合は {@link org.example.features.entry.EntryConflictException} を送出する。
+     */
+    void generateMissingJournal(Long appUserId, int year, Long transactionId);
 }

@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Optional;
 
 import org.example.entity.AccountingTransaction;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -26,6 +27,14 @@ public interface AccountingTransactionRepository extends JpaRepository<Accountin
               and not exists (select e.id from JournalEntry e where e.accountingTransaction = tx)
             """)
     long countDraftsWithoutJournal(@Param("yearId") Long yearId);
+
+    @Query("""
+            select tx from AccountingTransaction tx
+            where tx.fiscalYear.id = :yearId and tx.status = 'draft'
+              and not exists (select e.id from JournalEntry e where e.accountingTransaction = tx)
+            order by tx.transactionDate, tx.id
+            """)
+    List<AccountingTransaction> findDraftsWithoutJournal(@Param("yearId") Long yearId, Pageable pageable);
 
     List<AccountingTransaction> findByFiscalYearIdAndSettlementStatus(Long fiscalYearId, String settlementStatus);
 

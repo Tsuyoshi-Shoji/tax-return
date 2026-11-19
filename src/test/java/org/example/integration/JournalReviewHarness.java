@@ -34,6 +34,7 @@ import org.example.features.entry.EntryNotFoundException;
 import org.example.features.entry.form.EntryForm;
 import org.example.features.entry.service.EntryService;
 import org.example.features.taxreturn.dto.JournalReviewPage;
+import org.example.features.taxreturn.service.CardSettlementService;
 import org.example.features.taxreturn.service.ClosingJournalService;
 import org.example.features.taxreturn.service.JournalReviewService;
 import org.example.features.taxreturn.service.TaxReturnService;
@@ -75,7 +76,7 @@ public final class JournalReviewHarness {
 
     private void run() throws Exception {
         String url = "jdbc:h2:mem:journal-review;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=10000";
-        ProductionBootstrapHarness.applyMigrations(url, 1, 17);
+        ProductionBootstrapHarness.applyMigrations(url, 1, 19);
         System.setProperty("bootstrap.url", url);
         try (var app = new AnnotationConfigApplicationContext(ProductionBootstrapHarness.Config.class)) {
             context = app;
@@ -88,8 +89,11 @@ public final class JournalReviewHarness {
             verifyController();
             verifyStaleAndInvalid();
             verifyConcurrentConfirmation();
+            verifyBulkConfirmation();
             confirmAll();
             verifyEditedEntry();
+            verifyMissingJournalGeneration();
+            verifySettlementDateCorrection();
             verifyGeneratedEntry();
             verifyClosedYear();
         }
@@ -359,6 +363,132 @@ public final class JournalReviewHarness {
         expect(EntryConflictException.class, () -> service.confirm(userId, YEAR, pending.id(), pending.fingerprint()));
     }
 
+    private void verifyBulkConfirmation() {
+        var first = entry(ids.get(5));
+        var stale = entry(ids.get(6));
+        tx.executeWithoutResult(s -> journals.findById(stale.id()).orElseThrow().setSummary("Changed before bulk"));
+        Map<Long, String> mixed = new HashMap<>();
+        mixed.put(first.id(), first.fingerprint());
+        mixed.put(stale.id(), stale.fingerprint());
+        expect(EntryConflictException.class, () -> service.confirmAll(userId, YEAR, mixed));
+        require(!entry(first.id()).reviewed(), "Bulk confirmation must be all-or-nothing");
+
+        Fixture fixture = new Fixture(context.getBean(JournalReviewController.class), userId);
+        fixture.show();
+        fixture.postBulk(List.of(ids.get(3), ids.get(4)), "false");
+        require(fixture.status == 409, "Bulk confirmation requires explicit attestation");
+        fixture.show();
+        fixture.postBulk(List.of(ids.get(3), otherEntryId), "true");
+        require(fixture.status == 409 && !entry(ids.get(3)).reviewed(),
+                "Bulk confirmation must reject IDs not shown with the token and change nothing");
+        fixture.show();
+        fixture.postBulk(List.of(), "true");
+        require(fixture.status == 409, "Empty selection must be rejected");
+        fixture.show();
+        List<Long> tooMany = new ArrayList<>();
+        for (long i = 1; i <= 21; i++) {
+            tooMany.add(i);
+        }
+        expectStatus(HttpStatus.BAD_REQUEST, () -> fixture.postBulk(tooMany, "true"));
+        fixture.show();
+        fixture.postBulk(List.of(ids.get(3), ids.get(4), first.id()), "true");
+        require(fixture.status == 200 && fixture.result.startsWith("redirect:"), "Bulk confirm must redirect");
+        require(entry(ids.get(3)).reviewed() && entry(ids.get(4)).reviewed() && entry(first.id()).reviewed(),
+                "Selected entries must all be reviewed");
+        require(!entry(stale.id()).reviewed(), "Unselected entries must stay unreviewed");
+    }
+
+    private void verifyMissingJournalGeneration() {
+        EntryService entries = context.getBean(EntryService.class);
+        var expense = context.getBean(ExpenseEntryRepository.class).findAll().get(0);
+        Long txId = tx.execute(s -> {
+            Long id = context.getBean(ExpenseEntryRepository.class).findById(expense.getId()).orElseThrow()
+                    .getAccountingTransaction().getId();
+            journals.delete(journals.findByAccountingTransactionId(id).orElseThrow());
+            return id;
+        });
+        var listed = service.load(userId, YEAR, "all", 0).getMissingTransactions().stream()
+                .filter(m -> m.transactionId().equals(txId)).findFirst().orElseThrow();
+        require(listed.isGeneratable() && "expense".equals(listed.kind()) && expense.getId().equals(listed.entryId()),
+                "Missing journal must identify its editable source");
+        expect(EntryNotFoundException.class, () -> entries.generateMissingJournal(otherUserId, YEAR, txId));
+        Fixture fixture = new Fixture(context.getBean(JournalReviewController.class), userId);
+        fixture.show();
+        fixture.generate(txId);
+        require(fixture.result.startsWith("redirect:"), "Generation must redirect");
+        var generated = tx.execute(s -> journals.findByAccountingTransactionId(txId).orElseThrow());
+        require("draft".equals(generated.getStatus()), "Generated journal must need review");
+        require(service.load(userId, YEAR, "all", 0).getMissingTransactions().stream()
+                .noneMatch(m -> m.transactionId().equals(txId)), "Generated transaction must leave the missing list");
+        expect(EntryConflictException.class, () -> entries.generateMissingJournal(userId, YEAR, txId));
+        var created = entry(generated.getId());
+        service.confirm(userId, YEAR, created.id(), created.fingerprint());
+    }
+
+    private void verifySettlementDateCorrection() {
+        CardSettlementService settlements = context.getBean(CardSettlementService.class);
+        Long settlementTxId = tx.execute(s -> {
+            FiscalYear year = years.findById(yearId).orElseThrow();
+            AccountingTransaction transfer = new AccountingTransaction();
+            transfer.setFiscalYear(year);
+            transfer.setTransactionDate(LocalDate.of(YEAR, 4, 27));
+            transfer.setTransactionType("TRANSFER");
+            transfer.setSummary("Synthetic card settlement");
+            transfer.setTotalAmount(new BigDecimal("100"));
+            transfer.setStatus("draft");
+            transfer.setSettlementStatus("SETTLED");
+            context.getBean(AccountingTransactionRepository.class).save(transfer);
+            JournalEntry entry = new JournalEntry();
+            entry.setFiscalYear(year);
+            entry.setAccountingTransaction(transfer);
+            entry.setSourceType("CARD_SETTLEMENT");
+            entry.setSourceId(transfer.getId());
+            entry.setEntryDate(transfer.getTransactionDate());
+            entry.setSummary("Synthetic card settlement");
+            entry.setStatus("reviewed");
+            entry.addLine(line(1, "D", AccountMasterSeed.ACC_CASH, "Payable", "100"));
+            entry.addLine(line(2, "C", AccountMasterSeed.ACC_BANK_DEPOSIT, "Bank", "100"));
+            journals.save(entry);
+            return transfer.getId();
+        });
+        var registered = settlements.load(userId, YEAR).getRegistered();
+        require(registered.size() == 1 && registered.get(0).transactionId().equals(settlementTxId)
+                && registered.get(0).reviewed(), "Registered settlement must be listed for correction");
+        expect(EntryNotFoundException.class,
+                () -> settlements.updateSettlementDate(otherUserId, YEAR, settlementTxId, "2025-04-27", "2025-04-28"));
+        require(!settlements.updateSettlementDate(userId, YEAR, settlementTxId, "2025-04-27", "2026-01-05").isEmpty(),
+                "Out-of-year settlement date must be rejected");
+        require(!settlements.updateSettlementDate(userId, YEAR, settlementTxId, "2025-04-26", "2025-04-28").isEmpty(),
+                "Stale settlement date must be rejected");
+        require(settlements.updateSettlementDate(userId, YEAR, settlementTxId, "2025-04-27", "2025-04-28").isEmpty(),
+                "Settlement date correction failed");
+        tx.executeWithoutResult(s -> {
+            JournalEntry journal = journals.findBySourceTypeAndSourceId("CARD_SETTLEMENT", settlementTxId).orElseThrow();
+            require(LocalDate.of(YEAR, 4, 28).equals(journal.getEntryDate())
+                    && LocalDate.of(YEAR, 4, 28).equals(journal.getAccountingTransaction().getTransactionDate()),
+                    "Transaction and journal dates must move together");
+            require("draft".equals(journal.getStatus()), "Corrected settlement journal must need review again");
+        });
+        tx.executeWithoutResult(s -> {
+            FiscalYear year = years.findById(yearId).orElseThrow();
+            year.setStatus("closed");
+            year.setClosedAt(LocalDateTime.now());
+        });
+        try {
+            require(!settlements.updateSettlementDate(userId, YEAR, settlementTxId, "2025-04-28", "2025-04-29").isEmpty(),
+                    "Closed year settlement must not be corrected");
+        } finally {
+            tx.executeWithoutResult(s -> {
+                FiscalYear year = years.findById(yearId).orElseThrow();
+                year.setStatus("open");
+                year.setClosedAt(null);
+            });
+        }
+        var corrected = service.load(userId, YEAR, "draft", 0).getEntries().stream()
+                .filter(e -> "CARD_SETTLEMENT".equals(e.sourceType())).findFirst().orElseThrow();
+        service.confirm(userId, YEAR, corrected.id(), corrected.fingerprint());
+    }
+
     private void verifyGeneratedEntry() {
         Long consumptionId = tx.execute(s -> {
             HouseholdConsumption consumption = new HouseholdConsumption();
@@ -413,6 +543,10 @@ public final class JournalReviewHarness {
             context.getBean(AccountingTransactionRepository.class).save(missing);
         });
         require(service.load(userId, YEAR, "all", 0).getMissingCount() == 1, "Missing journals must not hide pending data");
+        var orphan = service.load(userId, YEAR, "all", 0).getMissingTransactions().get(0);
+        require(!orphan.isGeneratable(), "Transactions without source data must not offer generation");
+        expect(EntryConflictException.class,
+                () -> context.getBean(EntryService.class).generateMissingJournal(userId, YEAR, orphan.transactionId()));
     }
 
     private JournalReviewPage.Entry entry(Long id) {
@@ -509,6 +643,22 @@ public final class JournalReviewHarness {
             }
             result = controller.confirm(YEAR, id, "all", 0, csrf, reviewToken, confirmed, request, response,
                     model, new RedirectAttributesModelMap());
+        }
+
+        private void postBulk(List<Long> selected, String confirmed) {
+            status = 200;
+            parameters = new HashMap<>();
+            parameters.put("ids", selected.stream().map(String::valueOf).toArray(String[]::new));
+            result = controller.confirmBulk(YEAR, selected, "all", 0, csrf, reviewToken, confirmed, request, response,
+                    model, new RedirectAttributesModelMap());
+        }
+
+        private void generate(Long transactionId) {
+            status = 200;
+            parameters = new HashMap<>();
+            parameters.put("transactionId", new String[] {transactionId.toString()});
+            result = controller.generate(YEAR, transactionId, "all", 0, csrf, request, response, model,
+                    new RedirectAttributesModelMap());
         }
     }
 

@@ -695,6 +695,39 @@
                             <div class="tr-actions"><button type="submit" class="tr-btn tr-btn-primary">選択した取引を一括で引き落とし登録</button></div>
                         </form>
                     </c:if>
+                    <c:if test="${not empty cardSettlement.registered}">
+                        <h3 id="heading-card-settlement-registered">登録済みの引き落とし（支払日の修正）</h3>
+                        <p class="tr-desc">引き落とし日を誤って登録した場合は修正できます。修正した引き落とし仕訳は未確認に戻るため、仕訳帳の確認画面で再確認してください。金額・対象取引を誤った場合は、該当の収支を修正してください。</p>
+                        <div class="tr-table-scroll">
+                            <table class="tr-table" aria-labelledby="heading-card-settlement-registered">
+                                <thead><tr><th scope="col">引き落とし日</th><th scope="col">摘要</th><th scope="col" class="num">金額（円）</th><th scope="col">仕訳の状態</th><th scope="col">支払日の修正</th></tr></thead>
+                                <tbody>
+                                    <c:forEach var="settled" items="${cardSettlement.registered}">
+                                        <tr id="card-settlement-${settled.transactionId}">
+                                            <td><c:out value="${settled.settlementDate}" /></td>
+                                            <td><c:out value="${settled.summary}" /></td>
+                                            <td class="num"><fmt:formatNumber value="${settled.amount}" pattern="#,##0.##" /></td>
+                                            <td><c:out value="${settled.reviewed ? '確認済み' : '未確認'}" /></td>
+                                            <td>
+                                                <c:choose>
+                                                    <c:when test="${page.closed}">締め済みのため修正不可</c:when>
+                                                    <c:otherwise>
+                                                        <form method="post" action="${ctx}/tax-return/card-settlement/date?year=${page.selectedYear}" class="tr-settlement-date">
+                                                            <input type="hidden" name="csrfToken" value="<c:out value='${csrfToken}' />" />
+                                                            <input type="hidden" name="settlementTransactionId" value="${settled.transactionId}" />
+                                                            <input type="hidden" name="currentDate" value="<c:out value='${settled.settlementDate}' />" />
+                                                            <label><span class="visually-hidden">新しい引き落とし日</span><input type="date" name="settlementDate" value="<c:out value='${settled.settlementDate}' />" min="${page.selectedYear}-01-01" max="${page.selectedYear}-12-31" required /></label>
+                                                            <button type="submit" class="tr-btn tr-btn-outline">修正</button>
+                                                        </form>
+                                                    </c:otherwise>
+                                                </c:choose>
+                                            </td>
+                                        </tr>
+                                    </c:forEach>
+                                </tbody>
+                            </table>
+                        </div>
+                    </c:if>
                 </div>
                 <div class="tr-table-scroll tr-journal-scroll">
                     <table id="table-journal" class="tr-table tr-journal">

@@ -644,6 +644,29 @@ public class TaxReturnController {
         return render(request, response, model, year, null, errors);
     }
 
+    @PostMapping("/tax-return/card-settlement/date")
+    public String updateCardSettlementDate(
+            @RequestParam(value = "year", required = false) Integer year,
+            @RequestParam(value = "settlementTransactionId", required = false) Long settlementTransactionId,
+            @RequestParam(value = "currentDate", required = false) String currentDate,
+            @RequestParam(value = "settlementDate", required = false) String settlementDate,
+            @RequestParam(value = "csrfToken", required = false) String csrfToken,
+            HttpServletRequest request,
+            HttpServletResponse response,
+            Model model,
+            RedirectAttributes redirectAttributes) {
+        AuthUserContext context = authorize(request, csrfToken);
+        List<String> errors = call(() -> cardSettlementService.updateSettlementDate(context.getUserId(), year,
+                settlementTransactionId, currentDate, settlementDate));
+        if (errors.isEmpty()) {
+            redirectAttributes.addFlashAttribute("flashMessage",
+                    "引き落とし日を修正しました。該当の仕訳は未確認に戻ります。仕訳帳の確認画面で再確認してください。");
+            return redirect(year) + "#section-journal";
+        }
+        response.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+        return render(request, response, model, year, null, errors);
+    }
+
     @PostMapping("/tax-return/filing-type")
     public String updateDeduction(
             @RequestParam(value = "year", required = false) Integer year,

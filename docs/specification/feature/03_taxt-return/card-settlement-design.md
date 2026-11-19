@@ -91,6 +91,15 @@
 3. `journal_entry` / `journal_line` の生成
 4. 仕訳確認状態は `draft` で作成
 
+### 6.3 引き落とし日（支払日）の修正（2026-11-20）
+
+- `POST /tax-return/card-settlement/date?year=`：`settlementTransactionId`、`currentDate`（表示時の引き落とし日）、`settlementDate`（修正後）、`csrfToken`。ログイン済み所有者のみ、CSRF必須。
+- 確定申告画面の「登録済みの引き落とし（支払日の修正）」一覧から実行する。締め済み年度は表示のみで修正不可。
+- 年度→引き落とし取引の順にロックし、所有者・年度・`CARD_SETTLEMENT`仕訳との対応を検証する。対象なしは404。
+- 修正後の日付は対象年度内のみ。`currentDate`が現在値と異なる場合は他操作による変更とみなし拒否する。同日への変更は何もしない。
+- 引き落とし取引の`transaction_date`と仕訳の`entry_date`を同時に更新し、仕訳を`draft`（未確認）へ戻す。金額・対象取引・消込イベントは変更しない（誤りは元の収支を修正する）。
+- `audit.card-settlement`に利用者ID・年度・取引ID・結果のみ記録する。
+
 ---
 
 ## 7. データ設計

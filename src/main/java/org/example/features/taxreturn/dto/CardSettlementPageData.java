@@ -8,13 +8,19 @@ public class CardSettlementPageData {
     private final List<AccountOption> accountOptions;
     private final String defaultSettlementDate;
     private final String idempotencyKey;
+    private final List<Registered> registered;
 
     public CardSettlementPageData(List<Candidate> candidates, List<AccountOption> accountOptions,
-            String defaultSettlementDate, String idempotencyKey) {
+            String defaultSettlementDate, String idempotencyKey, List<Registered> registered) {
         this.candidates = candidates;
         this.accountOptions = accountOptions;
         this.defaultSettlementDate = defaultSettlementDate;
         this.idempotencyKey = idempotencyKey;
+        this.registered = List.copyOf(registered);
+    }
+
+    public List<Registered> getRegistered() {
+        return registered;
     }
 
     public List<Candidate> getCandidates() {
@@ -73,6 +79,30 @@ public class CardSettlementPageData {
 
         public BigDecimal getOutstandingAmount() {
             return outstandingAmount;
+        }
+    }
+
+    /** 登録済みの引き落とし（支払日の修正対象）。 */
+    public record Registered(Long transactionId, String settlementDate, String summary, BigDecimal amount,
+            boolean reviewed) {
+        public Long getTransactionId() {
+            return transactionId;
+        }
+
+        public String getSettlementDate() {
+            return settlementDate;
+        }
+
+        public String getSummary() {
+            return summary;
+        }
+
+        public BigDecimal getAmount() {
+            return amount;
+        }
+
+        public boolean isReviewed() {
+            return reviewed;
         }
     }
 

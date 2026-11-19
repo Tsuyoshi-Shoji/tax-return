@@ -3,9 +3,13 @@ package org.example.features.taxreturn.service.impl;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.TreeMap;
 
+import org.example.entity.AccountingTransaction;
 import org.example.entity.FiscalYear;
 import org.example.entity.JournalEntry;
 import org.example.entity.JournalLine;
@@ -17,7 +21,9 @@ import org.example.features.taxreturn.dto.JournalReviewPage;
 import org.example.features.taxreturn.service.JournalReviewService;
 import org.example.repository.AccountingTransactionRepository;
 import org.example.repository.BusinessProfileRepository;
+import org.example.repository.ExpenseEntryRepository;
 import org.example.repository.FiscalYearRepository;
+import org.example.repository.IncomeEntryRepository;
 import org.example.repository.JournalEntryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -28,18 +34,25 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class JournalReviewServiceImpl implements JournalReviewService {
     private static final int PAGE_SIZE = 20;
+    private static final int MAX_BULK = PAGE_SIZE;
+    private static final int MAX_MISSING_LISTED = 100;
     private static final Logger AUDIT = LoggerFactory.getLogger("audit.journal-review");
     private final BusinessProfileRepository profiles;
     private final FiscalYearRepository years;
     private final JournalEntryRepository journals;
     private final AccountingTransactionRepository transactions;
+    private final IncomeEntryRepository incomes;
+    private final ExpenseEntryRepository expenses;
 
     public JournalReviewServiceImpl(BusinessProfileRepository profiles, FiscalYearRepository years,
-            JournalEntryRepository journals, AccountingTransactionRepository transactions) {
+            JournalEntryRepository journals, AccountingTransactionRepository transactions,
+            IncomeEntryRepository incomes, ExpenseEntryRepository expenses) {
         this.profiles = profiles;
         this.years = years;
         this.journals = journals;
         this.transactions = transactions;
+        this.incomes = incomes;
+        this.expenses = expenses;
     }
 
     @Override
@@ -63,7 +76,8 @@ public class JournalReviewServiceImpl implements JournalReviewService {
                 pageNumber, page.getTotalPages(), page.getTotalElements(),
                 journals.countByFiscalYearIdAndStatus(selected.getId(), "draft"),
                 transactions.countDraftsWithoutJournal(selected.getId()),
-                page.getContent().stream().map(e -> view(e, selected)).toList());
+                page.getContent().stream().map(e -> view(e, selected)).toList(),
+                missingTransactions(selected.getId()));
     }
 
     @Override
@@ -71,6 +85,29 @@ public class JournalReviewServiceImpl implements JournalReviewService {
     public void confirm(Long userId, int year, Long entryId, String fingerprint) {
         FiscalYear locked = years.findOwnedByTaxYearForUpdate(year, userId)
                 .orElseThrow(() -> new EntryNotFoundException("Fiscal year not found"));
+        confirmLocked(userId, year, locked, entryId, fingerprint);
+    }
+
+    @Override
+    @Transactional
+    public int confirmAll(Long userId, int year, Map<Long, String> fingerprints) {
+        if (fingerprints == null || fingerprints.isEmpty() || fingerprints.size() > MAX_BULK) {
+            throw new EntryConflictException("確認する仕訳を1〜" + MAX_BULK + "件選択してください。");
+        }
+        FiscalYear locked = years.findOwnedByTaxYearForUpdate(year, userId)
+                .orElseThrow(() -> new EntryNotFoundException("Fiscal year not found"));
+        int confirmed = 0;
+        for (Long id : new TreeMap<>(fingerprints).keySet()) {
+            if (confirmLocked(userId, year, locked, id, fingerprints.get(id))) {
+                confirmed++;
+            }
+        }
+        AUDIT.info("confirm-bulk userId={} year={} requested={} reviewed={} result=reviewed",
+                userId, year, fingerprints.size(), confirmed);
+        return confirmed;
+    }
+
+    private boolean confirmLocked(Long userId, int year, FiscalYear locked, Long entryId, String fingerprint) {
         JournalEntry entry = journals.findOwnedForReview(entryId, locked.getId(), userId)
                 .orElseThrow(() -> new EntryNotFoundException("Journal not found"));
         if (!"open".equals(locked.getStatus()) || locked.getClosedAt() != null) {
@@ -84,7 +121,7 @@ public class JournalReviewServiceImpl implements JournalReviewService {
             reject(userId, year, entryId, "invalid", error);
         }
         if (reviewed(entry)) {
-            return;
+            return false;
         }
         if (!"draft".equals(entry.getStatus())) {
             reject(userId, year, entryId, "status", "この状態の仕訳は確認済みにできません。");
@@ -94,6 +131,31 @@ public class JournalReviewServiceImpl implements JournalReviewService {
         journals.flush();
         AUDIT.info("confirm userId={} year={} journalId={} fingerprint={} result=reviewed",
                 userId, year, entryId, fingerprint);
+        return true;
+    }
+
+    private List<JournalReviewPage.MissingTransaction> missingTransactions(Long yearId) {
+        List<AccountingTransaction> missing = transactions.findDraftsWithoutJournal(yearId,
+                PageRequest.of(0, MAX_MISSING_LISTED));
+        if (missing.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = missing.stream().map(AccountingTransaction::getId).toList();
+        Map<Long, Long> incomeIds = new HashMap<>();
+        incomes.findByAccountingTransactionIdInAndDeletedFalse(ids)
+                .forEach(e -> incomeIds.put(e.getAccountingTransaction().getId(), e.getId()));
+        Map<Long, Long> expenseIds = new HashMap<>();
+        expenses.findByAccountingTransactionIdInAndDeletedFalse(ids)
+                .forEach(e -> expenseIds.put(e.getAccountingTransaction().getId(), e.getId()));
+        return missing.stream().map(tx -> {
+            Long incomeId = incomeIds.get(tx.getId());
+            Long expenseId = expenseIds.get(tx.getId());
+            String kind = incomeId != null && expenseId == null ? "income"
+                    : expenseId != null && incomeId == null ? "expense" : null;
+            Long entryId = "income".equals(kind) ? incomeId : "expense".equals(kind) ? expenseId : null;
+            return new JournalReviewPage.MissingTransaction(tx.getId(), tx.getTransactionDate(), tx.getSummary(),
+                    tx.getTotalAmount(), kind, entryId);
+        }).toList();
     }
 
     private List<FiscalYear> ownedYears(Long userId) {
@@ -110,7 +172,8 @@ public class JournalReviewServiceImpl implements JournalReviewService {
     private static JournalReviewPage.Entry view(JournalEntry e, FiscalYear year) {
         return new JournalReviewPage.Entry(e.getId(), e.getEntryDate(), e.getSummary(), reviewed(e), fingerprint(e),
                 sorted(e).stream().map(l -> new JournalReviewPage.Line(l.getDebitCredit(), l.getAccountCode(),
-                        l.getAccountName(), l.getAmount(), l.getMemo())).toList(), validationError(e, year));
+                        l.getAccountName(), l.getAmount(), l.getMemo())).toList(), validationError(e, year),
+                e.getSourceType());
     }
 
     private static boolean reviewed(JournalEntry e) {

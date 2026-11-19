@@ -2,6 +2,7 @@ package org.example.controller;
 
 import java.io.Serializable;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -12,6 +13,7 @@ import org.example.features.auth.AuthUserContext;
 import org.example.features.common.session.FormCsrfTokenManager;
 import org.example.features.entry.EntryConflictException;
 import org.example.features.entry.EntryNotFoundException;
+import org.example.features.entry.service.EntryService;
 import org.example.features.taxreturn.dto.JournalReviewPage;
 import org.example.features.taxreturn.service.JournalReviewService;
 import org.slf4j.Logger;
@@ -37,12 +39,18 @@ public class JournalReviewController {
     private static final long TTL = 10 * 60 * 1000L;
     private static final Set<String> FIELDS = Set.of("year", "status", "page", "id", "csrfToken",
             "reviewToken", "confirmed");
+    private static final Set<String> BULK_FIELDS = Set.of("year", "status", "page", "ids", "csrfToken",
+            "reviewToken", "confirmed");
+    private static final Set<String> GENERATE_FIELDS = Set.of("year", "status", "page", "transactionId", "csrfToken");
+    private static final int MAX_BULK = 20;
     private static final Logger AUDIT = LoggerFactory.getLogger("audit.journal-review");
     private final JournalReviewService service;
+    private final EntryService entries;
     private final FormCsrfTokenManager csrf;
 
-    public JournalReviewController(JournalReviewService service, FormCsrfTokenManager csrf) {
+    public JournalReviewController(JournalReviewService service, EntryService entries, FormCsrfTokenManager csrf) {
         this.service = service;
+        this.entries = entries;
         this.csrf = csrf;
     }
 
@@ -86,6 +94,84 @@ public class JournalReviewController {
         }
         redirect.addFlashAttribute("reviewMessage", "仕訳を確認済みにしました。");
         return "redirect:/tax-return/journal?year=" + year + "&status=" + status + "&page=" + page;
+    }
+
+    @PostMapping("/tax-return/journal/confirm-bulk")
+    public String confirmBulk(@RequestParam("year") int year,
+            @RequestParam(value = "ids", required = false) List<Long> ids,
+            @RequestParam(value = "status", defaultValue = "all") String status,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "csrfToken", required = false) String csrfToken,
+            @RequestParam(value = "reviewToken", required = false) String reviewToken,
+            @RequestParam(value = "confirmed", required = false) String confirmed,
+            HttpServletRequest request, HttpServletResponse response, Model model, RedirectAttributes redirect) {
+        AuthUserContext user = currentUser(request);
+        if (!csrf.isValid(request.getSession(), SCOPE, csrfToken)) {
+            AUDIT.info("confirm-bulk userId={} result=csrf-rejected", user.getUserId());
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        }
+        if (request.getParameterMap().entrySet().stream()
+                .anyMatch(e -> !BULK_FIELDS.contains(e.getKey())
+                        || (!"ids".equals(e.getKey()) && e.getValue().length != 1))
+                || !validConditions(status, page)
+                || (ids != null && (ids.size() > MAX_BULK || ids.stream().anyMatch(i -> i == null || i <= 0)))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        }
+        int count;
+        try {
+            if (ids == null || ids.isEmpty()) {
+                throw new EntryConflictException("確認済みにする仕訳を選択してください。");
+            }
+            if (!"true".equals(confirmed)) {
+                throw new EntryConflictException("選択した仕訳の内容を確認し、確認欄にチェックしてください。");
+            }
+            Map<Long, String> fingerprints = new LinkedHashMap<>();
+            for (Long id : ids) {
+                fingerprints.put(id, expected(request.getSession(), reviewToken, user.getUserId(), year, id));
+            }
+            count = service.confirmAll(user.getUserId(), year, fingerprints);
+        } catch (EntryConflictException ex) {
+            AUDIT.info("confirm-bulk userId={} year={} requested={} result=confirmation-rejected",
+                    user.getUserId(), year, ids == null ? 0 : ids.size());
+            response.setStatus(HttpServletResponse.SC_CONFLICT);
+            model.addAttribute("reviewError", ex.getMessage());
+            return render(user, year, status, page, request, response, model);
+        }
+        redirect.addFlashAttribute("reviewMessage", "選択した仕訳" + count + "件を確認済みにしました。");
+        return "redirect:/tax-return/journal?year=" + year + "&status=" + status + "&page=" + page;
+    }
+
+    @PostMapping("/tax-return/journal/generate")
+    public String generate(@RequestParam("year") int year, @RequestParam("transactionId") Long transactionId,
+            @RequestParam(value = "status", defaultValue = "all") String status,
+            @RequestParam(value = "page", defaultValue = "0") int page,
+            @RequestParam(value = "csrfToken", required = false) String csrfToken,
+            HttpServletRequest request, HttpServletResponse response, Model model, RedirectAttributes redirect) {
+        AuthUserContext user = currentUser(request);
+        if (!csrf.isValid(request.getSession(), SCOPE, csrfToken)) {
+            AUDIT.info("generate userId={} result=csrf-rejected", user.getUserId());
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN);
+        }
+        if (request.getParameterMap().entrySet().stream()
+                .anyMatch(e -> !GENERATE_FIELDS.contains(e.getKey()) || e.getValue().length != 1)
+                || !validConditions(status, page) || transactionId <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
+        }
+        try {
+            entries.generateMissingJournal(user.getUserId(), year, transactionId);
+        } catch (EntryConflictException ex) {
+            AUDIT.info("generate userId={} year={} transactionId={} result=rejected", user.getUserId(), year, transactionId);
+            response.setStatus(HttpServletResponse.SC_CONFLICT);
+            model.addAttribute("reviewError", ex.getMessage());
+            return render(user, year, status, page, request, response, model);
+        }
+        AUDIT.info("generate userId={} year={} transactionId={} result=generated", user.getUserId(), year, transactionId);
+        redirect.addFlashAttribute("reviewMessage", "仕訳を生成しました（未確認）。内容を確認してから確認済みにしてください。");
+        return "redirect:/tax-return/journal?year=" + year + "&status=draft&page=0";
+    }
+
+    private static boolean validConditions(String status, int page) {
+        return Set.of("all", "draft", "reviewed").contains(status) && page >= 0 && page <= 100000;
     }
 
     private String render(AuthUserContext user, Integer year, String status, int page,
