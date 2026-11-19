@@ -22,6 +22,6 @@
 
 ## 制約
 - PK: `id`
-- UNIQUE: `uk_tx_settlement_event_fy_idempotency` (`fiscal_year_id`, `idempotency_key`)
+- UNIQUE: `uk_tx_settlement_event_fy_idempotency_source` (`fiscal_year_id`, `idempotency_key`, `source_transaction_id`)
 - FK: `fiscal_year_id`, `source_transaction_id`, `settlement_transaction_id`
 

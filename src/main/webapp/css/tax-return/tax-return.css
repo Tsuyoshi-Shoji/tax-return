@@ -60,6 +60,10 @@
 .tr-diff.is-bad { color: #f0384b; }
 
 .tr-table-scroll { overflow-x: auto; }
+.tr-journal-scroll {
+    max-height: 420px;
+    overflow-y: auto;
+}
 .tr-table { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
 .tr-table th, .tr-table td { padding: 7px 10px; border-bottom: 1px solid #edf1f8; text-align: left; }
 .tr-table thead th { background: #eef3fa; color: #10225f; font-weight: 700; }
@@ -300,6 +304,7 @@
     body.tr-printing .print-only { display: table-row-group; }
     body.tr-printing .screen-only { display: none; }
     body.tr-printing .tr-table-scroll { overflow: visible; }
+    body.tr-printing .tr-journal-scroll { max-height: none; }
     body.tr-printing .tr-details,
     body.tr-printing .tr-section form,
     body.tr-printing .tr-row-actions { display: none !important; }

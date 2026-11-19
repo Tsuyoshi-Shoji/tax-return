@@ -130,7 +130,7 @@ public class TaxReturnController {
 
     @InitBinder("cardSettlementForm")
     void bindCardSettlement(WebDataBinder binder) {
-        binder.setAllowedFields("settlementDate", "accountCode", "sourceTransactionId", "settledAmount",
+        binder.setAllowedFields("settlementDate", "accountCode", "sourceTransactionIds",
                 "feeAmount", "memo", "idempotencyKey", "csrfToken");
     }
 
